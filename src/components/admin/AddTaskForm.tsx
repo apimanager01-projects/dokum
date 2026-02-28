@@ -13,7 +13,13 @@ const initialState: ActionState = {}
 
 type UnitWithKurs = Unit & { kurse: Pick<Kurs, 'title'> }
 
-export function AddTaskForm({ units }: { units: UnitWithKurs[] }) {
+export function AddTaskForm({
+  units,
+  onUnitChange,
+}: {
+  units: UnitWithKurs[]
+  onUnitChange?: (unitId: string) => void
+}) {
   const [state, action, pending] = useActionState(
     async (_prev: ActionState, formData: FormData) => {
       const result = await createTask(formData)
@@ -43,6 +49,7 @@ export function AddTaskForm({ units }: { units: UnitWithKurs[] }) {
           id="task-unit"
           name="unit_id"
           required
+          onChange={(e) => onUnitChange?.(e.target.value)}
           className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
         >
           <option value="">— Select a Unit —</option>

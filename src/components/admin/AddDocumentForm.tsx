@@ -13,7 +13,13 @@ const initialState: ActionState = {}
 
 type TaskWithUnit = Task & { units: Unit & { kurse: Pick<Kurs, 'title'> } }
 
-export function AddDocumentForm({ tasks }: { tasks: TaskWithUnit[] }) {
+export function AddDocumentForm({
+  tasks,
+  onTaskChange,
+}: {
+  tasks: TaskWithUnit[]
+  onTaskChange?: (taskId: string) => void
+}) {
   const [state, action, pending] = useActionState(
     async (_prev: ActionState, formData: FormData) => {
       const result = await createDocument(formData)
@@ -43,6 +49,7 @@ export function AddDocumentForm({ tasks }: { tasks: TaskWithUnit[] }) {
           id="doc-task"
           name="task_id"
           required
+          onChange={(e) => onTaskChange?.(e.target.value)}
           className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
         >
           <option value="">— Select a Task —</option>

@@ -11,7 +11,13 @@ type ActionState = {
 
 const initialState: ActionState = {}
 
-export function AddUnitForm({ kurse }: { kurse: Pick<Kurs, 'id' | 'title'>[] }) {
+export function AddUnitForm({
+  kurse,
+  onKursChange,
+}: {
+  kurse: Pick<Kurs, 'id' | 'title'>[]
+  onKursChange?: (kursId: string) => void
+}) {
   const [state, action, pending] = useActionState(
     async (_prev: ActionState, formData: FormData) => {
       const result = await createUnit(formData)
@@ -41,6 +47,7 @@ export function AddUnitForm({ kurse }: { kurse: Pick<Kurs, 'id' | 'title'>[] }) 
           id="unit-kurs"
           name="kurs_id"
           required
+          onChange={(e) => onKursChange?.(e.target.value)}
           className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
         >
           <option value="">— Select a Kurs —</option>

@@ -33,7 +33,7 @@ export function RegisterForm() {
           type="text"
           required
           autoComplete="name"
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
         />
       </div>
 
@@ -47,7 +47,7 @@ export function RegisterForm() {
           type="email"
           required
           autoComplete="email"
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
         />
       </div>
 
@@ -62,21 +62,21 @@ export function RegisterForm() {
           required
           minLength={8}
           autoComplete="new-password"
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
         />
       </div>
 
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+        className="rounded-md border border-brand px-4 py-2 text-sm font-medium text-brand hover:bg-brand/5 disabled:opacity-50"
       >
         {pending ? 'Creating account…' : 'Create account'}
       </button>
 
       <p className="text-center text-sm text-gray-500">
         Already have an account?{' '}
-        <Link href="/auth/login" className="font-medium text-gray-900 underline">
+        <Link href="/auth/login" className="font-medium text-brand underline">
           Sign in
         </Link>
       </p>

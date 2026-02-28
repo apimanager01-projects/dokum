@@ -74,7 +74,7 @@ export function DocumentTree({ kurse, selectedTaskId }: Props) {
                             key={task.id}
                             className={`ml-3 rounded-md border p-2 transition-colors ${
                               isSelected
-                                ? 'border-gray-900 bg-gray-50 ring-1 ring-gray-900'
+                                ? 'border-brand bg-gray-50 ring-1 ring-brand'
                                 : 'border-gray-100'
                             }`}
                           >

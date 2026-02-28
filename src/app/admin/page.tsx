@@ -44,7 +44,7 @@ export default async function AdminPage() {
           <Link
             key={card.href}
             href={card.href}
-            className="flex flex-col justify-between rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md hover:border-gray-300"
+            className="flex flex-col justify-between rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:border-brand/30 hover:shadow-md"
           >
             <div>
               <p className="text-sm font-semibold text-gray-900">{card.label}</p>
@@ -52,7 +52,7 @@ export default async function AdminPage() {
                 <p className="mt-1 text-xs text-gray-400">{card.subtitle}</p>
               )}
             </div>
-            <span className="mt-4 text-xs font-medium text-gray-400">→</span>
+            <span className="mt-4 text-xs font-medium text-brand">→</span>
           </Link>
         ))}
       </div>

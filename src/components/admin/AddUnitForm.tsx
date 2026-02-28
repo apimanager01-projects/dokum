@@ -49,7 +49,7 @@ export function AddUnitForm({
             </Link>
             <Link
               href={`/admin/tasks/new?unitId=${state.id}`}
-              className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-700"
+              className="rounded-md border border-brand px-3 py-1.5 text-sm font-medium text-brand hover:bg-brand/5"
             >
               Task hinzufügen →
             </Link>
@@ -67,7 +67,7 @@ export function AddUnitForm({
           required
           defaultValue={defaultKursId}
           onChange={(e) => onKursChange?.(e.target.value)}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
         >
           <option value="">— Select a Kurs —</option>
           {kurse.map((k) => (
@@ -87,7 +87,7 @@ export function AddUnitForm({
           name="title"
           type="text"
           required
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
         />
       </div>
 
@@ -99,7 +99,7 @@ export function AddUnitForm({
           id="unit-description"
           name="description"
           rows={3}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
         />
       </div>
 
@@ -112,7 +112,7 @@ export function AddUnitForm({
           name="position"
           type="number"
           defaultValue={0}
-          className="w-24 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
+          className="w-24 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
         />
         <p className="text-xs text-gray-400">Lower numbers appear first within the Kurs.</p>
       </div>
@@ -120,7 +120,7 @@ export function AddUnitForm({
       <button
         type="submit"
         disabled={pending}
-        className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
+        className="self-start rounded-md border border-brand px-4 py-2 text-sm font-medium text-brand hover:bg-brand/5 disabled:opacity-50"
       >
         {pending ? 'Saving…' : 'Add Unit'}
       </button>

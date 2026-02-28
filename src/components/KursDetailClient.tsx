@@ -82,7 +82,7 @@ export default function KursDetailClient({ units }: { units: UnitWithTasksAndUrl
                                       href={doc.signedUrl}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="shrink-0 rounded-md bg-gray-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-gray-700 transition-colors"
+                                      className="shrink-0 rounded-md border border-brand px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand/5 transition-colors"
                                     >
                                       Open PDF ↗
                                     </a>

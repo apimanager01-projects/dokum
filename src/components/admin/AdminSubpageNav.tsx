@@ -22,7 +22,7 @@ export function AdminSubpageNav({ active }: { active: Tab }) {
             href={tab.href}
             className={
               tab.id === active
-                ? 'rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white'
+                ? 'rounded-md border border-brand bg-brand/10 px-3 py-1.5 text-sm font-medium text-brand'
                 : 'rounded-md px-3 py-1.5 text-sm text-gray-500 hover:bg-gray-100 hover:text-gray-800'
             }
           >

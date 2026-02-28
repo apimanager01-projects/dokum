@@ -40,7 +40,7 @@ export function KursTree({ kurse, selectedKursId }: Props) {
             key={kurs.id}
             className={`rounded-lg border p-4 transition-colors ${
               isSelected
-                ? 'border-gray-900 bg-gray-50 ring-1 ring-gray-900'
+                ? 'border-brand bg-gray-50 ring-1 ring-brand'
                 : 'border-gray-200 bg-white'
             }`}
           >

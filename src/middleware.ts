@@ -34,11 +34,19 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl
   const isAuthPage = pathname.startsWith('/auth')
+  const isAdminPage = pathname.startsWith('/admin')
 
   // Unauthenticated user trying to access a protected page → redirect to login
   if (!user && !isAuthPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
+    return NextResponse.redirect(url)
+  }
+
+  // Authenticated user without admin role trying to access /admin → redirect to home
+  if (user && isAdminPage && user.app_metadata?.['role'] !== 'admin') {
+    const url = request.nextUrl.clone()
+    url.pathname = '/'
     return NextResponse.redirect(url)
   }
 

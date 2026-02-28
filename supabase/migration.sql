@@ -60,3 +60,31 @@ CREATE POLICY "Authenticated users can view published documents"
   ON public.documents FOR SELECT
   TO authenticated
   USING (published = TRUE);
+
+-- Admins can insert documents (role checked from JWT app_metadata)
+CREATE POLICY "Admins can insert documents"
+  ON public.documents FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+  );
+
+-- ─────────────────────────────────────────────
+-- Storage policies (run in Supabase SQL editor)
+-- ─────────────────────────────────────────────
+
+-- Admins can upload files to the pdfs bucket
+CREATE POLICY "Admins can upload PDFs"
+  ON storage.objects FOR INSERT
+  TO authenticated
+  WITH CHECK (
+    bucket_id = 'pdfs'
+    AND (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+  );
+
+-- ─────────────────────────────────────────────
+-- Granting admin role (run once per admin user)
+-- ─────────────────────────────────────────────
+-- UPDATE auth.users
+-- SET raw_app_meta_data = raw_app_meta_data || '{"role": "admin"}'::jsonb
+-- WHERE email = 'your-admin@example.com';

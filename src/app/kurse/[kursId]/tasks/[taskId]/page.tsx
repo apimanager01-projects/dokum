@@ -32,12 +32,13 @@ export default async function TaskPage({
       )
     `)
     .eq('id', taskId)
-    .eq('units.kurs_id', kursId)
     .single()
 
   if (error || !data) notFound()
 
   const task = data as unknown as TaskWithDocumentsAndKurs
+  if (task.units.kurs_id !== kursId) notFound()
+
   const kursTitle = task.units.kurse.title
 
   // Sort documents by position ASC, then created_at ASC

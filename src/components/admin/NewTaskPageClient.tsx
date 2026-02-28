@@ -5,7 +5,7 @@ import { AddTaskForm } from '@/components/admin/AddTaskForm'
 import { TaskTree } from '@/components/admin/TaskTree'
 
 type Task = { id: string; title: string; position: number; created_at: string }
-type Unit = { id: string; title: string; position: number; created_at: string; tasks: Task[] }
+type Unit = { id: string; kurs_id: string; title: string; description: string | null; position: number; created_at: string; tasks: Task[] }
 type KursWithUnitsAndTasks = { id: string; title: string; units: Unit[] }
 
 type Props = {

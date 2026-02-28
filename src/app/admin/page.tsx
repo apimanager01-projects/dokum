@@ -1,9 +1,29 @@
 import { redirect } from 'next/navigation'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { AddKursForm } from '@/components/admin/AddKursForm'
-import { AddUnitForm } from '@/components/admin/AddUnitForm'
-import { AddTaskForm } from '@/components/admin/AddTaskForm'
-import { AddDocumentForm } from '@/components/admin/AddDocumentForm'
+
+const cards = [
+  {
+    label: 'Kurs anlegen',
+    subtitle: null,
+    href: '/admin/kurse/new',
+  },
+  {
+    label: 'Unit anlegen',
+    subtitle: 'zu einem Kurs',
+    href: '/admin/units/new',
+  },
+  {
+    label: 'Task anlegen',
+    subtitle: 'zu einer Unit',
+    href: '/admin/tasks/new',
+  },
+  {
+    label: 'Dokument hinzufügen',
+    subtitle: 'zu einem Task',
+    href: '/admin/documents/new',
+  },
+]
 
 export default async function AdminPage() {
   const supabase = await createClient()
@@ -11,63 +31,31 @@ export default async function AdminPage() {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Belt-and-suspenders: middleware handles the redirect, but guard here too
   if (!user || user.app_metadata?.['role'] !== 'admin') {
     redirect('/')
   }
 
-  // Fetch all kurse, units, and tasks to populate form dropdowns
-  const [{ data: kurse }, { data: units }, { data: tasks }] = await Promise.all([
-    supabase
-      .from('kurse')
-      .select('id, title')
-      .order('position', { ascending: true })
-      .order('created_at', { ascending: true }),
-    supabase
-      .from('units')
-      .select('*, kurse ( title )')
-      .order('position', { ascending: true })
-      .order('created_at', { ascending: true }),
-    supabase
-      .from('tasks')
-      .select('*, units ( title, kurse ( title ) )')
-      .order('position', { ascending: true })
-      .order('created_at', { ascending: true }),
-  ])
-
   return (
-    <main className="mx-auto max-w-2xl px-4 py-10 space-y-14">
-      <h1 className="text-2xl font-bold text-gray-900">Admin</h1>
+    <main className="mx-auto max-w-4xl px-4 py-10">
+      <h1 className="mb-8 text-2xl font-bold text-gray-900">Admin</h1>
 
-      <section>
-        <h2 className="mb-4 text-lg font-semibold text-gray-800 border-b border-gray-200 pb-2">
-          Add Kurs
-        </h2>
-        <AddKursForm />
-      </section>
-
-      <section>
-        <h2 className="mb-4 text-lg font-semibold text-gray-800 border-b border-gray-200 pb-2">
-          Add Unit
-        </h2>
-        <AddUnitForm kurse={kurse ?? []} />
-      </section>
-
-      <section>
-        <h2 className="mb-4 text-lg font-semibold text-gray-800 border-b border-gray-200 pb-2">
-          Add Task
-        </h2>
-        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-        <AddTaskForm units={(units as any) ?? []} />
-      </section>
-
-      <section>
-        <h2 className="mb-4 text-lg font-semibold text-gray-800 border-b border-gray-200 pb-2">
-          Add Document (PDF)
-        </h2>
-        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-        <AddDocumentForm tasks={(tasks as any) ?? []} />
-      </section>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        {cards.map((card) => (
+          <Link
+            key={card.href}
+            href={card.href}
+            className="flex flex-col justify-between rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition hover:shadow-md hover:border-gray-300"
+          >
+            <div>
+              <p className="text-sm font-semibold text-gray-900">{card.label}</p>
+              {card.subtitle && (
+                <p className="mt-1 text-xs text-gray-400">{card.subtitle}</p>
+              )}
+            </div>
+            <span className="mt-4 text-xs font-medium text-gray-400">→</span>
+          </Link>
+        ))}
+      </div>
     </main>
   )
 }

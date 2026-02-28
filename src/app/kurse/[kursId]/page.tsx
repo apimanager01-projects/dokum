@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import type { KursWithUnits } from '@/types'
+import KursDetailClient from '@/components/KursDetailClient'
 
 export default async function KursPage({ params }: { params: Promise<{ kursId: string }> }) {
   const { kursId } = await params
@@ -13,7 +14,10 @@ export default async function KursPage({ params }: { params: Promise<{ kursId: s
       *,
       units (
         *,
-        tasks ( * )
+        tasks (
+          *,
+          documents ( * )
+        )
       )
     `)
     .eq('id', kursId)
@@ -23,11 +27,36 @@ export default async function KursPage({ params }: { params: Promise<{ kursId: s
 
   const kurs = data as KursWithUnits
 
-  // Sort units and tasks by position ASC, then created_at ASC
+  // Sort units, tasks, and documents by position ASC, then created_at ASC
   kurs.units.sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
-  kurs.units.forEach((unit) =>
+  kurs.units.forEach((unit) => {
     unit.tasks.sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
+    unit.tasks.forEach((task) =>
+      task.documents.sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
+    )
+  })
+
+  // Collect all documents and generate signed URLs in parallel
+  const allDocs = kurs.units.flatMap((u) => u.tasks.flatMap((t) => t.documents))
+  const signedResults = await Promise.all(
+    allDocs.map((doc) => supabase.storage.from('pdfs').createSignedUrl(doc.pdf_path, 60 * 60))
   )
+  const urlMap: Record<string, string | null> = {}
+  allDocs.forEach((doc, i) => {
+    urlMap[doc.id] = signedResults[i].data?.signedUrl ?? null
+  })
+
+  // Enrich units with signed URLs on each document
+  const enrichedUnits = kurs.units.map((unit) => ({
+    ...unit,
+    tasks: unit.tasks.map((task) => ({
+      ...task,
+      documents: task.documents.map((doc) => ({
+        ...doc,
+        signedUrl: urlMap[doc.id] ?? null,
+      })),
+    })),
+  }))
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
@@ -40,38 +69,7 @@ export default async function KursPage({ params }: { params: Promise<{ kursId: s
         <p className="mt-2 text-gray-600">{kurs.description}</p>
       )}
 
-      {kurs.units.length === 0 ? (
-        <p className="mt-8 text-sm text-gray-500">No units yet.</p>
-      ) : (
-        <div className="mt-8 space-y-8">
-          {kurs.units.map((unit) => (
-            <section key={unit.id}>
-              <h2 className="text-lg font-semibold text-gray-800">{unit.title}</h2>
-              {unit.description && (
-                <p className="mt-1 text-sm text-gray-500">{unit.description}</p>
-              )}
-
-              {unit.tasks.length === 0 ? (
-                <p className="mt-3 text-sm text-gray-400">No tasks yet.</p>
-              ) : (
-                <ul className="mt-3 space-y-1">
-                  {unit.tasks.map((task) => (
-                    <li key={task.id}>
-                      <Link
-                        href={`/kurse/${kursId}/tasks/${task.id}`}
-                        className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors"
-                      >
-                        <span className="text-gray-400">›</span>
-                        {task.title}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          ))}
-        </div>
-      )}
+      <KursDetailClient units={enrichedUnits} />
     </main>
   )
 }

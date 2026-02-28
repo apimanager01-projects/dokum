@@ -1,12 +1,14 @@
 'use client'
 
 import { useActionState } from 'react'
+import Link from 'next/link'
 import { createUnit } from '@/actions/admin'
 import type { Kurs } from '@/types'
 
 type ActionState = {
   error?: string
   success?: boolean
+  id?: string
 }
 
 const initialState: ActionState = {}
@@ -14,9 +16,11 @@ const initialState: ActionState = {}
 export function AddUnitForm({
   kurse,
   onKursChange,
+  defaultKursId = '',
 }: {
   kurse: Pick<Kurs, 'id' | 'title'>[]
   onKursChange?: (kursId: string) => void
+  defaultKursId?: string
 }) {
   const [state, action, pending] = useActionState(
     async (_prev: ActionState, formData: FormData) => {
@@ -33,10 +37,24 @@ export function AddUnitForm({
           {state.error}
         </p>
       )}
-      {state.success && (
-        <p className="text-sm text-green-600 bg-green-50 border border-green-200 rounded-md px-3 py-2">
-          Unit added successfully.
-        </p>
+      {state.success && state.id && (
+        <div className="rounded-md border border-green-200 bg-green-50 px-3 py-3">
+          <p className="text-sm font-medium text-green-800">Unit erfolgreich angelegt!</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link
+              href="/admin"
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+            >
+              ← Zurück zur Übersicht
+            </Link>
+            <Link
+              href={`/admin/tasks/new?unitId=${state.id}`}
+              className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-700"
+            >
+              Task hinzufügen →
+            </Link>
+          </div>
+        </div>
       )}
 
       <div className="flex flex-col gap-1">
@@ -47,6 +65,7 @@ export function AddUnitForm({
           id="unit-kurs"
           name="kurs_id"
           required
+          defaultValue={defaultKursId}
           onChange={(e) => onKursChange?.(e.target.value)}
           className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
         >

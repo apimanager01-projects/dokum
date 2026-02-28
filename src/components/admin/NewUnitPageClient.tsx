@@ -19,16 +19,17 @@ type KursWithUnits = {
 
 type Props = {
   kurseWithUnits: KursWithUnits[]
+  defaultKursId: string
 }
 
-export function NewUnitPageClient({ kurseWithUnits }: Props) {
-  const [selectedKursId, setSelectedKursId] = useState('')
+export function NewUnitPageClient({ kurseWithUnits, defaultKursId }: Props) {
+  const [selectedKursId, setSelectedKursId] = useState(defaultKursId)
 
   const kurse = kurseWithUnits.map(({ id, title }) => ({ id, title }))
 
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-[7fr_3fr]">
-      <AddUnitForm kurse={kurse} onKursChange={setSelectedKursId} />
+      <AddUnitForm kurse={kurse} onKursChange={setSelectedKursId} defaultKursId={defaultKursId} />
       <div>
         <p className="mb-3 text-sm font-medium text-gray-500">Kurs-Übersicht</p>
         <KursTree kurse={kurseWithUnits} selectedKursId={selectedKursId} />

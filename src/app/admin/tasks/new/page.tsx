@@ -3,7 +3,11 @@ import { createClient } from '@/lib/supabase/server'
 import { NewTaskPageClient } from '@/components/admin/NewTaskPageClient'
 import { AdminSubpageNav } from '@/components/admin/AdminSubpageNav'
 
-export default async function NewTaskPage() {
+export default async function NewTaskPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ unitId?: string }>
+}) {
   const supabase = await createClient()
   const {
     data: { user },
@@ -12,6 +16,8 @@ export default async function NewTaskPage() {
   if (!user || user.app_metadata?.['role'] !== 'admin') {
     redirect('/')
   }
+
+  const { unitId: defaultUnitId } = await searchParams
 
   const { data: kurse } = await supabase
     .from('kurse')
@@ -24,7 +30,7 @@ export default async function NewTaskPage() {
       <AdminSubpageNav active="tasks" />
       <h1 className="mb-8 text-2xl font-bold text-gray-900">Task anlegen</h1>
       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      <NewTaskPageClient kurseWithUnitsAndTasks={(kurse as any) ?? []} />
+      <NewTaskPageClient kurseWithUnitsAndTasks={(kurse as any) ?? []} defaultUnitId={defaultUnitId ?? ''} />
     </main>
   )
 }

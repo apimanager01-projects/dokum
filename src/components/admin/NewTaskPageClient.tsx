@@ -10,10 +10,11 @@ type KursWithUnitsAndTasks = { id: string; title: string; units: Unit[] }
 
 type Props = {
   kurseWithUnitsAndTasks: KursWithUnitsAndTasks[]
+  defaultUnitId: string
 }
 
-export function NewTaskPageClient({ kurseWithUnitsAndTasks }: Props) {
-  const [selectedUnitId, setSelectedUnitId] = useState('')
+export function NewTaskPageClient({ kurseWithUnitsAndTasks, defaultUnitId }: Props) {
+  const [selectedUnitId, setSelectedUnitId] = useState(defaultUnitId)
 
   // Flatten units with kurs title for the form dropdown
   const units = kurseWithUnitsAndTasks.flatMap((kurs) =>
@@ -25,7 +26,7 @@ export function NewTaskPageClient({ kurseWithUnitsAndTasks }: Props) {
 
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-[7fr_3fr]">
-      <AddTaskForm units={units} onUnitChange={setSelectedUnitId} />
+      <AddTaskForm units={units} onUnitChange={setSelectedUnitId} defaultUnitId={defaultUnitId} />
       <div>
         <p className="mb-3 text-sm font-medium text-gray-500">Kurs-Übersicht</p>
         <TaskTree kurse={kurseWithUnitsAndTasks} selectedUnitId={selectedUnitId} />

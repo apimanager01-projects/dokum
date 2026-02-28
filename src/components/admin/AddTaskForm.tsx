@@ -1,12 +1,14 @@
 'use client'
 
 import { useActionState } from 'react'
+import Link from 'next/link'
 import { createTask } from '@/actions/admin'
 import type { Unit, Kurs } from '@/types'
 
 type ActionState = {
   error?: string
   success?: boolean
+  id?: string
 }
 
 const initialState: ActionState = {}
@@ -16,9 +18,11 @@ type UnitWithKurs = Unit & { kurse: Pick<Kurs, 'title'> }
 export function AddTaskForm({
   units,
   onUnitChange,
+  defaultUnitId = '',
 }: {
   units: UnitWithKurs[]
   onUnitChange?: (unitId: string) => void
+  defaultUnitId?: string
 }) {
   const [state, action, pending] = useActionState(
     async (_prev: ActionState, formData: FormData) => {
@@ -35,10 +39,24 @@ export function AddTaskForm({
           {state.error}
         </p>
       )}
-      {state.success && (
-        <p className="text-sm text-green-600 bg-green-50 border border-green-200 rounded-md px-3 py-2">
-          Task added successfully.
-        </p>
+      {state.success && state.id && (
+        <div className="rounded-md border border-green-200 bg-green-50 px-3 py-3">
+          <p className="text-sm font-medium text-green-800">Task erfolgreich angelegt!</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link
+              href="/admin"
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+            >
+              ← Zurück zur Übersicht
+            </Link>
+            <Link
+              href={`/admin/documents/new?taskId=${state.id}`}
+              className="rounded-md bg-gray-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-gray-700"
+            >
+              Dokument hinzufügen →
+            </Link>
+          </div>
+        </div>
       )}
 
       <div className="flex flex-col gap-1">
@@ -49,6 +67,7 @@ export function AddTaskForm({
           id="task-unit"
           name="unit_id"
           required
+          defaultValue={defaultUnitId}
           onChange={(e) => onUnitChange?.(e.target.value)}
           className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
         >

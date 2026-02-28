@@ -11,10 +11,11 @@ type KursTree = { id: string; title: string; units: Unit[] }
 
 type Props = {
   kurseTree: KursTree[]
+  defaultTaskId: string
 }
 
-export function NewDocumentPageClient({ kurseTree }: Props) {
-  const [selectedTaskId, setSelectedTaskId] = useState('')
+export function NewDocumentPageClient({ kurseTree, defaultTaskId }: Props) {
+  const [selectedTaskId, setSelectedTaskId] = useState(defaultTaskId)
 
   // Flatten tasks with unit + kurs labels for the form dropdown
   const tasks = kurseTree.flatMap((kurs) =>
@@ -28,7 +29,7 @@ export function NewDocumentPageClient({ kurseTree }: Props) {
 
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-[7fr_3fr]">
-      <AddDocumentForm tasks={tasks} onTaskChange={setSelectedTaskId} />
+      <AddDocumentForm tasks={tasks} onTaskChange={setSelectedTaskId} defaultTaskId={defaultTaskId} />
       <div>
         <p className="mb-3 text-sm font-medium text-gray-500">Kurs-Übersicht</p>
         <DocumentTree kurse={kurseTree} selectedTaskId={selectedTaskId} />

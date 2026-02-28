@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 type ActionResult = {
   error?: string
   success?: boolean
+  id?: string
 }
 
 async function getAdminUser() {
@@ -31,10 +32,14 @@ export async function createKurs(formData: FormData): Promise<ActionResult> {
 
   if (!title) return { error: 'Title is required.' }
 
-  const { error } = await supabase.from('kurse').insert({ title, description, position, published })
+  const { data, error } = await supabase
+    .from('kurse')
+    .insert({ title, description, position, published })
+    .select('id')
+    .single()
   if (error) return { error: `Failed to create Kurs: ${error.message}` }
 
-  return { success: true }
+  return { success: true, id: data.id }
 }
 
 export async function createUnit(formData: FormData): Promise<ActionResult> {
@@ -48,10 +53,14 @@ export async function createUnit(formData: FormData): Promise<ActionResult> {
   if (!kurs_id) return { error: 'Please select a Kurs.' }
   if (!title) return { error: 'Title is required.' }
 
-  const { error } = await supabase.from('units').insert({ kurs_id, title, description, position })
+  const { data, error } = await supabase
+    .from('units')
+    .insert({ kurs_id, title, description, position })
+    .select('id')
+    .single()
   if (error) return { error: `Failed to create Unit: ${error.message}` }
 
-  return { success: true }
+  return { success: true, id: data.id }
 }
 
 export async function createTask(formData: FormData): Promise<ActionResult> {
@@ -65,10 +74,14 @@ export async function createTask(formData: FormData): Promise<ActionResult> {
   if (!unit_id) return { error: 'Please select a Unit.' }
   if (!title) return { error: 'Title is required.' }
 
-  const { error } = await supabase.from('tasks').insert({ unit_id, title, description, position })
+  const { data, error } = await supabase
+    .from('tasks')
+    .insert({ unit_id, title, description, position })
+    .select('id')
+    .single()
   if (error) return { error: `Failed to create Task: ${error.message}` }
 
-  return { success: true }
+  return { success: true, id: data.id }
 }
 
 export async function createDocument(formData: FormData): Promise<ActionResult> {

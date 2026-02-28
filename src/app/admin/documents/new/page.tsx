@@ -3,7 +3,11 @@ import { createClient } from '@/lib/supabase/server'
 import { NewDocumentPageClient } from '@/components/admin/NewDocumentPageClient'
 import { AdminSubpageNav } from '@/components/admin/AdminSubpageNav'
 
-export default async function NewDocumentPage() {
+export default async function NewDocumentPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ taskId?: string }>
+}) {
   const supabase = await createClient()
   const {
     data: { user },
@@ -12,6 +16,8 @@ export default async function NewDocumentPage() {
   if (!user || user.app_metadata?.['role'] !== 'admin') {
     redirect('/')
   }
+
+  const { taskId: defaultTaskId } = await searchParams
 
   const { data: kurse } = await supabase
     .from('kurse')
@@ -24,7 +30,7 @@ export default async function NewDocumentPage() {
       <AdminSubpageNav active="documents" />
       <h1 className="mb-8 text-2xl font-bold text-gray-900">Dokument hinzufügen</h1>
       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      <NewDocumentPageClient kurseTree={(kurse as any) ?? []} />
+      <NewDocumentPageClient kurseTree={(kurse as any) ?? []} defaultTaskId={defaultTaskId ?? ''} />
     </main>
   )
 }

@@ -3,7 +3,11 @@ import { createClient } from '@/lib/supabase/server'
 import { NewUnitPageClient } from '@/components/admin/NewUnitPageClient'
 import { AdminSubpageNav } from '@/components/admin/AdminSubpageNav'
 
-export default async function NewUnitPage() {
+export default async function NewUnitPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ kursId?: string }>
+}) {
   const supabase = await createClient()
   const {
     data: { user },
@@ -12,6 +16,8 @@ export default async function NewUnitPage() {
   if (!user || user.app_metadata?.['role'] !== 'admin') {
     redirect('/')
   }
+
+  const { kursId: defaultKursId } = await searchParams
 
   const { data: kurse } = await supabase
     .from('kurse')
@@ -24,7 +30,7 @@ export default async function NewUnitPage() {
       <AdminSubpageNav active="units" />
       <h1 className="mb-8 text-2xl font-bold text-gray-900">Unit anlegen</h1>
       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      <NewUnitPageClient kurseWithUnits={(kurse as any) ?? []} />
+      <NewUnitPageClient kurseWithUnits={(kurse as any) ?? []} defaultKursId={defaultKursId ?? ''} />
     </main>
   )
 }

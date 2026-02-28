@@ -16,9 +16,11 @@ type TaskWithUnit = Task & { units: Unit & { kurse: Pick<Kurs, 'title'> } }
 export function AddDocumentForm({
   tasks,
   onTaskChange,
+  defaultTaskId = '',
 }: {
   tasks: TaskWithUnit[]
   onTaskChange?: (taskId: string) => void
+  defaultTaskId?: string
 }) {
   const [state, action, pending] = useActionState(
     async (_prev: ActionState, formData: FormData) => {
@@ -36,9 +38,17 @@ export function AddDocumentForm({
         </p>
       )}
       {state.success && (
-        <p className="text-sm text-green-600 bg-green-50 border border-green-200 rounded-md px-3 py-2">
-          Document added successfully.
-        </p>
+        <div className="rounded-md border border-green-200 bg-green-50 px-3 py-3">
+          <p className="text-sm font-medium text-green-800">Dokument erfolgreich hochgeladen!</p>
+          <div className="mt-3">
+            <a
+              href="/admin"
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+            >
+              ← Zurück zur Übersicht
+            </a>
+          </div>
+        </div>
       )}
 
       <div className="flex flex-col gap-1">
@@ -49,6 +59,7 @@ export function AddDocumentForm({
           id="doc-task"
           name="task_id"
           required
+          defaultValue={defaultTaskId}
           onChange={(e) => onTaskChange?.(e.target.value)}
           className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
         >

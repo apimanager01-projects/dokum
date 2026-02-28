@@ -5,11 +5,51 @@ export interface Profile {
   created_at: string
 }
 
-export interface Document {
+export interface Kurs {
   id: string
   title: string
   description: string | null
-  pdf_path: string
   published: boolean
+  position: number
   created_at: string
+}
+
+export interface Unit {
+  id: string
+  kurs_id: string
+  title: string
+  description: string | null
+  position: number
+  created_at: string
+}
+
+export interface Task {
+  id: string
+  unit_id: string
+  title: string
+  description: string | null
+  position: number
+  created_at: string
+}
+
+export interface Document {
+  id: string
+  task_id: string
+  title: string
+  description: string | null
+  pdf_path: string
+  position: number
+  created_at: string
+}
+
+export interface TaskWithDocuments extends Task {
+  documents: Document[]
+}
+
+export interface UnitWithTasks extends Unit {
+  tasks: TaskWithDocuments[]
+}
+
+export interface KursWithUnits extends Kurs {
+  units: UnitWithTasks[]
 }

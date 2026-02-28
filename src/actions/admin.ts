@@ -8,10 +8,8 @@ type ActionResult = {
   success?: boolean
 }
 
-export async function createDocument(formData: FormData): Promise<ActionResult> {
+async function getAdminUser() {
   const supabase = await createClient()
-
-  // Re-validate admin status server-side — never trust the caller
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -20,21 +18,72 @@ export async function createDocument(formData: FormData): Promise<ActionResult> 
     redirect('/')
   }
 
-  // Extract and validate form fields
+  return { supabase, user }
+}
+
+export async function createKurs(formData: FormData): Promise<ActionResult> {
+  const { supabase } = await getAdminUser()
+
+  const title = (formData.get('title') as string | null)?.trim()
+  const description = (formData.get('description') as string | null)?.trim() || null
+  const position = parseInt((formData.get('position') as string | null) ?? '0', 10)
+  const published = formData.get('published') === 'true'
+
+  if (!title) return { error: 'Title is required.' }
+
+  const { error } = await supabase.from('kurse').insert({ title, description, position, published })
+  if (error) return { error: `Failed to create Kurs: ${error.message}` }
+
+  return { success: true }
+}
+
+export async function createUnit(formData: FormData): Promise<ActionResult> {
+  const { supabase } = await getAdminUser()
+
+  const kurs_id = (formData.get('kurs_id') as string | null)?.trim()
+  const title = (formData.get('title') as string | null)?.trim()
+  const description = (formData.get('description') as string | null)?.trim() || null
+  const position = parseInt((formData.get('position') as string | null) ?? '0', 10)
+
+  if (!kurs_id) return { error: 'Please select a Kurs.' }
+  if (!title) return { error: 'Title is required.' }
+
+  const { error } = await supabase.from('units').insert({ kurs_id, title, description, position })
+  if (error) return { error: `Failed to create Unit: ${error.message}` }
+
+  return { success: true }
+}
+
+export async function createTask(formData: FormData): Promise<ActionResult> {
+  const { supabase } = await getAdminUser()
+
+  const unit_id = (formData.get('unit_id') as string | null)?.trim()
+  const title = (formData.get('title') as string | null)?.trim()
+  const description = (formData.get('description') as string | null)?.trim() || null
+  const position = parseInt((formData.get('position') as string | null) ?? '0', 10)
+
+  if (!unit_id) return { error: 'Please select a Unit.' }
+  if (!title) return { error: 'Title is required.' }
+
+  const { error } = await supabase.from('tasks').insert({ unit_id, title, description, position })
+  if (error) return { error: `Failed to create Task: ${error.message}` }
+
+  return { success: true }
+}
+
+export async function createDocument(formData: FormData): Promise<ActionResult> {
+  const { supabase, user } = await getAdminUser()
+
+  const task_id = (formData.get('task_id') as string | null)?.trim()
   const title = (formData.get('title') as string | null)?.trim()
   const description = (formData.get('description') as string | null)?.trim() || null
   const pdfFile = formData.get('pdf') as File | null
-  const published = formData.get('published') === 'true'
+  const position = parseInt((formData.get('position') as string | null) ?? '0', 10)
 
-  if (!title) {
-    return { error: 'Title is required.' }
-  }
-  if (!pdfFile || pdfFile.size === 0) {
-    return { error: 'A PDF file is required.' }
-  }
-  if (pdfFile.type !== 'application/pdf') {
-    return { error: 'The uploaded file must be a PDF.' }
-  }
+  if (!task_id) return { error: 'Please select a Task.' }
+  if (!title) return { error: 'Title is required.' }
+  if (!pdfFile || pdfFile.size === 0) return { error: 'A PDF file is required.' }
+  if (pdfFile.type !== 'application/pdf') return { error: 'The uploaded file must be a PDF.' }
 
   // Generate storage path: documents/{userId}/{timestamp}-{sanitised-title}.pdf
   const sanitisedTitle = title
@@ -44,28 +93,17 @@ export async function createDocument(formData: FormData): Promise<ActionResult> 
     .slice(0, 60)
   const storagePath = `documents/${user.id}/${Date.now()}-${sanitisedTitle}.pdf`
 
-  // Upload to Supabase Storage
   const { error: uploadError } = await supabase.storage
     .from('pdfs')
-    .upload(storagePath, pdfFile, {
-      contentType: 'application/pdf',
-      upsert: false,
-    })
+    .upload(storagePath, pdfFile, { contentType: 'application/pdf', upsert: false })
 
-  if (uploadError) {
-    return { error: `Upload failed: ${uploadError.message}` }
-  }
+  if (uploadError) return { error: `Upload failed: ${uploadError.message}` }
 
-  // Insert the document row (pdf_path stores the path, never a signed URL)
-  const { error: insertError } = await supabase.from('documents').insert({
-    title,
-    description,
-    pdf_path: storagePath,
-    published,
-  })
+  const { error: insertError } = await supabase
+    .from('documents')
+    .insert({ task_id, title, description, pdf_path: storagePath, position })
 
   if (insertError) {
-    // Best-effort cleanup: remove the uploaded file to avoid orphaned storage objects
     await supabase.storage.from('pdfs').remove([storagePath])
     return { error: `Failed to save document: ${insertError.message}` }
   }

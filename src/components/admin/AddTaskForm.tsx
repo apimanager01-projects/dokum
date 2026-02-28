@@ -1,8 +1,8 @@
 'use client'
 
 import { useActionState } from 'react'
-import { createDocument } from '@/actions/admin'
-import type { Task, Unit, Kurs } from '@/types'
+import { createTask } from '@/actions/admin'
+import type { Unit, Kurs } from '@/types'
 
 type ActionState = {
   error?: string
@@ -11,12 +11,12 @@ type ActionState = {
 
 const initialState: ActionState = {}
 
-type TaskWithUnit = Task & { units: Unit & { kurse: Pick<Kurs, 'title'> } }
+type UnitWithKurs = Unit & { kurse: Pick<Kurs, 'title'> }
 
-export function AddDocumentForm({ tasks }: { tasks: TaskWithUnit[] }) {
+export function AddTaskForm({ units }: { units: UnitWithKurs[] }) {
   const [state, action, pending] = useActionState(
     async (_prev: ActionState, formData: FormData) => {
-      const result = await createDocument(formData)
+      const result = await createTask(formData)
       return result ?? initialState
     },
     initialState
@@ -31,35 +31,35 @@ export function AddDocumentForm({ tasks }: { tasks: TaskWithUnit[] }) {
       )}
       {state.success && (
         <p className="text-sm text-green-600 bg-green-50 border border-green-200 rounded-md px-3 py-2">
-          Document added successfully.
+          Task added successfully.
         </p>
       )}
 
       <div className="flex flex-col gap-1">
-        <label htmlFor="doc-task" className="text-sm font-medium text-gray-700">
-          Task <span className="text-red-500">*</span>
+        <label htmlFor="task-unit" className="text-sm font-medium text-gray-700">
+          Unit <span className="text-red-500">*</span>
         </label>
         <select
-          id="doc-task"
-          name="task_id"
+          id="task-unit"
+          name="unit_id"
           required
           className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
         >
-          <option value="">— Select a Task —</option>
-          {tasks.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.units.kurse.title} › {t.units.title} › {t.title}
+          <option value="">— Select a Unit —</option>
+          {units.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.kurse.title} › {u.title}
             </option>
           ))}
         </select>
       </div>
 
       <div className="flex flex-col gap-1">
-        <label htmlFor="doc-title" className="text-sm font-medium text-gray-700">
+        <label htmlFor="task-title" className="text-sm font-medium text-gray-700">
           Title <span className="text-red-500">*</span>
         </label>
         <input
-          id="doc-title"
+          id="task-title"
           name="title"
           type="text"
           required
@@ -68,11 +68,11 @@ export function AddDocumentForm({ tasks }: { tasks: TaskWithUnit[] }) {
       </div>
 
       <div className="flex flex-col gap-1">
-        <label htmlFor="doc-description" className="text-sm font-medium text-gray-700">
+        <label htmlFor="task-description" className="text-sm font-medium text-gray-700">
           Description
         </label>
         <textarea
-          id="doc-description"
+          id="task-description"
           name="description"
           rows={3}
           className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
@@ -80,32 +80,17 @@ export function AddDocumentForm({ tasks }: { tasks: TaskWithUnit[] }) {
       </div>
 
       <div className="flex flex-col gap-1">
-        <label htmlFor="doc-pdf" className="text-sm font-medium text-gray-700">
-          PDF File <span className="text-red-500">*</span>
-        </label>
-        <input
-          id="doc-pdf"
-          name="pdf"
-          type="file"
-          accept="application/pdf"
-          required
-          className="text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200"
-        />
-        <p className="text-xs text-gray-400">Max file size: 10 MB</p>
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label htmlFor="doc-position" className="text-sm font-medium text-gray-700">
+        <label htmlFor="task-position" className="text-sm font-medium text-gray-700">
           Position
         </label>
         <input
-          id="doc-position"
+          id="task-position"
           name="position"
           type="number"
           defaultValue={0}
           className="w-24 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900"
         />
-        <p className="text-xs text-gray-400">Lower numbers appear first within the Task.</p>
+        <p className="text-xs text-gray-400">Lower numbers appear first within the Unit.</p>
       </div>
 
       <button
@@ -113,7 +98,7 @@ export function AddDocumentForm({ tasks }: { tasks: TaskWithUnit[] }) {
         disabled={pending}
         className="rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-50"
       >
-        {pending ? 'Saving…' : 'Add Document'}
+        {pending ? 'Saving…' : 'Add Task'}
       </button>
     </form>
   )

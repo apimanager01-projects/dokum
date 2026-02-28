@@ -12,13 +12,46 @@ CREATE TABLE public.profiles (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- documents: managed via the Supabase dashboard
-CREATE TABLE public.documents (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  title       TEXT NOT NULL,
+-- ─── Kurs → Unit → Task → Document hierarchy ───────────
+
+-- kurse: top-level groupings (e.g. "Kurs 1")
+CREATE TABLE public.kurse (
+  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  title       TEXT        NOT NULL,
   description TEXT,
-  pdf_path    TEXT NOT NULL,       -- storage path inside the 'pdfs' bucket
-  published   BOOLEAN NOT NULL DEFAULT FALSE,
+  published   BOOLEAN     NOT NULL DEFAULT FALSE,
+  position    INTEGER     NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- units: second level, belong to a Kurs
+CREATE TABLE public.units (
+  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  kurs_id     UUID        NOT NULL REFERENCES public.kurse(id) ON DELETE CASCADE,
+  title       TEXT        NOT NULL,
+  description TEXT,
+  position    INTEGER     NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- tasks: third level, belong to a Unit
+CREATE TABLE public.tasks (
+  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  unit_id     UUID        NOT NULL REFERENCES public.units(id) ON DELETE CASCADE,
+  title       TEXT        NOT NULL,
+  description TEXT,
+  position    INTEGER     NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- documents: PDF leaf nodes, belong to a Task (one or more per task)
+CREATE TABLE public.documents (
+  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  task_id     UUID        NOT NULL REFERENCES public.tasks(id) ON DELETE CASCADE,
+  title       TEXT        NOT NULL,
+  description TEXT,
+  pdf_path    TEXT        NOT NULL, -- storage path inside the 'pdfs' bucket
+  position    INTEGER     NOT NULL DEFAULT 0,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -48,6 +81,9 @@ CREATE TRIGGER on_auth_user_created
 -- ─────────────────────────────────────────────
 
 ALTER TABLE public.profiles  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.kurse     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.units     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tasks     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.documents ENABLE ROW LEVEL SECURITY;
 
 -- Each user can only see their own profile
@@ -55,19 +91,71 @@ CREATE POLICY "Users can view own profile"
   ON public.profiles FOR SELECT
   USING (id = auth.uid());
 
--- Any authenticated user can see published documents
-CREATE POLICY "Authenticated users can view published documents"
-  ON public.documents FOR SELECT
+-- ── SELECT: visibility is inherited from the parent Kurs's published flag ──
+
+-- Authenticated users see published kurse
+CREATE POLICY "Authenticated users can view published kurse"
+  ON public.kurse FOR SELECT
   TO authenticated
   USING (published = TRUE);
 
--- Admins can insert documents (role checked from JWT app_metadata)
+-- Units are visible when their parent Kurs is published
+CREATE POLICY "View units of published kurse"
+  ON public.units FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.kurse
+      WHERE kurse.id = units.kurs_id AND kurse.published = TRUE
+    )
+  );
+
+-- Tasks are visible when their grandparent Kurs is published
+CREATE POLICY "View tasks of published kurse"
+  ON public.tasks FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.units
+      JOIN public.kurse ON kurse.id = units.kurs_id
+      WHERE units.id = tasks.unit_id AND kurse.published = TRUE
+    )
+  );
+
+-- Documents are visible when their great-grandparent Kurs is published
+CREATE POLICY "View documents of published kurse"
+  ON public.documents FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.tasks
+      JOIN public.units ON units.id = tasks.unit_id
+      JOIN public.kurse ON kurse.id = units.kurs_id
+      WHERE tasks.id = documents.task_id AND kurse.published = TRUE
+    )
+  );
+
+-- ── INSERT: admin only (role checked from JWT app_metadata) ──
+
+CREATE POLICY "Admins can insert kurse"
+  ON public.kurse FOR INSERT
+  TO authenticated
+  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+CREATE POLICY "Admins can insert units"
+  ON public.units FOR INSERT
+  TO authenticated
+  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+CREATE POLICY "Admins can insert tasks"
+  ON public.tasks FOR INSERT
+  TO authenticated
+  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
 CREATE POLICY "Admins can insert documents"
   ON public.documents FOR INSERT
   TO authenticated
-  WITH CHECK (
-    (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
-  );
+  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- ─────────────────────────────────────────────
 -- Storage policies (run in Supabase SQL editor)

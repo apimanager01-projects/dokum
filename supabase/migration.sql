@@ -135,6 +135,29 @@ CREATE POLICY "View documents of published kurse"
     )
   );
 
+-- ── SELECT: admins can view all rows (including unpublished) ──
+-- Multiple SELECT policies are OR'd, so regular users still only see published content.
+
+CREATE POLICY "Admins can view all kurse"
+  ON public.kurse FOR SELECT
+  TO authenticated
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+CREATE POLICY "Admins can view all units"
+  ON public.units FOR SELECT
+  TO authenticated
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+CREATE POLICY "Admins can view all tasks"
+  ON public.tasks FOR SELECT
+  TO authenticated
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+CREATE POLICY "Admins can view all documents"
+  ON public.documents FOR SELECT
+  TO authenticated
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
 -- ── INSERT: admin only (role checked from JWT app_metadata) ──
 
 CREATE POLICY "Admins can insert kurse"

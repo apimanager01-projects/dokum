@@ -3,13 +3,18 @@ import { KursCard } from '@/components/kurse/KursCard'
 
 export default async function HomePage() {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  const isAdmin = user?.app_metadata?.['role'] === 'admin'
 
-  const { data: kurse, error } = await supabase
+  let query = supabase
     .from('kurse')
     .select('*')
-    .eq('published', true)
     .order('position', { ascending: true })
     .order('created_at', { ascending: true })
+
+  if (!isAdmin) query = query.eq('published', true)
+
+  const { data: kurse, error } = await query
 
   if (error) {
     return (

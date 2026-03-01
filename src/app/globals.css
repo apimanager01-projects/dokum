@@ -17,6 +17,22 @@
   --color-brand-dark: #a6281c;
 }
 
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.65s ease-out both;
+}
+
+.btn-brand {
+  transition: box-shadow 0.15s ease, background-color 0.15s ease;
+}
+.btn-brand:hover {
+  box-shadow: 0 0 0 3px rgb(219 54 39 / 0.25);
+}
+
 body {
   background: var(--background);
   color: var(--foreground);

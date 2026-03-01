@@ -20,7 +20,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${geist.variable} antialiased bg-gray-50 text-gray-900`}>
+      <body className={`${geist.variable} antialiased bg-gray-50 text-gray-900 flex flex-col min-h-screen`}>
         <Navbar />
         {children}
       </body>

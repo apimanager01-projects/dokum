@@ -40,7 +40,7 @@ export function AddKursForm() {
             </Link>
             <Link
               href={`/admin/units/new?kursId=${state.id}`}
-              className="rounded-md border border-brand px-3 py-1.5 text-sm font-medium text-brand hover:bg-brand/5"
+              className="rounded-md border border-brand px-3 py-1.5 text-sm font-medium text-brand hover:bg-brand/5 btn-brand"
             >
               Unit hinzufügen →
             </Link>
@@ -103,7 +103,7 @@ export function AddKursForm() {
       <button
         type="submit"
         disabled={pending}
-        className="self-start rounded-md border border-brand px-4 py-2 text-sm font-medium text-brand hover:bg-brand/5 disabled:opacity-50"
+        className="self-start rounded-md border border-brand px-4 py-2 text-sm font-medium text-brand hover:bg-brand/5 disabled:opacity-50 btn-brand"
       >
         {pending ? 'Saving…' : 'Add Kurs'}
       </button>

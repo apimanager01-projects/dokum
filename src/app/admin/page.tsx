@@ -44,7 +44,7 @@ export default async function AdminPage() {
           <Link
             key={card.href}
             href={card.href}
-            className="flex flex-col justify-between rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:border-brand/30 hover:shadow-md"
+            className="flex flex-col justify-between rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition-all hover:border-brand/30 hover:shadow-md animate-slide-up"
           >
             <div>
               <p className="text-sm font-semibold text-gray-900">{card.label}</p>

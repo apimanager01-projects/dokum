@@ -56,46 +56,52 @@ export default function KursDetailClient({ units }: { units: UnitWithTasksAndUrl
                       {task.title}
                     </button>
 
-                    {isOpen && (
-                      <div className="ml-6 mt-1 mb-2">
-                        {task.description && (
-                          <p className="px-3 pb-2 text-sm text-gray-500">{task.description}</p>
-                        )}
-                        {task.documents.length === 0 ? (
-                          <p className="px-3 text-xs text-gray-400">No documents yet.</p>
-                        ) : (
-                          <ul className="space-y-1">
-                            {task.documents.map((doc) => (
-                              <li
-                                key={doc.id}
-                                className="rounded-md border border-gray-100 bg-gray-50 px-3 py-2"
-                              >
-                                <div className="flex items-center justify-between gap-4">
-                                  <div>
-                                    <p className="text-sm font-medium text-gray-800">{doc.title}</p>
-                                    {doc.description && (
-                                      <p className="text-xs text-gray-500">{doc.description}</p>
+                    <div
+                      className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${
+                        isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                      }`}
+                    >
+                      <div className="overflow-hidden">
+                        <div className="ml-6 mt-1 mb-2">
+                          {task.description && (
+                            <p className="px-3 pb-2 text-sm text-gray-500">{task.description}</p>
+                          )}
+                          {task.documents.length === 0 ? (
+                            <p className="px-3 text-xs text-gray-400">No documents yet.</p>
+                          ) : (
+                            <ul className="space-y-1">
+                              {task.documents.map((doc) => (
+                                <li
+                                  key={doc.id}
+                                  className="rounded-md border border-gray-100 bg-gray-50 px-3 py-2"
+                                >
+                                  <div className="flex items-center justify-between gap-4">
+                                    <div>
+                                      <p className="text-sm font-medium text-gray-800">{doc.title}</p>
+                                      {doc.description && (
+                                        <p className="text-xs text-gray-500">{doc.description}</p>
+                                      )}
+                                    </div>
+                                    {doc.signedUrl ? (
+                                      <a
+                                        href={doc.signedUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="shrink-0 rounded-md border border-brand px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand/5 transition-colors btn-brand"
+                                      >
+                                        Open PDF ↗
+                                      </a>
+                                    ) : (
+                                      <span className="shrink-0 text-xs text-red-500">Link unavailable</span>
                                     )}
                                   </div>
-                                  {doc.signedUrl ? (
-                                    <a
-                                      href={doc.signedUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="shrink-0 rounded-md border border-brand px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand/5 transition-colors"
-                                    >
-                                      Open PDF ↗
-                                    </a>
-                                  ) : (
-                                    <span className="shrink-0 text-xs text-red-500">Link unavailable</span>
-                                  )}
-                                </div>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
                       </div>
-                    )}
+                    </div>
                   </li>
                 )
               })}

@@ -19,7 +19,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="de">
       <body className={`${geist.variable} antialiased bg-gray-50 text-gray-900 flex flex-col min-h-screen`}>
         <Navbar />
         {children}

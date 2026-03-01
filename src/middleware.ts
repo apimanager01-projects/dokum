@@ -35,9 +35,10 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const isAuthPage = pathname.startsWith('/auth')
   const isAdminPage = pathname.startsWith('/admin')
+  const isPublicPage = pathname === '/impressum' || pathname === '/datenschutz'
 
   // Unauthenticated user trying to access a protected page → redirect to login
-  if (!user && !isAuthPage) {
+  if (!user && !isAuthPage && !isPublicPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     return NextResponse.redirect(url)

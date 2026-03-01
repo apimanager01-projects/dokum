@@ -49,7 +49,7 @@ export default async function TaskPage({
   // Generate signed URLs for all PDFs in parallel
   const signedUrls = await Promise.all(
     docs.map((doc) =>
-      supabase.storage.from('pdfs').createSignedUrl(doc.pdf_path, 60 * 60)
+      supabase.storage.from('pdfs').createSignedUrl(doc.pdf_path, 60 * 60 * 24, { download: false })
     )
   )
 

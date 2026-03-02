@@ -1,6 +1,7 @@
 'use client'
 
 import { useActionState } from 'react'
+import Link from 'next/link'
 import { createDocument } from '@/actions/admin'
 import type { Task, Unit, Kurs } from '@/types'
 
@@ -41,12 +42,12 @@ export function AddDocumentForm({
         <div className="rounded-md border border-green-200 bg-green-50 px-3 py-3">
           <p className="text-sm font-medium text-green-800">Dokument erfolgreich hochgeladen!</p>
           <div className="mt-3">
-            <a
+            <Link
               href="/admin"
               className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
             >
               ← Zurück zur Übersicht
-            </a>
+            </Link>
           </div>
         </div>
       )}

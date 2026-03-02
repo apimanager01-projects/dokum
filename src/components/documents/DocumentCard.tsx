@@ -1,3 +1,5 @@
+// CURRENTLY UNUSED — no page imports this component.
+// The target route /documents/[id] does not exist yet.
 import Link from 'next/link'
 import type { Document } from '@/types'
 

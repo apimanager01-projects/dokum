@@ -1,3 +1,5 @@
+// CURRENTLY UNUSED — this route is not linked from any UI.
+// Kept for potential future use. Remove if permanently deprecated.
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'

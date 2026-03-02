@@ -36,28 +36,6 @@ export default async function KursPage({ params }: { params: Promise<{ kursId: s
     )
   })
 
-  // Collect all documents and generate signed URLs in parallel
-  const allDocs = kurs.units.flatMap((u) => u.tasks.flatMap((t) => t.documents))
-  const signedResults = await Promise.all(
-    allDocs.map((doc) => supabase.storage.from('pdfs').createSignedUrl(doc.pdf_path, 60 * 60))
-  )
-  const urlMap: Record<string, string | null> = {}
-  allDocs.forEach((doc, i) => {
-    urlMap[doc.id] = signedResults[i].data?.signedUrl ?? null
-  })
-
-  // Enrich units with signed URLs on each document
-  const enrichedUnits = kurs.units.map((unit) => ({
-    ...unit,
-    tasks: unit.tasks.map((task) => ({
-      ...task,
-      documents: task.documents.map((doc) => ({
-        ...doc,
-        signedUrl: urlMap[doc.id] ?? null,
-      })),
-    })),
-  }))
-
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
       <Link href="/" className="mb-6 inline-block text-sm text-gray-500 hover:text-gray-700">
@@ -69,7 +47,7 @@ export default async function KursPage({ params }: { params: Promise<{ kursId: s
         <p className="mt-2 text-gray-600">{kurs.description}</p>
       )}
 
-      <KursDetailClient units={enrichedUnits} />
+      <KursDetailClient units={kurs.units} />
     </main>
   )
 }

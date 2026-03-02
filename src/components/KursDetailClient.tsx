@@ -3,11 +3,10 @@
 import { useState } from 'react'
 import type { Unit, Task, Document } from '@/types'
 
-type DocWithUrl = Document & { signedUrl: string | null }
-type TaskWithDocsAndUrls = Task & { documents: DocWithUrl[] }
-type UnitWithTasksAndUrls = Unit & { tasks: TaskWithDocsAndUrls[] }
+type TaskWithDocs = Task & { documents: Document[] }
+type UnitWithTasks = Unit & { tasks: TaskWithDocs[] }
 
-export default function KursDetailClient({ units }: { units: UnitWithTasksAndUrls[] }) {
+export default function KursDetailClient({ units }: { units: UnitWithTasks[] }) {
   const [openTaskIds, setOpenTaskIds] = useState<Set<string>>(new Set())
 
   function toggleTask(taskId: string) {
@@ -82,18 +81,14 @@ export default function KursDetailClient({ units }: { units: UnitWithTasksAndUrl
                                         <p className="text-xs text-gray-500">{doc.description}</p>
                                       )}
                                     </div>
-                                    {doc.signedUrl ? (
-                                      <a
-                                        href={doc.signedUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="shrink-0 rounded-md border border-brand px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand/5 transition-colors btn-brand"
-                                      >
-                                        Open PDF ↗
-                                      </a>
-                                    ) : (
-                                      <span className="shrink-0 text-xs text-red-500">Link unavailable</span>
-                                    )}
+                                    <a
+                                      href={`/api/pdf/${doc.id}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="shrink-0 rounded-md border border-brand px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand/5 transition-colors btn-brand"
+                                    >
+                                      Open PDF ↗
+                                    </a>
                                   </div>
                                 </li>
                               ))}

@@ -41,6 +41,9 @@ export async function middleware(request: NextRequest) {
   if (!user && !isAuthPage && !isPublicPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
+    if (pathname.startsWith('/api/pdf/')) {
+      url.searchParams.set('message', 'Bitte melde dich an/registriere dich, um auf dieses Dokument zuzugreifen.')
+    }
     return NextResponse.redirect(url)
   }
 

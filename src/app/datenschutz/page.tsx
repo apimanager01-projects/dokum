@@ -1,11 +1,18 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
+import { createClient } from '@/lib/supabase/server'
+import { WithdrawConsentButton } from '@/components/consent/WithdrawConsentButton'
 
 export const metadata: Metadata = {
   title: 'Datenschutzerklärung – Dokum',
 }
 
-export default function DatenschutzPage() {
+export default async function DatenschutzPage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  const isAdmin = user?.app_metadata?.['role'] === 'admin'
+  const showWithdrawal = !!user && !isAdmin && !!user.user_metadata?.['consent_accepted_at']
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-12">
       <Link href="/" className="mb-8 inline-block text-sm text-gray-500 transition-colors hover:text-gray-900">
@@ -51,6 +58,17 @@ export default function DatenschutzPage() {
           <span className="text-gray-900">[email@example.com]</span>.
         </p>
       </section>
+
+      {showWithdrawal && (
+        <section className="mt-12 rounded-md border border-red-100 bg-red-50 p-6">
+          <h2 className="mb-2 text-base font-semibold text-gray-900">Einwilligung widerrufen</h2>
+          <p className="mb-4 text-sm text-gray-600">
+            Du kannst deine Einwilligung zur Datenverarbeitung jederzeit widerrufen.
+            Du wirst anschließend abgemeldet. Zur vollständigen Datenlöschung kontaktiere uns.
+          </p>
+          <WithdrawConsentButton />
+        </section>
+      )}
     </div>
   )
 }

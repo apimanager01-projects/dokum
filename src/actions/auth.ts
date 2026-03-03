@@ -17,20 +17,51 @@ export async function signIn(formData: FormData) {
   redirect('/')
 }
 
-export async function signUp(_formData: FormData) {
-  // TODO: re-enable when registration opens — replace body with the block below:
-  // const email = _formData.get('email') as string
-  // const password = _formData.get('password') as string
-  // const fullName = _formData.get('fullName') as string
-  // const supabase = await createClient()
-  // const { error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName } } })
-  // if (error) return { error: error.message ?? 'Sign up failed.' }
-  // redirect('/auth/login?message=Check your email to confirm your account.')
-  return { error: 'Registration is currently disabled.' }
+export async function signUp(formData: FormData) {
+  const email = (formData.get('email') as string).trim()
+  const password = formData.get('password') as string
+  const fullName = (formData.get('fullName') as string).trim()
+  const consentGiven = formData.get('consentGiven') === 'true'
+
+  if (!consentGiven) {
+    return { error: 'Du musst die Datenschutzerklärung akzeptieren.' }
+  }
+
+  const supabase = await createClient()
+  const { error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { data: { full_name: fullName, consent_accepted_at: new Date().toISOString() } },
+  })
+
+  if (error) return { error: error.message ?? 'Registrierung fehlgeschlagen.' }
+  redirect('/auth/login?message=Bitte bestätige deine E-Mail-Adresse.')
 }
 
 export async function signOut() {
   const supabase = await createClient()
   await supabase.auth.signOut()
   redirect('/auth/login')
+}
+
+export async function acceptConsent() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/auth/login')
+
+  const { error } = await supabase.auth.updateUser({
+    data: { consent_accepted_at: new Date().toISOString() },
+  })
+  if (error) return { error: error.message }
+  redirect('/')
+}
+
+export async function withdrawConsent() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/auth/login')
+
+  await supabase.auth.updateUser({ data: { consent_accepted_at: null } })
+  await supabase.auth.signOut()
+  return {}
 }

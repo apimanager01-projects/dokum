@@ -66,6 +66,24 @@ export function RegisterForm() {
         />
       </div>
 
+      <div className="flex items-start gap-2">
+        <input
+          id="consentGiven"
+          name="consentGiven"
+          type="checkbox"
+          value="true"
+          required
+          className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-brand"
+        />
+        <label htmlFor="consentGiven" className="text-sm text-gray-600 leading-snug">
+          Ich habe die{' '}
+          <Link href="/datenschutz" className="font-medium text-brand underline" target="_blank">
+            Datenschutzerklärung
+          </Link>{' '}
+          gelesen und stimme der Verarbeitung meiner Daten zu.
+        </label>
+      </div>
+
       <button
         type="submit"
         disabled={pending}

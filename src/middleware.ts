@@ -35,7 +35,8 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const isAuthPage = pathname.startsWith('/auth')
   const isAdminPage = pathname.startsWith('/admin')
-  const isPublicPage = pathname === '/impressum' || pathname === '/datenschutz'
+  const isConsentPage = pathname === '/consent'
+  const isPublicPage = pathname === '/impressum' || pathname === '/datenschutz' || isConsentPage
 
   // Unauthenticated user trying to access a protected page → redirect to login
   if (!user && !isAuthPage && !isPublicPage) {
@@ -58,6 +59,19 @@ export async function middleware(request: NextRequest) {
   if (user && isAuthPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
+    return NextResponse.redirect(url)
+  }
+
+  // Authenticated non-admin without consent → redirect to /consent
+  if (
+    user &&
+    !isAuthPage &&
+    !isPublicPage &&
+    user.app_metadata?.['role'] !== 'admin' &&
+    !user.user_metadata?.['consent_accepted_at']
+  ) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/consent'
     return NextResponse.redirect(url)
   }
 

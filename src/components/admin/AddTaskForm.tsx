@@ -1,6 +1,7 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createTask } from '@/actions/admin'
 import type { Unit, Kurs } from '@/types'
@@ -24,6 +25,7 @@ export function AddTaskForm({
   onUnitChange?: (unitId: string) => void
   defaultUnitId?: string
 }) {
+  const router = useRouter()
   const [state, action, pending] = useActionState(
     async (_prev: ActionState, formData: FormData) => {
       const result = await createTask(formData)
@@ -31,6 +33,10 @@ export function AddTaskForm({
     },
     initialState
   )
+
+  useEffect(() => {
+    if (state.success) router.refresh()
+  }, [state.success])
 
   return (
     <form action={action} className="flex flex-col gap-5">

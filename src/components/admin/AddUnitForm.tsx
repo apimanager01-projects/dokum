@@ -1,6 +1,7 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createUnit } from '@/actions/admin'
 import type { Kurs } from '@/types'
@@ -22,6 +23,7 @@ export function AddUnitForm({
   onKursChange?: (kursId: string) => void
   defaultKursId?: string
 }) {
+  const router = useRouter()
   const [state, action, pending] = useActionState(
     async (_prev: ActionState, formData: FormData) => {
       const result = await createUnit(formData)
@@ -29,6 +31,10 @@ export function AddUnitForm({
     },
     initialState
   )
+
+  useEffect(() => {
+    if (state.success) router.refresh()
+  }, [state.success])
 
   return (
     <form action={action} className="flex flex-col gap-5">

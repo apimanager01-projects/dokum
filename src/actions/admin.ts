@@ -1,6 +1,7 @@
 'use server'
 
 import { redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 
 type ActionResult = {
@@ -39,6 +40,8 @@ export async function createKurs(formData: FormData): Promise<ActionResult> {
     .single()
   if (error) return { error: `Failed to create Kurs: ${error.message}` }
 
+  revalidatePath('/admin/kurse/new')
+  revalidatePath('/', 'layout')
   return { success: true, id: data.id }
 }
 
@@ -60,6 +63,8 @@ export async function createUnit(formData: FormData): Promise<ActionResult> {
     .single()
   if (error) return { error: `Failed to create Unit: ${error.message}` }
 
+  revalidatePath('/admin/units/new')
+  revalidatePath('/', 'layout')
   return { success: true, id: data.id }
 }
 
@@ -81,6 +86,8 @@ export async function createTask(formData: FormData): Promise<ActionResult> {
     .single()
   if (error) return { error: `Failed to create Task: ${error.message}` }
 
+  revalidatePath('/admin/tasks/new')
+  revalidatePath('/', 'layout')
   return { success: true, id: data.id }
 }
 
@@ -121,5 +128,29 @@ export async function createDocument(formData: FormData): Promise<ActionResult> 
     return { error: `Failed to save document: ${insertError.message}` }
   }
 
+  revalidatePath('/admin/documents/new')
+  revalidatePath('/', 'layout')
   return { success: true }
+}
+
+export async function deleteDocument(docId: string): Promise<{ error?: string }> {
+  const { supabase } = await getAdminUser()
+
+  const { data: doc, error: fetchErr } = await supabase
+    .from('documents')
+    .select('pdf_path')
+    .eq('id', docId)
+    .single()
+  if (fetchErr || !doc) return { error: 'Document not found' }
+
+  const { error: dbErr } = await supabase.from('documents').delete().eq('id', docId)
+  if (dbErr) return { error: dbErr.message }
+
+  if (doc.pdf_path) {
+    await supabase.storage.from('pdfs').remove([doc.pdf_path])
+  }
+
+  revalidatePath('/admin/documents/new')
+  revalidatePath('/', 'layout')
+  return {}
 }

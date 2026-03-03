@@ -1,5 +1,9 @@
 'use client'
 
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { deleteDocument } from '@/actions/admin'
+
 type Document = {
   id: string
   title: string
@@ -41,6 +45,21 @@ function sortByPosition<T extends { position: number; created_at: string }>(item
 }
 
 export function DocumentTree({ kurse, selectedTaskId }: Props) {
+  const router = useRouter()
+  const [loadingId, setLoadingId] = useState<string | null>(null)
+
+  async function handleDelete(docId: string, docTitle: string) {
+    if (!window.confirm(`Dokument "${docTitle}" wirklich löschen?`)) return
+    setLoadingId(docId)
+    const result = await deleteDocument(docId)
+    setLoadingId(null)
+    if (result.error) {
+      alert(`Fehler: ${result.error}`)
+    } else {
+      router.refresh()
+    }
+  }
+
   if (kurse.length === 0) {
     return (
       <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-400">
@@ -89,10 +108,20 @@ export function DocumentTree({ kurse, selectedTaskId }: Props) {
                                 {sortByPosition(task.documents).map((doc) => (
                                   <li
                                     key={doc.id}
-                                    className="ml-3 flex items-center gap-2 text-xs text-gray-500"
+                                    className="ml-3 flex items-center justify-between gap-2 text-xs text-gray-500"
                                   >
-                                    <span className="text-gray-300">›</span>
-                                    {doc.title}
+                                    <span className="flex items-center gap-2">
+                                      <span className="text-gray-300">›</span>
+                                      {doc.title}
+                                    </span>
+                                    <button
+                                      onClick={() => handleDelete(doc.id, doc.title)}
+                                      disabled={loadingId === doc.id}
+                                      title="Dokument löschen"
+                                      className="shrink-0 text-gray-400 hover:text-red-500 disabled:opacity-40"
+                                    >
+                                      ✕
+                                    </button>
                                   </li>
                                 ))}
                               </ul>

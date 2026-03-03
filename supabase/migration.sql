@@ -180,6 +180,13 @@ CREATE POLICY "Admins can insert documents"
   TO authenticated
   WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
+-- ── DELETE: admin only ──
+
+CREATE POLICY "Admins can delete documents"
+  ON public.documents FOR DELETE
+  TO authenticated
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
 -- ─────────────────────────────────────────────
 -- Storage policies (run in Supabase SQL editor)
 -- ─────────────────────────────────────────────
@@ -189,6 +196,15 @@ CREATE POLICY "Admins can upload PDFs"
   ON storage.objects FOR INSERT
   TO authenticated
   WITH CHECK (
+    bucket_id = 'pdfs'
+    AND (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+  );
+
+-- Admins can delete PDFs from storage
+CREATE POLICY "Admins can delete PDFs"
+  ON storage.objects FOR DELETE
+  TO authenticated
+  USING (
     bucket_id = 'pdfs'
     AND (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
   );

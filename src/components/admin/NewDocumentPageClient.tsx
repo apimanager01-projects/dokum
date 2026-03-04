@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { AddDocumentForm } from '@/components/admin/AddDocumentForm'
-import { DocumentTree } from '@/components/admin/DocumentTree'
+import { AdminTree } from '@/components/admin/AdminTree'
 
 type Document = { id: string; title: string; position: number; created_at: string }
 type Task = { id: string; unit_id: string; title: string; description: string | null; position: number; created_at: string; documents: Document[] }
@@ -32,7 +32,7 @@ export function NewDocumentPageClient({ kurseTree, defaultTaskId }: Props) {
       <AddDocumentForm tasks={tasks} onTaskChange={setSelectedTaskId} defaultTaskId={defaultTaskId} />
       <div>
         <p className="mb-3 text-sm font-medium text-gray-500">Kurs-Übersicht</p>
-        <DocumentTree kurse={kurseTree} selectedTaskId={selectedTaskId} />
+        <AdminTree kurse={kurseTree} selectedId={selectedTaskId} deleteLevel="document" />
       </div>
     </div>
   )

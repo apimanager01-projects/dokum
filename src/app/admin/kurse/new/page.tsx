@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { AddKursForm } from '@/components/admin/AddKursForm'
-import { KursTree } from '@/components/admin/KursTree'
+import { AdminTree } from '@/components/admin/AdminTree'
 import { AdminSubpageNav } from '@/components/admin/AdminSubpageNav'
 
 export default async function NewKursPage() {
@@ -30,7 +30,7 @@ export default async function NewKursPage() {
         <div>
           <p className="mb-3 text-sm font-medium text-gray-500">Vorhandene Kurse</p>
           {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-          <KursTree kurse={(kurse as any) ?? []} selectedKursId="" />
+          <AdminTree kurse={(kurse as any) ?? []} selectedId="" deleteLevel="kurs" />
         </div>
       </div>
     </main>

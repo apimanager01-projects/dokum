@@ -182,6 +182,21 @@ CREATE POLICY "Admins can insert documents"
 
 -- ── DELETE: admin only ──
 
+CREATE POLICY "Admins can delete kurse"
+  ON public.kurse FOR DELETE
+  TO authenticated
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+CREATE POLICY "Admins can delete units"
+  ON public.units FOR DELETE
+  TO authenticated
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+CREATE POLICY "Admins can delete tasks"
+  ON public.tasks FOR DELETE
+  TO authenticated
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
 CREATE POLICY "Admins can delete documents"
   ON public.documents FOR DELETE
   TO authenticated

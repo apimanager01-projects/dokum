@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { AddUnitForm } from '@/components/admin/AddUnitForm'
-import { KursTree } from '@/components/admin/KursTree'
+import { AdminTree } from '@/components/admin/AdminTree'
 
 type Unit = {
   id: string
@@ -32,7 +32,7 @@ export function NewUnitPageClient({ kurseWithUnits, defaultKursId }: Props) {
       <AddUnitForm kurse={kurse} onKursChange={setSelectedKursId} defaultKursId={defaultKursId} />
       <div>
         <p className="mb-3 text-sm font-medium text-gray-500">Kurs-Übersicht</p>
-        <KursTree kurse={kurseWithUnits} selectedKursId={selectedKursId} />
+        <AdminTree kurse={kurseWithUnits} selectedId={selectedKursId} deleteLevel="unit" />
       </div>
     </div>
   )

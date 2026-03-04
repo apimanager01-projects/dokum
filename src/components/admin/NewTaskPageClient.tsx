@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { AddTaskForm } from '@/components/admin/AddTaskForm'
-import { TaskTree } from '@/components/admin/TaskTree'
+import { AdminTree } from '@/components/admin/AdminTree'
 
 type Task = { id: string; title: string; position: number; created_at: string }
 type Unit = { id: string; kurs_id: string; title: string; description: string | null; position: number; created_at: string; tasks: Task[] }
@@ -29,7 +29,7 @@ export function NewTaskPageClient({ kurseWithUnitsAndTasks, defaultUnitId }: Pro
       <AddTaskForm units={units} onUnitChange={setSelectedUnitId} defaultUnitId={defaultUnitId} />
       <div>
         <p className="mb-3 text-sm font-medium text-gray-500">Kurs-Übersicht</p>
-        <TaskTree kurse={kurseWithUnitsAndTasks} selectedUnitId={selectedUnitId} />
+        <AdminTree kurse={kurseWithUnitsAndTasks} selectedId={selectedUnitId} deleteLevel="task" />
       </div>
     </div>
   )

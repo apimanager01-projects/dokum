@@ -133,6 +133,72 @@ export async function createDocument(formData: FormData): Promise<ActionResult> 
   return { success: true }
 }
 
+export async function deleteTask(taskId: string): Promise<{ error?: string }> {
+  const { supabase } = await getAdminUser()
+
+  const { data: task } = await supabase
+    .from('tasks')
+    .select('id, documents(pdf_path)')
+    .eq('id', taskId)
+    .single()
+
+  const { error } = await supabase.from('tasks').delete().eq('id', taskId)
+  if (error) return { error: error.message }
+
+  const paths = ((task?.documents ?? []) as { pdf_path: string }[])
+    .map((d) => d.pdf_path)
+    .filter(Boolean)
+  if (paths.length) await supabase.storage.from('pdfs').remove(paths)
+
+  revalidatePath('/admin/tasks/new')
+  revalidatePath('/', 'layout')
+  return {}
+}
+
+export async function deleteUnit(unitId: string): Promise<{ error?: string }> {
+  const { supabase } = await getAdminUser()
+
+  const { data: unit } = await supabase
+    .from('units')
+    .select('id, tasks(id, documents(pdf_path))')
+    .eq('id', unitId)
+    .single()
+
+  const { error } = await supabase.from('units').delete().eq('id', unitId)
+  if (error) return { error: error.message }
+
+  const paths = ((unit?.tasks ?? []) as { documents: { pdf_path: string }[] }[])
+    .flatMap((t) => t.documents.map((d) => d.pdf_path))
+    .filter(Boolean)
+  if (paths.length) await supabase.storage.from('pdfs').remove(paths)
+
+  revalidatePath('/admin/units/new')
+  revalidatePath('/', 'layout')
+  return {}
+}
+
+export async function deleteKurs(kursId: string): Promise<{ error?: string }> {
+  const { supabase } = await getAdminUser()
+
+  const { data: kurs } = await supabase
+    .from('kurse')
+    .select('id, units(id, tasks(id, documents(pdf_path)))')
+    .eq('id', kursId)
+    .single()
+
+  const { error } = await supabase.from('kurse').delete().eq('id', kursId)
+  if (error) return { error: error.message }
+
+  const paths = ((kurs?.units ?? []) as { tasks: { documents: { pdf_path: string }[] }[] }[])
+    .flatMap((u) => u.tasks.flatMap((t) => t.documents.map((d) => d.pdf_path)))
+    .filter(Boolean)
+  if (paths.length) await supabase.storage.from('pdfs').remove(paths)
+
+  revalidatePath('/admin/kurse/new')
+  revalidatePath('/', 'layout')
+  return {}
+}
+
 export async function deleteDocument(docId: string): Promise<{ error?: string }> {
   const { supabase } = await getAdminUser()
 

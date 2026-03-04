@@ -52,7 +52,7 @@ export async function acceptConsent() {
   const { error } = await supabase.auth.updateUser({
     data: { consent_accepted_at: new Date().toISOString() },
   })
-  if (error) return { error: error.message }
+  if (error) redirect('/')
   redirect('/')
 }
 

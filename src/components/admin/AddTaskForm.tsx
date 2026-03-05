@@ -3,7 +3,7 @@
 import { useActionState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createTask } from '@/actions/admin'
+import { createTask, updateTask } from '@/actions/admin'
 import type { Unit, Kurs } from '@/types'
 
 type ActionState = {
@@ -16,19 +16,29 @@ const initialState: ActionState = {}
 
 type UnitWithKurs = Unit & { kurse: Pick<Kurs, 'title'> }
 
+type DefaultValues = {
+  title: string
+  description: string | null
+  position: number
+}
+
 export function AddTaskForm({
   units,
   onUnitChange,
   defaultUnitId = '',
+  editId,
+  defaultValues,
 }: {
   units: UnitWithKurs[]
   onUnitChange?: (unitId: string) => void
   defaultUnitId?: string
+  editId?: string
+  defaultValues?: DefaultValues
 }) {
   const router = useRouter()
   const [state, action, pending] = useActionState(
     async (_prev: ActionState, formData: FormData) => {
-      const result = await createTask(formData)
+      const result = editId ? await updateTask(editId, formData) : await createTask(formData)
       return result ?? initialState
     },
     initialState
@@ -45,9 +55,11 @@ export function AddTaskForm({
           {state.error}
         </p>
       )}
-      {state.success && state.id && (
+      {state.success && (
         <div className="rounded-md border border-green-200 bg-green-50 px-3 py-3">
-          <p className="text-sm font-medium text-green-800">Task erfolgreich angelegt!</p>
+          <p className="text-sm font-medium text-green-800">
+            {editId ? 'Task erfolgreich aktualisiert!' : 'Task erfolgreich angelegt!'}
+          </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Link
               href="/admin"
@@ -55,12 +67,14 @@ export function AddTaskForm({
             >
               ← Zurück zur Übersicht
             </Link>
-            <Link
-              href={`/admin/documents/new?taskId=${state.id}`}
-              className="rounded-md border border-brand px-3 py-1.5 text-sm font-medium text-brand hover:bg-brand/5 btn-brand"
-            >
-              Dokument hinzufügen →
-            </Link>
+            {!editId && state.id && (
+              <Link
+                href={`/admin/documents/new?taskId=${state.id}`}
+                className="rounded-md border border-brand px-3 py-1.5 text-sm font-medium text-brand hover:bg-brand/5 btn-brand"
+              >
+                Dokument hinzufügen →
+              </Link>
+            )}
           </div>
         </div>
       )}
@@ -74,8 +88,9 @@ export function AddTaskForm({
           name="unit_id"
           required
           defaultValue={defaultUnitId}
+          disabled={!!editId}
           onChange={(e) => onUnitChange?.(e.target.value)}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
+          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand disabled:bg-gray-50 disabled:text-gray-500"
         >
           <option value="">— Select a Unit —</option>
           {units.map((u) => (
@@ -95,6 +110,7 @@ export function AddTaskForm({
           name="title"
           type="text"
           required
+          defaultValue={defaultValues?.title ?? ''}
           className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
         />
       </div>
@@ -107,6 +123,7 @@ export function AddTaskForm({
           id="task-description"
           name="description"
           rows={3}
+          defaultValue={defaultValues?.description ?? ''}
           className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
         />
       </div>
@@ -119,7 +136,7 @@ export function AddTaskForm({
           id="task-position"
           name="position"
           type="number"
-          defaultValue={0}
+          defaultValue={defaultValues?.position ?? 0}
           className="w-24 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
         />
         <p className="text-xs text-gray-400">Lower numbers appear first within the Unit.</p>
@@ -130,7 +147,7 @@ export function AddTaskForm({
         disabled={pending}
         className="self-start rounded-md border border-brand px-4 py-2 text-sm font-medium text-brand hover:bg-brand/5 disabled:opacity-50 btn-brand"
       >
-        {pending ? 'Saving…' : 'Add Task'}
+        {pending ? 'Saving…' : editId ? 'Aktualisieren' : 'Add Task'}
       </button>
     </form>
   )

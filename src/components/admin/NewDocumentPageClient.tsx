@@ -9,12 +9,16 @@ type Task = { id: string; unit_id: string; title: string; description: string | 
 type Unit = { id: string; kurs_id: string; title: string; description: string | null; position: number; created_at: string; tasks: Task[] }
 type KursTree = { id: string; title: string; units: Unit[] }
 
+type DefaultValues = { title: string; description: string | null; position: number; pdf_path?: string }
+
 type Props = {
   kurseTree: KursTree[]
   defaultTaskId: string
+  editId?: string
+  defaultValues?: DefaultValues
 }
 
-export function NewDocumentPageClient({ kurseTree, defaultTaskId }: Props) {
+export function NewDocumentPageClient({ kurseTree, defaultTaskId, editId, defaultValues }: Props) {
   const [selectedTaskId, setSelectedTaskId] = useState(defaultTaskId)
 
   // Flatten tasks with unit + kurs labels for the form dropdown
@@ -29,7 +33,13 @@ export function NewDocumentPageClient({ kurseTree, defaultTaskId }: Props) {
 
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-[7fr_3fr]">
-      <AddDocumentForm tasks={tasks} onTaskChange={setSelectedTaskId} defaultTaskId={defaultTaskId} />
+      <AddDocumentForm
+        tasks={tasks}
+        onTaskChange={setSelectedTaskId}
+        defaultTaskId={defaultTaskId}
+        editId={editId}
+        defaultValues={defaultValues}
+      />
       <div>
         <p className="mb-3 text-sm font-medium text-gray-500">Kurs-Übersicht</p>
         <AdminTree kurse={kurseTree} selectedId={selectedTaskId} deleteLevel="document" />

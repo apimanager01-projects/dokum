@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { NewDocumentPageClient } from '@/components/admin/NewDocumentPageClient'
@@ -6,7 +7,7 @@ import { AdminSubpageNav } from '@/components/admin/AdminSubpageNav'
 export default async function NewDocumentPage({
   searchParams,
 }: {
-  searchParams: Promise<{ taskId?: string }>
+  searchParams: Promise<{ taskId?: string; editId?: string }>
 }) {
   const supabase = await createClient()
   const {
@@ -17,7 +18,21 @@ export default async function NewDocumentPage({
     redirect('/')
   }
 
-  const { taskId: defaultTaskId } = await searchParams
+  const { taskId, editId } = await searchParams
+
+  let defaultTaskId = taskId ?? ''
+  let editDefaults: { title: string; description: string | null; position: number; pdf_path: string } | undefined
+  if (editId) {
+    const { data } = await supabase
+      .from('documents')
+      .select('task_id, title, description, position, pdf_path')
+      .eq('id', editId)
+      .single()
+    if (data) {
+      editDefaults = { title: data.title, description: data.description, position: data.position, pdf_path: data.pdf_path }
+      defaultTaskId = data.task_id
+    }
+  }
 
   const { data: kurse } = await supabase
     .from('kurse')
@@ -28,9 +43,24 @@ export default async function NewDocumentPage({
   return (
     <main className="mx-auto max-w-5xl px-4 py-10">
       <AdminSubpageNav active="documents" />
-      <h1 className="mb-8 text-2xl font-bold text-gray-900">Dokument hinzufügen</h1>
+      <div className="mb-8 flex items-baseline gap-4">
+        <h1 className="text-2xl font-bold text-gray-900">
+          {editId ? 'Dokument bearbeiten' : 'Dokument hinzufügen'}
+        </h1>
+        {editId && (
+          <Link href="/admin/documents/new" className="text-sm text-brand hover:underline">
+            + Neues Dokument hinzufügen
+          </Link>
+        )}
+      </div>
       {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-      <NewDocumentPageClient kurseTree={(kurse as any) ?? []} defaultTaskId={defaultTaskId ?? ''} />
+      <NewDocumentPageClient
+        key={editId ?? 'new'}
+        kurseTree={(kurse as any) ?? []}
+        defaultTaskId={defaultTaskId}
+        editId={editId}
+        defaultValues={editDefaults}
+      />
     </main>
   )
 }

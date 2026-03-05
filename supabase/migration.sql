@@ -180,6 +180,32 @@ CREATE POLICY "Admins can insert documents"
   TO authenticated
   WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
+-- ── UPDATE: admin only ──
+
+CREATE POLICY "Admins can update kurse"
+  ON public.kurse FOR UPDATE
+  TO authenticated
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+CREATE POLICY "Admins can update units"
+  ON public.units FOR UPDATE
+  TO authenticated
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+CREATE POLICY "Admins can update tasks"
+  ON public.tasks FOR UPDATE
+  TO authenticated
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+CREATE POLICY "Admins can update documents"
+  ON public.documents FOR UPDATE
+  TO authenticated
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
+  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
 -- ── DELETE: admin only ──
 
 CREATE POLICY "Admins can delete kurse"

@@ -3,7 +3,7 @@
 import { useActionState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createDocument } from '@/actions/admin'
+import { createDocument, updateDocument } from '@/actions/admin'
 import type { Task, Unit, Kurs } from '@/types'
 
 type ActionState = {
@@ -15,19 +15,30 @@ const initialState: ActionState = {}
 
 type TaskWithUnit = Task & { units: Unit & { kurse: Pick<Kurs, 'title'> } }
 
+type DefaultValues = {
+  title: string
+  description: string | null
+  position: number
+  pdf_path: string
+}
+
 export function AddDocumentForm({
   tasks,
   onTaskChange,
   defaultTaskId = '',
+  editId,
+  defaultValues,
 }: {
   tasks: TaskWithUnit[]
   onTaskChange?: (taskId: string) => void
   defaultTaskId?: string
+  editId?: string
+  defaultValues?: DefaultValues
 }) {
   const router = useRouter()
   const [state, action, pending] = useActionState(
     async (_prev: ActionState, formData: FormData) => {
-      const result = await createDocument(formData)
+      const result = editId ? await updateDocument(editId, formData) : await createDocument(formData)
       return result ?? initialState
     },
     initialState
@@ -46,7 +57,9 @@ export function AddDocumentForm({
       )}
       {state.success && (
         <div className="rounded-md border border-green-200 bg-green-50 px-3 py-3">
-          <p className="text-sm font-medium text-green-800">Dokument erfolgreich hochgeladen!</p>
+          <p className="text-sm font-medium text-green-800">
+            {editId ? 'Dokument erfolgreich aktualisiert!' : 'Dokument erfolgreich hochgeladen!'}
+          </p>
           <div className="mt-3">
             <Link
               href="/admin"
@@ -67,8 +80,9 @@ export function AddDocumentForm({
           name="task_id"
           required
           defaultValue={defaultTaskId}
+          disabled={!!editId}
           onChange={(e) => onTaskChange?.(e.target.value)}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
+          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand disabled:bg-gray-50 disabled:text-gray-500"
         >
           <option value="">— Select a Task —</option>
           {tasks.map((t) => (
@@ -88,6 +102,7 @@ export function AddDocumentForm({
           name="title"
           type="text"
           required
+          defaultValue={defaultValues?.title ?? ''}
           className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
         />
       </div>
@@ -100,23 +115,31 @@ export function AddDocumentForm({
           id="doc-description"
           name="description"
           rows={3}
+          defaultValue={defaultValues?.description ?? ''}
           className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
         />
       </div>
 
       <div className="flex flex-col gap-1">
         <label htmlFor="doc-pdf" className="text-sm font-medium text-gray-700">
-          PDF File <span className="text-red-500">*</span>
+          PDF File {!editId && <span className="text-red-500">*</span>}
         </label>
+        {editId && defaultValues?.pdf_path && (
+          <p className="text-xs text-gray-500">
+            Aktuell: <span className="font-mono">{defaultValues.pdf_path.split('/').pop()}</span>
+          </p>
+        )}
         <input
           id="doc-pdf"
           name="pdf"
           type="file"
           accept="application/pdf"
-          required
+          required={!editId}
           className="text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200"
         />
-        <p className="text-xs text-gray-400">Max file size: 10 MB</p>
+        <p className="text-xs text-gray-400">
+          {editId ? 'Kein Upload = aktuelles PDF beibehalten. Max 10 MB.' : 'Max file size: 10 MB'}
+        </p>
       </div>
 
       <div className="flex flex-col gap-1">
@@ -127,7 +150,7 @@ export function AddDocumentForm({
           id="doc-position"
           name="position"
           type="number"
-          defaultValue={0}
+          defaultValue={defaultValues?.position ?? 0}
           className="w-24 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
         />
         <p className="text-xs text-gray-400">Lower numbers appear first within the Task.</p>
@@ -138,7 +161,7 @@ export function AddDocumentForm({
         disabled={pending}
         className="self-start rounded-md border border-brand px-4 py-2 text-sm font-medium text-brand hover:bg-brand/5 disabled:opacity-50 btn-brand"
       >
-        {pending ? 'Saving…' : 'Add Document'}
+        {pending ? 'Saving…' : editId ? 'Aktualisieren' : 'Add Document'}
       </button>
     </form>
   )

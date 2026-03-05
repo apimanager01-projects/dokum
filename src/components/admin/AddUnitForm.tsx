@@ -3,7 +3,7 @@
 import { useActionState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createUnit } from '@/actions/admin'
+import { createUnit, updateUnit } from '@/actions/admin'
 import type { Kurs } from '@/types'
 
 type ActionState = {
@@ -14,19 +14,29 @@ type ActionState = {
 
 const initialState: ActionState = {}
 
+type DefaultValues = {
+  title: string
+  description: string | null
+  position: number
+}
+
 export function AddUnitForm({
   kurse,
   onKursChange,
   defaultKursId = '',
+  editId,
+  defaultValues,
 }: {
   kurse: Pick<Kurs, 'id' | 'title'>[]
   onKursChange?: (kursId: string) => void
   defaultKursId?: string
+  editId?: string
+  defaultValues?: DefaultValues
 }) {
   const router = useRouter()
   const [state, action, pending] = useActionState(
     async (_prev: ActionState, formData: FormData) => {
-      const result = await createUnit(formData)
+      const result = editId ? await updateUnit(editId, formData) : await createUnit(formData)
       return result ?? initialState
     },
     initialState
@@ -43,9 +53,11 @@ export function AddUnitForm({
           {state.error}
         </p>
       )}
-      {state.success && state.id && (
+      {state.success && (
         <div className="rounded-md border border-green-200 bg-green-50 px-3 py-3">
-          <p className="text-sm font-medium text-green-800">Unit erfolgreich angelegt!</p>
+          <p className="text-sm font-medium text-green-800">
+            {editId ? 'Unit erfolgreich aktualisiert!' : 'Unit erfolgreich angelegt!'}
+          </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Link
               href="/admin"
@@ -53,12 +65,14 @@ export function AddUnitForm({
             >
               ← Zurück zur Übersicht
             </Link>
-            <Link
-              href={`/admin/tasks/new?unitId=${state.id}`}
-              className="rounded-md border border-brand px-3 py-1.5 text-sm font-medium text-brand hover:bg-brand/5 btn-brand"
-            >
-              Task hinzufügen →
-            </Link>
+            {!editId && state.id && (
+              <Link
+                href={`/admin/tasks/new?unitId=${state.id}`}
+                className="rounded-md border border-brand px-3 py-1.5 text-sm font-medium text-brand hover:bg-brand/5 btn-brand"
+              >
+                Task hinzufügen →
+              </Link>
+            )}
           </div>
         </div>
       )}
@@ -72,8 +86,9 @@ export function AddUnitForm({
           name="kurs_id"
           required
           defaultValue={defaultKursId}
+          disabled={!!editId}
           onChange={(e) => onKursChange?.(e.target.value)}
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
+          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand disabled:bg-gray-50 disabled:text-gray-500"
         >
           <option value="">— Select a Kurs —</option>
           {kurse.map((k) => (
@@ -93,6 +108,7 @@ export function AddUnitForm({
           name="title"
           type="text"
           required
+          defaultValue={defaultValues?.title ?? ''}
           className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
         />
       </div>
@@ -105,6 +121,7 @@ export function AddUnitForm({
           id="unit-description"
           name="description"
           rows={3}
+          defaultValue={defaultValues?.description ?? ''}
           className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
         />
       </div>
@@ -117,7 +134,7 @@ export function AddUnitForm({
           id="unit-position"
           name="position"
           type="number"
-          defaultValue={0}
+          defaultValue={defaultValues?.position ?? 0}
           className="w-24 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
         />
         <p className="text-xs text-gray-400">Lower numbers appear first within the Kurs.</p>
@@ -128,7 +145,7 @@ export function AddUnitForm({
         disabled={pending}
         className="self-start rounded-md border border-brand px-4 py-2 text-sm font-medium text-brand hover:bg-brand/5 disabled:opacity-50 btn-brand"
       >
-        {pending ? 'Saving…' : 'Add Unit'}
+        {pending ? 'Saving…' : editId ? 'Aktualisieren' : 'Add Unit'}
       </button>
     </form>
   )

@@ -30,6 +30,13 @@ const confirmMessages = {
 
 const deleteActions = { kurs: deleteKurs, unit: deleteUnit, task: deleteTask, document: deleteDocument }
 
+const editHrefs = {
+  kurs: (id: string) => `/admin/kurse/new?editId=${id}`,
+  unit: (id: string) => `/admin/units/new?editId=${id}`,
+  task: (id: string) => `/admin/tasks/new?editId=${id}`,
+  document: (id: string) => `/admin/documents/new?editId=${id}`,
+}
+
 export function AdminTree({ kurse, selectedId = '', deleteLevel }: Props) {
   const router = useRouter()
   const [loadingId, setLoadingId] = useState<string | null>(null)
@@ -43,17 +50,29 @@ export function AdminTree({ kurse, selectedId = '', deleteLevel }: Props) {
     else router.refresh()
   }
 
-  function delBtn(id: string, title: string, level: keyof typeof deleteActions) {
-    if (deleteLevel !== level) return null
+  function itemBtns(id: string, title: string, level: keyof typeof deleteActions) {
     return (
-      <button
-        onClick={() => handleDelete(id, title, level)}
-        disabled={loadingId === id}
-        className="shrink-0 text-gray-300 transition-colors hover:text-red-500 disabled:opacity-50"
-        title={`${level.charAt(0).toUpperCase() + level.slice(1)} löschen`}
-      >
-        ✕
-      </button>
+      <div className="flex items-center gap-1">
+        {deleteLevel === level && (
+          <button
+            onClick={() => router.push(editHrefs[level](id))}
+            className="shrink-0 text-gray-300 transition-colors hover:text-blue-500"
+            title="Bearbeiten"
+          >
+            ✎
+          </button>
+        )}
+        {deleteLevel === level && (
+          <button
+            onClick={() => handleDelete(id, title, level)}
+            disabled={loadingId === id}
+            className="shrink-0 text-gray-300 transition-colors hover:text-red-500 disabled:opacity-50"
+            title={`${level.charAt(0).toUpperCase() + level.slice(1)} löschen`}
+          >
+            ✕
+          </button>
+        )}
+      </div>
     )
   }
 
@@ -78,7 +97,7 @@ export function AdminTree({ kurse, selectedId = '', deleteLevel }: Props) {
         >
           <div className="flex items-center justify-between gap-2">
             <p className="text-sm font-semibold text-gray-900">{kurs.title}</p>
-            {delBtn(kurs.id, kurs.title, 'kurs')}
+            {itemBtns(kurs.id, kurs.title, 'kurs')}
           </div>
 
           {kurs.units !== undefined && (
@@ -97,7 +116,7 @@ export function AdminTree({ kurse, selectedId = '', deleteLevel }: Props) {
                   >
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs font-medium text-gray-700">{unit.title}</p>
-                      {delBtn(unit.id, unit.title, 'unit')}
+                      {itemBtns(unit.id, unit.title, 'unit')}
                     </div>
 
                     {unit.tasks !== undefined && (
@@ -116,7 +135,7 @@ export function AdminTree({ kurse, selectedId = '', deleteLevel }: Props) {
                             >
                               <div className="flex items-center justify-between gap-2">
                                 <p className="text-xs text-gray-600">{task.title}</p>
-                                {delBtn(task.id, task.title, 'task')}
+                                {itemBtns(task.id, task.title, 'task')}
                               </div>
 
                               {task.documents !== undefined && (
@@ -135,7 +154,7 @@ export function AdminTree({ kurse, selectedId = '', deleteLevel }: Props) {
                                           <span className="text-gray-300">›</span>
                                           {doc.title}
                                         </span>
-                                        {delBtn(doc.id, doc.title, 'document')}
+                                        {itemBtns(doc.id, doc.title, 'document')}
                                       </li>
                                     ))}
                                   </ul>

@@ -220,3 +220,86 @@ export async function deleteDocument(docId: string): Promise<{ error?: string }>
   revalidatePath('/', 'layout')
   return {}
 }
+
+export async function updateKurs(kursId: string, formData: FormData): Promise<ActionResult> {
+  const { supabase } = await getAdminUser()
+  const title = (formData.get('title') as string | null)?.trim()
+  const description = (formData.get('description') as string | null)?.trim() || null
+  const position = parseInt((formData.get('position') as string | null) ?? '0', 10)
+  const published = formData.get('published') === 'true'
+  if (!title) return { error: 'Title is required.' }
+  const { error } = await supabase.from('kurse').update({ title, description, position, published }).eq('id', kursId)
+  if (error) return { error: error.message }
+  revalidatePath('/admin/kurse/new')
+  revalidatePath('/', 'layout')
+  return { success: true }
+}
+
+export async function updateUnit(unitId: string, formData: FormData): Promise<ActionResult> {
+  const { supabase } = await getAdminUser()
+  const title = (formData.get('title') as string | null)?.trim()
+  const description = (formData.get('description') as string | null)?.trim() || null
+  const position = parseInt((formData.get('position') as string | null) ?? '0', 10)
+  if (!title) return { error: 'Title is required.' }
+  const { error } = await supabase.from('units').update({ title, description, position }).eq('id', unitId)
+  if (error) return { error: error.message }
+  revalidatePath('/admin/units/new')
+  revalidatePath('/', 'layout')
+  return { success: true }
+}
+
+export async function updateTask(taskId: string, formData: FormData): Promise<ActionResult> {
+  const { supabase } = await getAdminUser()
+  const title = (formData.get('title') as string | null)?.trim()
+  const description = (formData.get('description') as string | null)?.trim() || null
+  const position = parseInt((formData.get('position') as string | null) ?? '0', 10)
+  if (!title) return { error: 'Title is required.' }
+  const { error } = await supabase.from('tasks').update({ title, description, position }).eq('id', taskId)
+  if (error) return { error: error.message }
+  revalidatePath('/admin/tasks/new')
+  revalidatePath('/', 'layout')
+  return { success: true }
+}
+
+export async function updateDocument(docId: string, formData: FormData): Promise<ActionResult> {
+  const { supabase, user } = await getAdminUser()
+  const title = (formData.get('title') as string | null)?.trim()
+  const description = (formData.get('description') as string | null)?.trim() || null
+  const position = parseInt((formData.get('position') as string | null) ?? '0', 10)
+  const pdfFile = formData.get('pdf') as File | null
+  if (!title) return { error: 'Title is required.' }
+
+  if (pdfFile && pdfFile.size > 0) {
+    if (pdfFile.type !== 'application/pdf') return { error: 'The uploaded file must be a PDF.' }
+
+    const { data: doc, error: fetchErr } = await supabase
+      .from('documents')
+      .select('pdf_path')
+      .eq('id', docId)
+      .single()
+    if (fetchErr || !doc) return { error: 'Document not found.' }
+
+    const sanitisedTitle = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60)
+    const newPath = `documents/${user.id}/${Date.now()}-${sanitisedTitle}.pdf`
+
+    const { error: uploadErr } = await supabase.storage
+      .from('pdfs')
+      .upload(newPath, pdfFile, { contentType: 'application/pdf', upsert: false })
+    if (uploadErr) return { error: `Upload failed: ${uploadErr.message}` }
+
+    const { error: dbErr } = await supabase.from('documents').update({ title, description, position, pdf_path: newPath }).eq('id', docId)
+    if (dbErr) {
+      await supabase.storage.from('pdfs').remove([newPath])
+      return { error: dbErr.message }
+    }
+
+    if (doc.pdf_path) await supabase.storage.from('pdfs').remove([doc.pdf_path])
+  } else {
+    const { error } = await supabase.from('documents').update({ title, description, position }).eq('id', docId)
+    if (error) return { error: error.message }
+  }
+
+  revalidatePath('/admin/documents/new')
+  revalidatePath('/', 'layout')
+  return { success: true }
+}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useEffect } from 'react'
+import { useActionState, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createDocument, updateDocument } from '@/actions/admin'
@@ -36,6 +36,7 @@ export function AddDocumentForm({
   defaultValues?: DefaultValues
 }) {
   const router = useRouter()
+  const [fileError, setFileError] = useState<string | null>(null)
   const [state, action, pending] = useActionState(
     async (_prev: ActionState, formData: FormData) => {
       const result = editId ? await updateDocument(editId, formData) : await createDocument(formData)
@@ -136,9 +137,23 @@ export function AddDocumentForm({
           accept="application/pdf"
           required={!editId}
           className="text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200"
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file && file.size > 4 * 1024 * 1024) {
+              setFileError(`Datei zu groß: ${(file.size / 1024 / 1024).toFixed(1)} MB. Maximal 4 MB erlaubt.`)
+              e.target.value = ''
+            } else {
+              setFileError(null)
+            }
+          }}
         />
+        {fileError && (
+          <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+            {fileError}
+          </p>
+        )}
         <p className="text-xs text-gray-400">
-          {editId ? 'Kein Upload = aktuelles PDF beibehalten. Max 10 MB.' : 'Max file size: 10 MB'}
+          {editId ? 'Kein Upload = aktuelles PDF beibehalten. Max 4 MB.' : 'Max file size: 4 MB'}
         </p>
       </div>
 
@@ -158,7 +173,7 @@ export function AddDocumentForm({
 
       <button
         type="submit"
-        disabled={pending}
+        disabled={pending || !!fileError}
         className="self-start rounded-md border border-brand px-4 py-2 text-sm font-medium text-brand hover:bg-brand/5 disabled:opacity-50 btn-brand"
       >
         {pending ? 'Saving…' : editId ? 'Aktualisieren' : 'Add Document'}

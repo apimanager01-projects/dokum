@@ -4,22 +4,22 @@ import { createClient } from '@/lib/supabase/server'
 
 const cards = [
   {
-    label: 'Kurs anlegen',
+    label: 'Kurse verwalten',
     subtitle: null,
     href: '/admin/kurse/new',
   },
   {
-    label: 'Unit anlegen',
+    label: 'Units verwalten',
     subtitle: 'zu einem Kurs',
     href: '/admin/units/new',
   },
   {
-    label: 'Task anlegen',
+    label: 'Tasks verwalten',
     subtitle: 'zu einer Unit',
     href: '/admin/tasks/new',
   },
   {
-    label: 'Dokument hinzufügen',
+    label: 'Dokumente verwalten',
     subtitle: 'zu einem Task',
     href: '/admin/documents/new',
   },

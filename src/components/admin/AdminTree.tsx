@@ -85,7 +85,7 @@ export function AdminTree({ kurse, selectedId = '', deleteLevel }: Props) {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="max-w-sm space-y-3">
       {kurse.map((kurs) => (
         <div
           key={kurs.id}
@@ -95,8 +95,8 @@ export function AdminTree({ kurse, selectedId = '', deleteLevel }: Props) {
               : 'border-gray-200 bg-white'
           }`}
         >
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-semibold text-gray-900">{kurs.title}</p>
+          <div className="flex min-w-0 items-center justify-between gap-2">
+            <p className="truncate text-sm font-semibold text-gray-900" title={kurs.title}>{kurs.title}</p>
             {itemBtns(kurs.id, kurs.title, 'kurs')}
           </div>
 
@@ -114,8 +114,8 @@ export function AdminTree({ kurse, selectedId = '', deleteLevel }: Props) {
                         : 'border-gray-100'
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-medium text-gray-700">{unit.title}</p>
+                    <div className="flex min-w-0 items-center justify-between gap-2">
+                      <p className="truncate text-xs font-medium text-gray-700" title={unit.title}>{unit.title}</p>
                       {itemBtns(unit.id, unit.title, 'unit')}
                     </div>
 
@@ -133,8 +133,8 @@ export function AdminTree({ kurse, selectedId = '', deleteLevel }: Props) {
                                   : 'border-gray-100'
                               }`}
                             >
-                              <div className="flex items-center justify-between gap-2">
-                                <p className="text-xs text-gray-600">{task.title}</p>
+                              <div className="flex min-w-0 items-center justify-between gap-2">
+                                <p className="truncate text-xs text-gray-600" title={task.title}>{task.title}</p>
                                 {itemBtns(task.id, task.title, 'task')}
                               </div>
 
@@ -148,11 +148,11 @@ export function AdminTree({ kurse, selectedId = '', deleteLevel }: Props) {
                                     {sort(task.documents).map((doc) => (
                                       <li
                                         key={doc.id}
-                                        className="ml-3 flex items-center justify-between gap-2 text-xs text-gray-500"
+                                        className="ml-3 flex min-w-0 items-center justify-between gap-2 text-xs text-gray-500"
                                       >
-                                        <span className="flex items-center gap-2">
-                                          <span className="text-gray-300">›</span>
-                                          {doc.title}
+                                        <span className="flex min-w-0 items-center gap-2">
+                                          <span className="shrink-0 text-gray-300">›</span>
+                                          <span className="truncate" title={doc.title}>{doc.title}</span>
                                         </span>
                                         {itemBtns(doc.id, doc.title, 'document')}
                                       </li>

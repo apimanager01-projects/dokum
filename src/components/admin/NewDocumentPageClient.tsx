@@ -9,7 +9,7 @@ type Task = { id: string; unit_id: string; title: string; description: string | 
 type Unit = { id: string; kurs_id: string; title: string; description: string | null; position: number; created_at: string; tasks: Task[] }
 type KursTree = { id: string; title: string; units: Unit[] }
 
-type DefaultValues = { title: string; description: string | null; position: number; pdf_path?: string }
+type DefaultValues = { title: string; description: string | null; position: number; file_path?: string; file_type?: 'pdf' | 'image' }
 
 type Props = {
   kurseTree: KursTree[]

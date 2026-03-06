@@ -37,7 +37,8 @@ export interface Document {
   task_id: string
   title: string
   description: string | null
-  pdf_path: string
+  file_path: string
+  file_type: 'pdf' | 'image'
   position: number
   created_at: string
 }

@@ -74,22 +74,36 @@ export default function KursDetailClient({ units }: { units: UnitWithTasks[] }) 
                                   key={doc.id}
                                   className="rounded-md border border-gray-100 bg-gray-50 px-3 py-2"
                                 >
-                                  <div className="flex items-center justify-between gap-4">
+                                  {doc.file_type === 'image' ? (
                                     <div>
                                       <p className="text-sm font-medium text-gray-800">{doc.title}</p>
                                       {doc.description && (
                                         <p className="text-xs text-gray-500">{doc.description}</p>
                                       )}
+                                      <img
+                                        src={`/api/file/${doc.id}`}
+                                        alt={doc.title}
+                                        className="mt-2 w-full rounded-md object-contain max-h-[600px]"
+                                      />
                                     </div>
-                                    <a
-                                      href={`/api/pdf/${doc.id}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="shrink-0 rounded-md border border-brand px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand/5 transition-colors btn-brand"
-                                    >
-                                      Open PDF ↗
-                                    </a>
-                                  </div>
+                                  ) : (
+                                    <div className="flex items-center justify-between gap-4">
+                                      <div>
+                                        <p className="text-sm font-medium text-gray-800">{doc.title}</p>
+                                        {doc.description && (
+                                          <p className="text-xs text-gray-500">{doc.description}</p>
+                                        )}
+                                      </div>
+                                      <a
+                                        href={`/api/file/${doc.id}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="shrink-0 rounded-md border border-brand px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand/5 transition-colors btn-brand"
+                                      >
+                                        Open PDF ↗
+                                      </a>
+                                    </div>
+                                  )}
                                 </li>
                               ))}
                             </ul>

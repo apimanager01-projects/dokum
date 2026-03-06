@@ -21,15 +21,15 @@ export default async function NewDocumentPage({
   const { taskId, editId } = await searchParams
 
   let defaultTaskId = taskId ?? ''
-  let editDefaults: { title: string; description: string | null; position: number; pdf_path: string } | undefined
+  let editDefaults: { title: string; description: string | null; position: number; file_path: string; file_type: 'pdf' | 'image' } | undefined
   if (editId) {
     const { data } = await supabase
       .from('documents')
-      .select('task_id, title, description, position, pdf_path')
+      .select('task_id, title, description, position, file_path, file_type')
       .eq('id', editId)
       .single()
     if (data) {
-      editDefaults = { title: data.title, description: data.description, position: data.position, pdf_path: data.pdf_path }
+      editDefaults = { title: data.title, description: data.description, position: data.position, file_path: data.file_path, file_type: data.file_type as 'pdf' | 'image' }
       defaultTaskId = data.task_id
     }
   }

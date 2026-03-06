@@ -256,3 +256,13 @@ CREATE POLICY "Admins can delete PDFs"
 -- UPDATE auth.users
 -- SET raw_app_meta_data = raw_app_meta_data || '{"role": "admin"}'::jsonb
 -- WHERE email = 'your-admin@example.com';
+
+-- ─────────────────────────────────────────────
+-- v3.4 migration: add image support to documents
+-- ─────────────────────────────────────────────
+
+-- Add file_type column (existing rows default to 'pdf')
+ALTER TABLE public.documents ADD COLUMN file_type text NOT NULL DEFAULT 'pdf';
+
+-- Rename pdf_path to file_path
+ALTER TABLE public.documents RENAME COLUMN pdf_path TO file_path;

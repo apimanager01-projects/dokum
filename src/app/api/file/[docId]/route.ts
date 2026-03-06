@@ -17,7 +17,7 @@ export async function GET(
   // Fetch document — RLS ensures only documents under published Kurse are accessible
   const { data: doc, error } = await supabase
     .from('documents')
-    .select('pdf_path')
+    .select('file_path')
     .eq('id', docId)
     .single()
 
@@ -28,26 +28,29 @@ export async function GET(
   // Generate a short-lived signed URL (60 s — only used server-side for the fetch below)
   const { data: urlData, error: urlError } = await supabase.storage
     .from('pdfs')
-    .createSignedUrl(doc.pdf_path, 60, { download: false })
+    .createSignedUrl(doc.file_path, 60, { download: false })
 
   if (urlError || !urlData?.signedUrl) {
-    return new NextResponse('PDF konnte nicht geladen werden.', { status: 500 })
+    return new NextResponse('Datei konnte nicht geladen werden.', { status: 500 })
   }
 
-  // Fetch the PDF from Supabase Storage and stream it to the client
-  const pdfRes = await fetch(urlData.signedUrl)
-  if (!pdfRes.ok) {
-    return new NextResponse('PDF konnte nicht geladen werden.', { status: 502 })
+  // Fetch the file from Supabase Storage and stream it to the client
+  const storageRes = await fetch(urlData.signedUrl)
+  if (!storageRes.ok) {
+    return new NextResponse('Datei konnte nicht geladen werden.', { status: 502 })
   }
+
+  // Use the Content-Type from Supabase so PDFs and images are served correctly
+  const contentType = storageRes.headers.get('Content-Type') ?? 'application/octet-stream'
 
   const headers = new Headers({
-    'Content-Type': 'application/pdf',
+    'Content-Type': contentType,
     'Content-Disposition': 'inline',
   })
 
   // Forward Content-Length if present so browsers can show a loading progress bar
-  const contentLength = pdfRes.headers.get('Content-Length')
+  const contentLength = storageRes.headers.get('Content-Length')
   if (contentLength) headers.set('Content-Length', contentLength)
 
-  return new NextResponse(pdfRes.body, { headers })
+  return new NextResponse(storageRes.body, { headers })
 }

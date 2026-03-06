@@ -19,7 +19,8 @@ type DefaultValues = {
   title: string
   description: string | null
   position: number
-  pdf_path: string
+  file_path?: string
+  file_type?: 'pdf' | 'image'
 }
 
 export function AddDocumentForm({
@@ -123,18 +124,18 @@ export function AddDocumentForm({
 
       <div className="flex flex-col gap-1">
         <label htmlFor="doc-pdf" className="text-sm font-medium text-gray-700">
-          PDF File {!editId && <span className="text-red-500">*</span>}
+          Datei (PDF oder Bild) {!editId && <span className="text-red-500">*</span>}
         </label>
-        {editId && defaultValues?.pdf_path && (
+        {editId && defaultValues?.file_path && (
           <p className="text-xs text-gray-500">
-            Aktuell: <span className="font-mono">{defaultValues.pdf_path.split('/').pop()}</span>
+            Aktuell: <span className="font-mono">{defaultValues.file_path.split('/').pop()}</span>
           </p>
         )}
         <input
           id="doc-pdf"
           name="pdf"
           type="file"
-          accept="application/pdf"
+          accept="application/pdf,image/jpeg,image/png,image/gif,image/webp"
           required={!editId}
           className="text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200"
           onChange={(e) => {
@@ -153,7 +154,7 @@ export function AddDocumentForm({
           </p>
         )}
         <p className="text-xs text-gray-400">
-          {editId ? 'Kein Upload = aktuelles PDF beibehalten. Max 4 MB.' : 'Max file size: 4 MB'}
+          {editId ? 'Kein Upload = aktuelle Datei beibehalten. Max 4 MB.' : 'PDF, JPEG, PNG, GIF oder WebP. Max 4 MB.'}
         </p>
       </div>
 

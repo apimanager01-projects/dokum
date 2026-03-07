@@ -1,9 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import type { Unit, Task, Document } from '@/types'
+import type { Unit, Task, DocumentWithImages } from '@/types'
 
-type TaskWithDocs = Task & { documents: Document[] }
+type TaskWithDocs = Task & { documents: DocumentWithImages[] }
 type UnitWithTasks = Unit & { tasks: TaskWithDocs[] }
 
 export default function KursDetailClient({ units }: { units: UnitWithTasks[] }) {
@@ -74,7 +74,24 @@ export default function KursDetailClient({ units }: { units: UnitWithTasks[] }) 
                                   key={doc.id}
                                   className="rounded-md border border-gray-100 bg-gray-50 px-3 py-2"
                                 >
-                                  {doc.file_type === 'image' ? (
+                                  {doc.file_type === 'image_collection' ? (
+                                    <div>
+                                      <p className="text-sm font-medium text-gray-800">{doc.title}</p>
+                                      {doc.description && (
+                                        <p className="text-xs text-gray-500">{doc.description}</p>
+                                      )}
+                                      <div className="mt-2 grid grid-cols-1 gap-2">
+                                        {doc.document_images.map((img) => (
+                                          <img
+                                            key={img.id}
+                                            src={`/api/image/${img.id}`}
+                                            alt={doc.title}
+                                            className="rounded-md object-contain w-full max-h-[400px]"
+                                          />
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ) : doc.file_type === 'image' ? (
                                     <div>
                                       <p className="text-sm font-medium text-gray-800">{doc.title}</p>
                                       {doc.description && (

@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { deleteKurs, deleteUnit, deleteTask, deleteDocument } from '@/actions/admin'
 
-type DocumentItem = { id: string; title: string; position: number; created_at: string }
+type DocumentItem = { id: string; title: string; position: number; created_at: string; file_type?: string; document_images?: { id: string }[] }
 type TaskItem = { id: string; title: string; position: number; created_at: string; documents?: DocumentItem[] }
 type UnitItem = { id: string; title: string; position: number; created_at: string; tasks?: TaskItem[] }
 type KursItem = { id: string; title: string; units?: UnitItem[] }
@@ -153,6 +153,11 @@ export function AdminTree({ kurse, selectedId = '', deleteLevel }: Props) {
                                         <span className="flex min-w-0 items-center gap-2">
                                           <span className="shrink-0 text-gray-300">›</span>
                                           <span className="truncate" title={doc.title}>{doc.title}</span>
+                                          {doc.file_type === 'image_collection' && (
+                                            <span className="shrink-0 rounded bg-gray-100 px-1 py-0.5 text-[10px] text-gray-400">
+                                              {doc.document_images?.length ?? 0} Bilder
+                                            </span>
+                                          )}
                                         </span>
                                         {itemBtns(doc.id, doc.title, 'document')}
                                       </li>

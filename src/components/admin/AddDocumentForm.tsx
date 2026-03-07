@@ -19,8 +19,8 @@ type DefaultValues = {
   title: string
   description: string | null
   position: number
-  file_path?: string
-  file_type?: 'pdf' | 'image'
+  file_path?: string | null
+  file_type?: 'pdf' | 'image' | 'image_collection'
 }
 
 export function AddDocumentForm({
@@ -38,6 +38,9 @@ export function AddDocumentForm({
 }) {
   const router = useRouter()
   const [fileError, setFileError] = useState<string | null>(null)
+  const [docType, setDocType] = useState<'pdf' | 'image' | 'image_collection'>(
+    defaultValues?.file_type ?? 'pdf'
+  )
   const [state, action, pending] = useActionState(
     async (_prev: ActionState, formData: FormData) => {
       const result = editId ? await updateDocument(editId, formData) : await createDocument(formData)
@@ -49,6 +52,19 @@ export function AddDocumentForm({
   useEffect(() => {
     if (state.success) router.refresh()
   }, [state.success])
+
+  function validateFiles(files: FileList | null) {
+    if (!files) return
+    for (const file of Array.from(files)) {
+      if (file.size > 4 * 1024 * 1024) {
+        setFileError(`"${file.name}" ist zu groß (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximal 4 MB pro Datei.`)
+        return
+      }
+    }
+    setFileError(null)
+  }
+
+  const isEditingCollection = editId && defaultValues?.file_type === 'image_collection'
 
   return (
     <form action={action} className="flex flex-col gap-5">
@@ -122,41 +138,84 @@ export function AddDocumentForm({
         />
       </div>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="doc-pdf" className="text-sm font-medium text-gray-700">
-          Datei (PDF oder Bild) {!editId && <span className="text-red-500">*</span>}
-        </label>
-        {editId && defaultValues?.file_path && (
-          <p className="text-xs text-gray-500">
-            Aktuell: <span className="font-mono">{defaultValues.file_path.split('/').pop()}</span>
-          </p>
-        )}
-        <input
-          id="doc-pdf"
-          name="pdf"
-          type="file"
-          accept="application/pdf,image/jpeg,image/png,image/gif,image/webp"
-          required={!editId}
-          className="text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200"
-          onChange={(e) => {
-            const file = e.target.files?.[0]
-            if (file && file.size > 4 * 1024 * 1024) {
-              setFileError(`Datei zu groß: ${(file.size / 1024 / 1024).toFixed(1)} MB. Maximal 4 MB erlaubt.`)
-              e.target.value = ''
-            } else {
-              setFileError(null)
-            }
-          }}
-        />
-        {fileError && (
-          <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
-            {fileError}
-          </p>
-        )}
-        <p className="text-xs text-gray-400">
-          {editId ? 'Kein Upload = aktuelle Datei beibehalten. Max 4 MB.' : 'PDF, JPEG, PNG, GIF oder WebP. Max 4 MB.'}
+      {/* Document type selector — only shown when creating */}
+      {!editId && (
+        <div className="flex flex-col gap-1">
+          <label className="text-sm font-medium text-gray-700">Typ</label>
+          <div className="flex gap-3">
+            {(['pdf', 'image', 'image_collection'] as const).map((t) => (
+              <label key={t} className="flex items-center gap-1.5 cursor-pointer text-sm text-gray-700">
+                <input
+                  type="radio"
+                  name="doc_type"
+                  value={t}
+                  checked={docType === t}
+                  onChange={() => { setDocType(t); setFileError(null) }}
+                  className="accent-brand"
+                />
+                {t === 'pdf' ? 'PDF' : t === 'image' ? 'Bild (einzeln)' : 'Bildsammlung'}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* File input */}
+      {isEditingCollection ? (
+        <p className="text-xs text-gray-400 rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
+          Bildsammlungen können derzeit nicht bearbeitet werden. Nur Titel, Beschreibung und Position sind änderbar.
         </p>
-      </div>
+      ) : docType === 'image_collection' ? (
+        <div className="flex flex-col gap-1">
+          <label htmlFor="doc-images" className="text-sm font-medium text-gray-700">
+            Bilder <span className="text-red-500">*</span>
+          </label>
+          <input
+            id="doc-images"
+            name="images"
+            type="file"
+            accept="image/jpeg,image/png,image/gif,image/webp"
+            multiple
+            required
+            className="text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200"
+            onChange={(e) => validateFiles(e.target.files)}
+          />
+          {fileError && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+              {fileError}
+            </p>
+          )}
+          <p className="text-xs text-gray-400">JPEG, PNG, GIF oder WebP. Max 4 MB pro Bild.</p>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1">
+          <label htmlFor="doc-pdf" className="text-sm font-medium text-gray-700">
+            Datei {!editId && <span className="text-red-500">*</span>}
+          </label>
+          {editId && defaultValues?.file_path && (
+            <p className="text-xs text-gray-500">
+              Aktuell: <span className="font-mono">{defaultValues.file_path.split('/').pop()}</span>
+            </p>
+          )}
+          <input
+            id="doc-pdf"
+            name="pdf"
+            type="file"
+            accept={docType === 'image' ? 'image/jpeg,image/png,image/gif,image/webp' : 'application/pdf,image/jpeg,image/png,image/gif,image/webp'}
+            required={!editId}
+            className="text-sm text-gray-700 file:mr-3 file:rounded-md file:border-0 file:bg-gray-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200"
+            onChange={(e) => validateFiles(e.target.files)}
+          />
+          {fileError && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+              {fileError}
+            </p>
+          )}
+          <p className="text-xs text-gray-400">
+            {editId ? 'Kein Upload = aktuelle Datei beibehalten. Max 4 MB.' : docType === 'image' ? 'JPEG, PNG, GIF oder WebP. Max 4 MB.' : 'PDF, JPEG, PNG, GIF oder WebP. Max 4 MB.'}
+          </p>
+        </div>
+      )}
 
       <div className="flex flex-col gap-1">
         <label htmlFor="doc-position" className="text-sm font-medium text-gray-700">

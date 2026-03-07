@@ -37,14 +37,26 @@ export interface Document {
   task_id: string
   title: string
   description: string | null
-  file_path: string
-  file_type: 'pdf' | 'image'
+  file_path: string | null
+  file_type: 'pdf' | 'image' | 'image_collection'
   position: number
   created_at: string
 }
 
+export interface DocumentImage {
+  id: string
+  document_id: string
+  file_path: string
+  position: number
+  created_at: string
+}
+
+export interface DocumentWithImages extends Document {
+  document_images: DocumentImage[]
+}
+
 export interface TaskWithDocuments extends Task {
-  documents: Document[]
+  documents: DocumentWithImages[]
 }
 
 export interface UnitWithTasks extends Unit {

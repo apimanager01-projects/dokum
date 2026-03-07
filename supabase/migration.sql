@@ -266,3 +266,53 @@ ALTER TABLE public.documents ADD COLUMN file_type text NOT NULL DEFAULT 'pdf';
 
 -- Rename pdf_path to file_path
 ALTER TABLE public.documents RENAME COLUMN pdf_path TO file_path;
+
+-- ─────────────────────────────────────────────
+-- v3.5 migration: image collection support
+-- ─────────────────────────────────────────────
+
+-- Make file_path nullable (image_collection documents have no single file)
+ALTER TABLE public.documents ALTER COLUMN file_path DROP NOT NULL;
+
+-- document_images: multiple images belonging to one document
+CREATE TABLE public.document_images (
+  id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  document_id UUID        NOT NULL REFERENCES public.documents(id) ON DELETE CASCADE,
+  file_path   TEXT        NOT NULL,
+  position    INTEGER     NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+ALTER TABLE public.document_images ENABLE ROW LEVEL SECURITY;
+
+-- Regular users: visible when parent document is under a published kurs
+CREATE POLICY "View document_images of published kurse"
+  ON public.document_images FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.documents
+      JOIN public.tasks  ON tasks.id  = documents.task_id
+      JOIN public.units  ON units.id  = tasks.unit_id
+      JOIN public.kurse  ON kurse.id  = units.kurs_id
+      WHERE documents.id = document_images.document_id AND kurse.published = TRUE
+    )
+  );
+
+-- Admins can view all document_images
+CREATE POLICY "Admins can view all document_images"
+  ON public.document_images FOR SELECT
+  TO authenticated
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+-- Admins can insert document_images
+CREATE POLICY "Admins can insert document_images"
+  ON public.document_images FOR INSERT
+  TO authenticated
+  WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
+
+-- Admins can delete document_images
+CREATE POLICY "Admins can delete document_images"
+  ON public.document_images FOR DELETE
+  TO authenticated
+  USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');

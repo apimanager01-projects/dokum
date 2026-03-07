@@ -21,7 +21,7 @@ export default async function NewDocumentPage({
   const { taskId, editId } = await searchParams
 
   let defaultTaskId = taskId ?? ''
-  let editDefaults: { title: string; description: string | null; position: number; file_path: string; file_type: 'pdf' | 'image' } | undefined
+  let editDefaults: { title: string; description: string | null; position: number; file_path: string | null; file_type: 'pdf' | 'image' | 'image_collection' } | undefined
   if (editId) {
     const { data } = await supabase
       .from('documents')
@@ -29,14 +29,14 @@ export default async function NewDocumentPage({
       .eq('id', editId)
       .single()
     if (data) {
-      editDefaults = { title: data.title, description: data.description, position: data.position, file_path: data.file_path, file_type: data.file_type as 'pdf' | 'image' }
+      editDefaults = { title: data.title, description: data.description, position: data.position, file_path: data.file_path, file_type: data.file_type as 'pdf' | 'image' | 'image_collection' }
       defaultTaskId = data.task_id
     }
   }
 
   const { data: kurse } = await supabase
     .from('kurse')
-    .select('id, title, units(id, title, position, created_at, tasks(id, title, position, created_at, documents(id, title, position, created_at)))')
+    .select('id, title, units(id, title, position, created_at, tasks(id, title, position, created_at, documents(id, title, position, created_at, file_type, document_images(id))))')
     .order('position', { ascending: true })
     .order('created_at', { ascending: true })
 

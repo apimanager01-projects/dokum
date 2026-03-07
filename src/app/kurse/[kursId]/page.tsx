@@ -16,7 +16,7 @@ export default async function KursPage({ params }: { params: Promise<{ kursId: s
         *,
         tasks (
           *,
-          documents ( * )
+          documents ( *, document_images ( id, file_path, position, created_at ) )
         )
       )
     `)
@@ -31,9 +31,12 @@ export default async function KursPage({ params }: { params: Promise<{ kursId: s
   kurs.units.sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
   kurs.units.forEach((unit) => {
     unit.tasks.sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
-    unit.tasks.forEach((task) =>
+    unit.tasks.forEach((task) => {
       task.documents.sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
-    )
+      task.documents.forEach((doc) =>
+        doc.document_images.sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
+      )
+    })
   })
 
   return (

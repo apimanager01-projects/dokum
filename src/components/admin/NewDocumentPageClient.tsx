@@ -4,12 +4,12 @@ import { useState } from 'react'
 import { AddDocumentForm } from '@/components/admin/AddDocumentForm'
 import { AdminTree } from '@/components/admin/AdminTree'
 
-type Document = { id: string; title: string; position: number; created_at: string }
+type Document = { id: string; title: string; position: number; created_at: string; file_type?: string; document_images?: { id: string }[] }
 type Task = { id: string; unit_id: string; title: string; description: string | null; position: number; created_at: string; documents: Document[] }
 type Unit = { id: string; kurs_id: string; title: string; description: string | null; position: number; created_at: string; tasks: Task[] }
 type KursTree = { id: string; title: string; units: Unit[] }
 
-type DefaultValues = { title: string; description: string | null; position: number; file_path?: string; file_type?: 'pdf' | 'image' }
+type DefaultValues = { title: string; description: string | null; position: number; file_path?: string | null; file_type?: 'pdf' | 'image' | 'image_collection' }
 
 type Props = {
   kurseTree: KursTree[]

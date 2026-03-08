@@ -32,7 +32,7 @@ export default async function UnitPage({ params }: Props) {
   })
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-10">
+    <div className="mx-auto max-w-3xl px-4 py-10">
       <Link href={`/kurse/${kursId}`} className="mb-6 inline-block text-sm text-gray-500 hover:text-gray-700">
         ← Back to course
       </Link>
@@ -43,6 +43,6 @@ export default async function UnitPage({ params }: Props) {
       )}
 
       <UnitDetailClient tasks={unit.tasks} />
-    </main>
+    </div>
   )
 }

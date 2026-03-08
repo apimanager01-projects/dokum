@@ -18,14 +18,14 @@ export default async function HomePage() {
 
   if (error) {
     return (
-      <main className="mx-auto max-w-5xl px-4 py-10">
+      <div className="mx-auto max-w-5xl px-4 py-10">
         <p className="text-sm text-red-600">Failed to load courses.</p>
-      </main>
+      </div>
     )
   }
 
   return (
-    <main className="mx-auto max-w-5xl px-4 py-10">
+    <div className="mx-auto max-w-5xl px-4 py-10">
       <h1 className="mb-6 text-2xl font-bold text-gray-900">Kurse</h1>
 
       {kurse.length === 0 ? (
@@ -37,6 +37,6 @@ export default async function HomePage() {
           ))}
         </div>
       )}
-    </main>
+    </div>
   )
 }

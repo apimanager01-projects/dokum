@@ -23,7 +23,7 @@ export default function RootLayout({
     <html lang="de">
       <body className={`${geist.variable} antialiased bg-gray-50 text-gray-900 flex flex-col min-h-screen`}>
         <Navbar />
-        <main className="flex-1">{children}</main>
+        <main className="flex min-h-screen">{children}</main>
         <Footer />
       </body>
     </html>

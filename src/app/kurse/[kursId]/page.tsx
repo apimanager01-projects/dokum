@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import type { KursWithUnits } from '@/types'
 import KursDetailClient from '@/components/KursDetailClient'
+import ShareButton from '@/components/ShareButton'
 
 export default async function KursPage({ params }: { params: Promise<{ kursId: string }> }) {
   const { kursId } = await params
@@ -45,7 +46,10 @@ export default async function KursPage({ params }: { params: Promise<{ kursId: s
         ← Back to courses
       </Link>
 
-      <h1 className="text-2xl font-bold text-gray-900">{kurs.title}</h1>
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <h1 className="text-2xl font-bold text-gray-900">{kurs.title}</h1>
+        <ShareButton title={kurs.title} />
+      </div>
       {kurs.description && (
         <p className="mt-2 text-gray-600">{kurs.description}</p>
       )}

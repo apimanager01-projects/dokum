@@ -11,16 +11,7 @@ export default async function KursPage({ params }: { params: Promise<{ kursId: s
 
   const { data, error } = await supabase
     .from('kurse')
-    .select(`
-      *,
-      units (
-        *,
-        tasks (
-          *,
-          documents ( *, document_images ( id, file_path, position, created_at ) )
-        )
-      )
-    `)
+    .select('*, units(id, kurs_id, title, description, position, created_at)')
     .eq('id', kursId)
     .single()
 
@@ -28,17 +19,8 @@ export default async function KursPage({ params }: { params: Promise<{ kursId: s
 
   const kurs = data as KursWithUnits
 
-  // Sort units, tasks, and documents by position ASC, then created_at ASC
+  // Sort units by position ASC, then created_at ASC
   kurs.units.sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
-  kurs.units.forEach((unit) => {
-    unit.tasks.sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
-    unit.tasks.forEach((task) => {
-      task.documents.sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
-      task.documents.forEach((doc) =>
-        doc.document_images.sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
-      )
-    })
-  })
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
@@ -54,7 +36,7 @@ export default async function KursPage({ params }: { params: Promise<{ kursId: s
         <p className="mt-2 text-gray-600">{kurs.description}</p>
       )}
 
-      <KursDetailClient units={kurs.units} />
+      <KursDetailClient units={kurs.units} kursId={kursId} />
     </main>
   )
 }

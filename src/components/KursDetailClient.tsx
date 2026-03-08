@@ -1,139 +1,17 @@
 'use client'
 
-import { useState } from 'react'
-import type { Unit, Task, DocumentWithImages } from '@/types'
+import type { Unit } from '@/types'
+import { UnitCard } from '@/components/kurse/UnitCard'
 
-type TaskWithDocs = Task & { documents: DocumentWithImages[] }
-type UnitWithTasks = Unit & { tasks: TaskWithDocs[] }
-
-export default function KursDetailClient({ units }: { units: UnitWithTasks[] }) {
-  const [openTaskIds, setOpenTaskIds] = useState<Set<string>>(new Set())
-
-  function toggleTask(taskId: string) {
-    setOpenTaskIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(taskId)) {
-        next.delete(taskId)
-      } else {
-        next.add(taskId)
-      }
-      return next
-    })
-  }
-
+export default function KursDetailClient({ units, kursId }: { units: Unit[]; kursId: string }) {
   if (units.length === 0) {
     return <p className="mt-8 text-sm text-gray-500">No units yet.</p>
   }
 
   return (
-    <div className="mt-8 space-y-8">
+    <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {units.map((unit) => (
-        <section key={unit.id}>
-          <h2 className="text-lg font-semibold text-gray-800">{unit.title}</h2>
-          {unit.description && (
-            <p className="mt-1 text-sm text-gray-500">{unit.description}</p>
-          )}
-
-          {unit.tasks.length === 0 ? (
-            <p className="mt-3 text-sm text-gray-400">No tasks yet.</p>
-          ) : (
-            <ul className="mt-3 space-y-1">
-              {unit.tasks.map((task) => {
-                const isOpen = openTaskIds.has(task.id)
-                return (
-                  <li key={task.id}>
-                    <button
-                      onClick={() => toggleTask(task.id)}
-                      className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors text-left"
-                    >
-                      <span
-                        className="text-gray-400 transition-transform duration-150"
-                        style={{ display: 'inline-block', transform: isOpen ? 'rotate(90deg)' : 'none' }}
-                      >
-                        ›
-                      </span>
-                      {task.title}
-                    </button>
-
-                    <div
-                      className={`grid transition-[grid-template-rows] duration-300 ease-in-out ${
-                        isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-                      }`}
-                    >
-                      <div className="overflow-hidden">
-                        <div className="ml-6 mt-1 mb-2">
-                          {task.description && (
-                            <p className="px-3 pb-2 text-sm text-gray-500">{task.description}</p>
-                          )}
-                          {task.documents.length === 0 ? (
-                            <p className="px-3 text-xs text-gray-400">No documents yet.</p>
-                          ) : (
-                            <ul className="space-y-1">
-                              {task.documents.map((doc) => (
-                                <li
-                                  key={doc.id}
-                                  className="rounded-md border border-gray-100 bg-gray-50 px-3 py-2"
-                                >
-                                  {doc.file_type === 'image_collection' ? (
-                                    <div>
-                                      <p className="text-sm font-medium text-gray-800">{doc.title}</p>
-                                      {doc.description && (
-                                        <p className="text-xs text-gray-500">{doc.description}</p>
-                                      )}
-                                      <div className="mt-2 grid grid-cols-1 gap-2">
-                                        {doc.document_images.map((img) => (
-                                          <img
-                                            key={img.id}
-                                            src={`/api/image/${img.id}`}
-                                            alt={doc.title}
-                                            className="rounded-md object-contain w-full max-h-[400px]"
-                                          />
-                                        ))}
-                                      </div>
-                                    </div>
-                                  ) : doc.file_type === 'image' ? (
-                                    <div>
-                                      <p className="text-sm font-medium text-gray-800">{doc.title}</p>
-                                      {doc.description && (
-                                        <p className="text-xs text-gray-500">{doc.description}</p>
-                                      )}
-                                      <img
-                                        src={`/api/file/${doc.id}`}
-                                        alt={doc.title}
-                                        className="mt-2 w-full rounded-md object-contain max-h-[600px]"
-                                      />
-                                    </div>
-                                  ) : (
-                                    <div className="flex items-center justify-between gap-4">
-                                      <div>
-                                        <p className="text-sm font-medium text-gray-800">{doc.title}</p>
-                                        {doc.description && (
-                                          <p className="text-xs text-gray-500">{doc.description}</p>
-                                        )}
-                                      </div>
-                                      <a
-                                        href={`/api/file/${doc.id}`}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="shrink-0 rounded-md border border-brand px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand/5 transition-colors btn-brand"
-                                      >
-                                        Open PDF ↗
-                                      </a>
-                                    </div>
-                                  )}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </section>
+        <UnitCard key={unit.id} unit={unit} kursId={kursId} />
       ))}
     </div>
   )

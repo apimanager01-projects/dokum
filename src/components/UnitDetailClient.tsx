@@ -2,11 +2,18 @@
 
 import { useState } from 'react'
 import type { Task, DocumentWithImages } from '@/types'
+import Lightbox from '@/components/Lightbox'
 
 type TaskWithDocs = Task & { documents: DocumentWithImages[] }
 
+interface LightboxState {
+  images: string[]
+  index: number
+}
+
 export default function UnitDetailClient({ tasks }: { tasks: TaskWithDocs[] }) {
   const [openTaskIds, setOpenTaskIds] = useState<Set<string>>(new Set())
+  const [lightbox, setLightbox] = useState<LightboxState | null>(null)
 
   function toggleTask(taskId: string) {
     setOpenTaskIds((prev) => {
@@ -25,6 +32,15 @@ export default function UnitDetailClient({ tasks }: { tasks: TaskWithDocs[] }) {
   }
 
   return (
+    <>
+    {lightbox && (
+      <Lightbox
+        images={lightbox.images}
+        currentIndex={lightbox.index}
+        onClose={() => setLightbox(null)}
+        onNavigate={(index) => setLightbox((prev) => prev ? { ...prev, index } : null)}
+      />
+    )}
     <div className="mt-8 space-y-8">
       {tasks.map((task) => {
         const isOpen = openTaskIds.has(task.id)
@@ -70,12 +86,16 @@ export default function UnitDetailClient({ tasks }: { tasks: TaskWithDocs[] }) {
                                 <p className="text-xs text-gray-500">{doc.description}</p>
                               )}
                               <div className="mt-2 grid grid-cols-1 gap-2">
-                                {doc.document_images.map((img) => (
+                                {doc.document_images.map((img, imgIndex) => (
                                   <img
                                     key={img.id}
                                     src={`/api/image/${img.id}`}
                                     alt={doc.title}
-                                    className="rounded-md object-contain w-full max-h-[400px]"
+                                    className="rounded-md object-contain w-full max-h-[400px] cursor-zoom-in"
+                                    onClick={() => setLightbox({
+                                      images: doc.document_images.map((i) => `/api/image/${i.id}`),
+                                      index: imgIndex,
+                                    })}
                                   />
                                 ))}
                               </div>
@@ -89,7 +109,8 @@ export default function UnitDetailClient({ tasks }: { tasks: TaskWithDocs[] }) {
                               <img
                                 src={`/api/file/${doc.id}`}
                                 alt={doc.title}
-                                className="mt-2 w-full rounded-md object-contain max-h-[600px]"
+                                className="mt-2 w-full rounded-md object-contain max-h-[600px] cursor-zoom-in"
+                                onClick={() => setLightbox({ images: [`/api/file/${doc.id}`], index: 0 })}
                               />
                             </div>
                           ) : (
@@ -121,5 +142,6 @@ export default function UnitDetailClient({ tasks }: { tasks: TaskWithDocs[] }) {
         )
       })}
     </div>
+    </>
   )
 }

@@ -45,6 +45,7 @@ export default function UnitDetailClient({ tasks }: { tasks: TaskWithDocs[] }) {
       slides={lightbox?.slides ?? []}
       index={lightbox?.index ?? 0}
       plugins={[Zoom]}
+      zoom={{ scrollToZoom: true, maxZoomPixelRatio: 4 }}
     />
     <div className="mt-8 space-y-8">
       {tasks.map((task) => {

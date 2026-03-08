@@ -23,7 +23,7 @@ export default async function KursPage({ params }: { params: Promise<{ kursId: s
   kurs.units.sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-10">
+    <main className="mx-auto max-w-5xl px-4 py-10">
       <Link href="/" className="mb-6 inline-block text-sm text-gray-500 hover:text-gray-700">
         ← Back to courses
       </Link>

@@ -31,7 +31,7 @@ export default async function HomePage() {
       {kurse.length === 0 ? (
         <p className="text-sm text-gray-500">No courses available yet.</p>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {kurse.map((kurs) => (
             <KursCard key={kurs.id} kurs={kurs} />
           ))}

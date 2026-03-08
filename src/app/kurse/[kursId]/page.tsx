@@ -2,8 +2,8 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import type { KursWithUnits } from '@/types'
-import KursDetailClient from '@/components/KursDetailClient'
 import ShareButton from '@/components/ShareButton'
+import { UnitCard } from '@/components/kurse/UnitCard'
 
 export default async function KursPage({ params }: { params: Promise<{ kursId: string }> }) {
   const { kursId } = await params
@@ -23,7 +23,7 @@ export default async function KursPage({ params }: { params: Promise<{ kursId: s
   kurs.units.sort((a, b) => a.position - b.position || a.created_at.localeCompare(b.created_at))
 
   return (
-    <div className="mx-auto max-w-2xl px-4 bg-gray-900 py-10">
+    <div className="mx-auto max-w-5xl px-4 py-10">
       <Link href="/" className="mb-6 inline-block text-sm text-gray-500 hover:text-gray-700">
         ← Back to courses
       </Link>
@@ -36,7 +36,12 @@ export default async function KursPage({ params }: { params: Promise<{ kursId: s
         <p className="mt-2 text-gray-600">{kurs.description}</p>
       )}
 
-      <KursDetailClient units={kurs.units} kursId={kursId} />
+      
+      <div className="mt-8 grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+      {kurs.units.map((unit) => (
+        <UnitCard key={unit.id} unit={unit} kursId={kursId} />
+      ))}
+    </div>
     </div>
   )
 }

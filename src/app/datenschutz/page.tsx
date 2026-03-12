@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
-import { WithdrawConsentButton } from '@/components/consent/WithdrawConsentButton'
+import { ConsentWithdrawalSection } from '@/components/datenschutz/ConsentWithdrawalSection'
 
 export const metadata: Metadata = {
   title: 'Datenschutzerklärung – Dokum',
@@ -10,8 +10,6 @@ export const metadata: Metadata = {
 export default async function DatenschutzPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const isAdmin = user?.app_metadata?.['role'] === 'admin'
-  const showWithdrawal = !!user && !isAdmin && !!user.user_metadata?.['consent_accepted_at']
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-12">
@@ -523,16 +521,7 @@ Diese Cookies werden auch Targeting-Cookies genannt. Sie dienen dazu dem User in
         <p><strong>Erläuterung:</strong> Beim Profiling werden verschiedene Informationen über eine Person zusammengefasst, um mehr über diese Person zu erfahren. Zum Beispiel können Online-Shops Profiling betreiben, um beispielsweise die Bonität einer Person zu prüfen oder um gezielte Werbung zu betreiben.</p>
       </article>
 
-      {showWithdrawal && (
-        <section className="mt-12 rounded-md border border-red-100 bg-red-50 p-6">
-          <h2 className="mb-2 text-base font-semibold text-gray-900">Einwilligung widerrufen</h2>
-          <p className="mb-4 text-sm text-gray-600">
-            Du kannst deine Einwilligung zur Datenverarbeitung jederzeit widerrufen.
-            Du wirst anschließend abgemeldet. Zur vollständigen Datenlöschung kontaktiere uns.
-          </p>
-          <WithdrawConsentButton />
-        </section>
-      )}
+      <ConsentWithdrawalSection user={user} />
     </div>
   )
 }

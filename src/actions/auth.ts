@@ -34,7 +34,9 @@ export async function signUp(formData: FormData) {
     options: { data: { full_name: fullName, consent_accepted_at: new Date().toISOString() } },
   })
 
-  if (error) return { error: error.message ?? 'Registrierung fehlgeschlagen.' }
+  if (error) {
+    return { error: error.message ?? 'Registrierung fehlgeschlagen.' }
+  }
   redirect('/auth/login?message=Bitte bestätige deine E-Mail-Adresse.')
 }
 

@@ -14,22 +14,48 @@ export default function ImpressumPage() {
 
       <h1 className="mb-8 text-3xl font-bold text-gray-900">Impressum</h1>
 
-      <section className="mb-8">
-        <h2 className="mb-3 text-lg font-semibold text-gray-900">Angaben gemäß § 5 TMG</h2>
-        <p className="text-gray-600">[Name]<br />[Straße Hausnummer]<br />[PLZ Ort]</p>
-      </section>
-
-      <section className="mb-8">
-        <h2 className="mb-3 text-lg font-semibold text-gray-900">Kontakt</h2>
-        <p className="text-gray-600">
-          E-Mail: <span className="text-gray-900">[email@example.com]</span>
+      <div className="prose prose-sm max-w-none text-gray-600">
+        <p>Informationen über den Diensteanbieter.</p>
+        <p className="font-semibold text-gray-900">Maurice Riegler</p>
+        <p>
+          Peygarten-Ottenstein 195, <br />
+          3532 Rastenfeld, <br />
+          Österreich
         </p>
-      </section>
+        <p>
+          <strong>Tel.:</strong> +4367761555976
+          <br />
+          <strong>E-Mail:</strong>{' '}
+          <a href="mailto:mauriceriegler@dokum.at" className="text-blue-600 hover:underline">
+            mauriceriegler@dokum.at
+          </a>
+        </p>
 
-      <section className="mb-8">
-        <h2 className="mb-3 text-lg font-semibold text-gray-900">Verantwortlich für den Inhalt nach § 55 Abs. 2 RStV</h2>
-        <p className="text-gray-600">[Name]<br />[Adresse]</p>
-      </section>
+        <h2 id="bildernachweis" className="mt-8 mb-3 text-lg font-semibold text-gray-900">
+          Bildernachweis
+        </h2>
+        <p>Die Bilder, Fotos und Grafiken auf dieser Webseite sind urheberrechtlich geschützt.</p>
+        <p>
+          <strong>Die Bilderrechte liegen bei:</strong>
+          <br />
+          Maurice Rieger
+          <br />
+          Daniel Gretz
+        </p>
+        <p>Alle Texte sind urheberrechtlich geschützt.</p>
+
+        <p className="mt-4 text-xs text-gray-500">
+          Quelle: Erstellt mit dem{' '}
+          <a
+            href="https://www.adsimple.at/impressum-generator/"
+            title="Impressum Generator Österreich von AdSimple"
+            className="text-blue-600 hover:underline"
+          >
+            Impressum Generator
+          </a>{' '}
+          von AdSimple
+        </p>
+      </div>
     </div>
   )
 }

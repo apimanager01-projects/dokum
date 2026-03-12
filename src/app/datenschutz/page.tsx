@@ -518,7 +518,32 @@ Diese Cookies werden auch Targeting-Cookies genannt. Sie dienen dazu dem User in
         <blockquote className="border-l-4 border-gray-300 pl-4 italic my-2">
           <p><strong>„Profiling"</strong> jede Art der automatisierten Verarbeitung personenbezogener Daten, die darin besteht, dass diese personenbezogenen Daten verwendet werden, um bestimmte persönliche Aspekte, die sich auf eine natürliche Person beziehen, zu bewerten, insbesondere um Aspekte bezüglich Arbeitsleistung, wirtschaftliche Lage, Gesundheit, persönliche Vorlieben, Interessen, Zuverlässigkeit, Verhalten, Aufenthaltsort oder Ortswechsel dieser natürlichen Person zu analysieren oder vorherzusagen;</p>
         </blockquote>
-        <p><strong>Erläuterung:</strong> Beim Profiling werden verschiedene Informationen über eine Person zusammengefasst, um mehr über diese Person zu erfahren. Zum Beispiel können Online-Shops Profiling betreiben, um beispielsweise die Bonität einer Person zu prüfen oder um gezielte Werbung zu betreiben.</p>
+        <p><strong>Erläuterung:</strong> Beim Profiling werden verschiedene Informationen über eine Person zusammengetragen, um daraus mehr über diese Person zu erfahren. Im Webbereich wird Profiling häufig für Werbezwecke oder auch für Bonitätsprüfungen angewandt. Web- bzw. Werbeanalyseprogramme sammeln zum Beispiel Daten über Ihre Verhalten und Ihre Interessen auf einer Website. Daraus ergibt sich ein spezielles Userprofil, mit dessen Hilfe Werbung gezielt an eine Zielgruppe ausgespielt werden kann.</p>
+        <p>&nbsp;</p>
+
+        <h2 id="verantwortlicher" className="mb-4 mt-8 text-xl font-bold text-gray-900">Verantwortlicher</h2>
+        <p><strong>Begriffsbestimmung nach Artikel 4 der DSGVO</strong></p>
+        <p>Im Sinne dieser Verordnung bezeichnet der Ausdruck:</p>
+        <blockquote className="border-l-4 border-gray-300 pl-4 italic my-2">
+          <p><strong>„Verantwortlicher"</strong> die natürliche oder juristische Person, Behörde, Einrichtung oder andere Stelle, die allein oder gemeinsam mit anderen über die Zwecke und Mittel der Verarbeitung von personenbezogenen Daten entscheidet; sind die Zwecke und Mittel dieser Verarbeitung durch das Unionsrecht oder das Recht der Mitgliedstaaten vorgegeben, so kann der Verantwortliche beziehungsweise können die bestimmten Kriterien seiner Benennung nach dem Unionsrecht oder dem Recht der Mitgliedstaaten vorgesehen werden;</p>
+        </blockquote>
+        <p><strong>Erläuterung:</strong> In unserem Fall sind wir für die Verarbeitung Ihrer personenbezogenen Daten verantwortlich und folglich der &#8220;Verantwortliche&#8221;. Wenn wir erhobene Daten zur Verarbeitung an andere Dienstleister weitergeben, sind diese &#8220;Auftragsverarbeiter&#8221;. Dafür muss ein &#8220;Auftragsverarbeitungsvertrag (AVV)&#8221; unterzeichnet werden.</p>
+        <p>&nbsp;</p>
+
+        <h2 id="verarbeitung" className="mb-4 mt-8 text-xl font-bold text-gray-900">Verarbeitung</h2>
+        <p><strong>Begriffsbestimmung nach Artikel 4 der DSGVO</strong></p>
+        <p>Im Sinne dieser Verordnung bezeichnet der Ausdruck:</p>
+        <blockquote className="border-l-4 border-gray-300 pl-4 italic my-2">
+          <p><strong>„Verarbeitung"</strong> jeden mit oder ohne Hilfe automatisierter Verfahren ausgeführten Vorgang oder jede solche Vorgangsreihe im Zusammenhang mit personenbezogenen Daten wie das Erheben, das Erfassen, die Organisation, das Ordnen, die Speicherung, die Anpassung oder Veränderung, das Auslesen, das Abfragen, die Verwendung, die Offenlegung durch Übermittlung, Verbreitung oder eine andere Form der Bereitstellung, den Abgleich oder die Verknüpfung, die Einschränkung, das Löschen oder die Vernichtung;</p>
+        </blockquote>
+        <p><strong>Anmerkung:</strong> Wenn wir in unserer Datenschutzerklärung von Verarbeitung sprechen, meinen wir damit jegliche Art von Datenverarbeitung. Dazu zählt, wie oben in der originalen DSGVO-Erklärung erwähnt, nicht nur das Erheben sondern auch das Speichern und Verarbeiten von Daten.</p>
+
+        <h2 id="schlusswort" className="mb-4 mt-8 text-xl font-bold text-gray-900">Schlusswort</h2>
+        <p>Herzlichen Glückwunsch! Wenn Sie diese Zeilen lesen, haben Sie sich wirklich durch unsere gesamte Datenschutzerklärung „gekämpft" oder zumindest bis hier hin gescrollt. Wie Sie am Umfang unserer Datenschutzerklärung sehen, nehmen wir den Schutz Ihrer persönlichen Daten, alles andere als auf die leichte Schulter.<br/>
+Uns ist es wichtig, Sie nach bestem Wissen und Gewissen über die Verarbeitung personenbezogener Daten zu informieren. Dabei wollen wir Ihnen aber nicht nur mitteilen, welche Daten verarbeitet werden, sondern auch die Beweggründe für die Verwendung diverser Softwareprogramme näherbringen. In der Regel klingen Datenschutzerklärung sehr technisch und juristisch. Da die meisten von Ihnen aber keine Webentwickler oder Juristen sind, wollten wir auch sprachlich einen anderen Weg gehen und den Sachverhalt in einfacher und klarer Sprache erklären. Immer ist dies natürlich aufgrund der Thematik nicht möglich. Daher werden die wichtigsten Begriffe am Ende der Datenschutzerklärung näher erläutert.<br/>
+Bei Fragen zum Thema Datenschutz auf unserer Website zögern Sie bitte nicht, uns oder die verantwortliche Stelle zu kontaktieren. Wir wünschen Ihnen noch eine schöne Zeit und hoffen, Sie auf unserer Website bald wieder begrüßen zu dürfen.</p>
+        <p>Alle Texte sind urheberrechtlich geschützt.</p>
+        <p style={{marginTop: '15px'}}>Quelle: <a href="https://www.adsimple.at/datenschutz-generator/" target="_blank" rel="noopener" className="text-blue-600 hover:underline" title="Datenschutzerklärung Generator Österreich">Datenschutzerklärung</a> erstellt mit dem Datenschutz Generator für Österreich von AdSimple</p>
       </article>
 
       <ConsentWithdrawalSection user={user} />

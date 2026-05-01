@@ -4,11 +4,22 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { STORAGE_BUCKET, MAX_FILE_SIZE_BYTES, ALLOWED_IMAGE_MIMES, ALLOWED_FILE_MIMES, MIME_TO_EXT } from '@/lib/constants'
+import { KursFormSchema, UnitFormSchema, TaskFormSchema, DocumentMetaSchema, DocumentUpdateMetaSchema } from '@/lib/schemas'
 
 type ActionResult = {
   error?: string
   success?: boolean
   id?: string
+}
+
+function parseForm<T>(schema: { safeParse: (data: unknown) => { success: true; data: T } | { success: false; error: { issues: { message: string }[] } } }, formData: FormData, fields: string[]): { ok: true; data: T } | { ok: false; error: string } {
+  const raw: Record<string, unknown> = {}
+  for (const field of fields) {
+    raw[field] = formData.get(field)
+  }
+  const result = schema.safeParse(raw)
+  if (!result.success) return { ok: false, error: result.error.issues[0].message }
+  return { ok: true, data: result.data }
 }
 
 async function getAdminUser() {
@@ -27,12 +38,9 @@ async function getAdminUser() {
 export async function createKurs(formData: FormData): Promise<ActionResult> {
   const { supabase } = await getAdminUser()
 
-  const title = (formData.get('title') as string | null)?.trim()
-  const description = (formData.get('description') as string | null)?.trim() || null
-  const position = parseInt((formData.get('position') as string | null) ?? '0', 10)
-  const published = formData.get('published') === 'true'
-
-  if (!title) return { error: 'Title is required.' }
+  const parsed = parseForm(KursFormSchema, formData, ['title', 'description', 'position', 'published'])
+  if (!parsed.ok) return { error: parsed.error }
+  const { title, description, position, published } = parsed.data
 
   const { data, error } = await supabase
     .from('kurse')
@@ -49,13 +57,9 @@ export async function createKurs(formData: FormData): Promise<ActionResult> {
 export async function createUnit(formData: FormData): Promise<ActionResult> {
   const { supabase } = await getAdminUser()
 
-  const kurs_id = (formData.get('kurs_id') as string | null)?.trim()
-  const title = (formData.get('title') as string | null)?.trim()
-  const description = (formData.get('description') as string | null)?.trim() || null
-  const position = parseInt((formData.get('position') as string | null) ?? '0', 10)
-
-  if (!kurs_id) return { error: 'Please select a Kurs.' }
-  if (!title) return { error: 'Title is required.' }
+  const parsed = parseForm(UnitFormSchema, formData, ['kurs_id', 'title', 'description', 'position'])
+  if (!parsed.ok) return { error: parsed.error }
+  const { kurs_id, title, description, position } = parsed.data
 
   const { data, error } = await supabase
     .from('units')
@@ -72,13 +76,9 @@ export async function createUnit(formData: FormData): Promise<ActionResult> {
 export async function createTask(formData: FormData): Promise<ActionResult> {
   const { supabase } = await getAdminUser()
 
-  const unit_id = (formData.get('unit_id') as string | null)?.trim()
-  const title = (formData.get('title') as string | null)?.trim()
-  const description = (formData.get('description') as string | null)?.trim() || null
-  const position = parseInt((formData.get('position') as string | null) ?? '0', 10)
-
-  if (!unit_id) return { error: 'Please select a Unit.' }
-  if (!title) return { error: 'Title is required.' }
+  const parsed = parseForm(TaskFormSchema, formData, ['unit_id', 'title', 'description', 'position'])
+  if (!parsed.ok) return { error: parsed.error }
+  const { unit_id, title, description, position } = parsed.data
 
   const { data, error } = await supabase
     .from('tasks')
@@ -99,14 +99,9 @@ function sanitise(name: string, maxLen = 60) {
 export async function createDocument(formData: FormData): Promise<ActionResult> {
   const { supabase, user } = await getAdminUser()
 
-  const task_id = (formData.get('task_id') as string | null)?.trim()
-  const title = (formData.get('title') as string | null)?.trim()
-  const description = (formData.get('description') as string | null)?.trim() || null
-  const position = parseInt((formData.get('position') as string | null) ?? '0', 10)
-  const doc_type = (formData.get('doc_type') as string | null) ?? 'pdf'
-
-  if (!task_id) return { error: 'Please select a Task.' }
-  if (!title) return { error: 'Title is required.' }
+  const parsed = parseForm(DocumentMetaSchema, formData, ['task_id', 'title', 'description', 'position', 'doc_type'])
+  if (!parsed.ok) return { error: parsed.error }
+  const { task_id, title, description, position, doc_type } = parsed.data
 
   // ── Image collection branch ──────────────────────────────────────────────
   if (doc_type === 'image_collection') {
@@ -328,11 +323,9 @@ export async function deleteDocument(docId: string): Promise<{ error?: string }>
 
 export async function updateKurs(kursId: string, formData: FormData): Promise<ActionResult> {
   const { supabase } = await getAdminUser()
-  const title = (formData.get('title') as string | null)?.trim()
-  const description = (formData.get('description') as string | null)?.trim() || null
-  const position = parseInt((formData.get('position') as string | null) ?? '0', 10)
-  const published = formData.get('published') === 'true'
-  if (!title) return { error: 'Title is required.' }
+  const parsed = parseForm(KursFormSchema, formData, ['title', 'description', 'position', 'published'])
+  if (!parsed.ok) return { error: parsed.error }
+  const { title, description, position, published } = parsed.data
   const { error } = await supabase.from('kurse').update({ title, description, position, published }).eq('id', kursId)
   if (error) return { error: error.message }
   revalidatePath('/admin/kurse/new')
@@ -342,10 +335,9 @@ export async function updateKurs(kursId: string, formData: FormData): Promise<Ac
 
 export async function updateUnit(unitId: string, formData: FormData): Promise<ActionResult> {
   const { supabase } = await getAdminUser()
-  const title = (formData.get('title') as string | null)?.trim()
-  const description = (formData.get('description') as string | null)?.trim() || null
-  const position = parseInt((formData.get('position') as string | null) ?? '0', 10)
-  if (!title) return { error: 'Title is required.' }
+  const parsed = parseForm(DocumentUpdateMetaSchema, formData, ['title', 'description', 'position'])
+  if (!parsed.ok) return { error: parsed.error }
+  const { title, description, position } = parsed.data
   const { error } = await supabase.from('units').update({ title, description, position }).eq('id', unitId)
   if (error) return { error: error.message }
   revalidatePath('/admin/units/new')
@@ -355,10 +347,9 @@ export async function updateUnit(unitId: string, formData: FormData): Promise<Ac
 
 export async function updateTask(taskId: string, formData: FormData): Promise<ActionResult> {
   const { supabase } = await getAdminUser()
-  const title = (formData.get('title') as string | null)?.trim()
-  const description = (formData.get('description') as string | null)?.trim() || null
-  const position = parseInt((formData.get('position') as string | null) ?? '0', 10)
-  if (!title) return { error: 'Title is required.' }
+  const parsed = parseForm(DocumentUpdateMetaSchema, formData, ['title', 'description', 'position'])
+  if (!parsed.ok) return { error: parsed.error }
+  const { title, description, position } = parsed.data
   const { error } = await supabase.from('tasks').update({ title, description, position }).eq('id', taskId)
   if (error) return { error: error.message }
   revalidatePath('/admin/tasks/new')
@@ -368,10 +359,9 @@ export async function updateTask(taskId: string, formData: FormData): Promise<Ac
 
 export async function updateDocument(docId: string, formData: FormData): Promise<ActionResult> {
   const { supabase, user } = await getAdminUser()
-  const title = (formData.get('title') as string | null)?.trim()
-  const description = (formData.get('description') as string | null)?.trim() || null
-  const position = parseInt((formData.get('position') as string | null) ?? '0', 10)
-  if (!title) return { error: 'Title is required.' }
+  const parsed = parseForm(DocumentUpdateMetaSchema, formData, ['title', 'description', 'position'])
+  if (!parsed.ok) return { error: parsed.error }
+  const { title, description, position } = parsed.data
 
   // Fetch current document to know its type
   const { data: currentDoc, error: fetchErr } = await supabase

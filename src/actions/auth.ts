@@ -2,10 +2,15 @@
 
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { SignInSchema, SignUpSchema } from '@/lib/schemas'
 
 export async function signIn(formData: FormData) {
-  const email = formData.get('email') as string
-  const password = formData.get('password') as string
+  const result = SignInSchema.safeParse({
+    email: formData.get('email'),
+    password: formData.get('password'),
+  })
+  if (!result.success) return { error: result.error.issues[0].message }
+  const { email, password } = result.data
 
   const supabase = await createClient()
   const { error } = await supabase.auth.signInWithPassword({ email, password })
@@ -18,9 +23,14 @@ export async function signIn(formData: FormData) {
 }
 
 export async function signUp(formData: FormData) {
-  const email = (formData.get('email') as string).trim()
-  const password = formData.get('password') as string
-  const fullName = (formData.get('fullName') as string).trim()
+  const result = SignUpSchema.safeParse({
+    email: formData.get('email'),
+    password: formData.get('password'),
+    full_name: formData.get('fullName'),
+  })
+  if (!result.success) return { error: result.error.issues[0].message }
+  const { email, password, full_name } = result.data
+
   const consentGiven = formData.get('consentGiven') === 'true'
 
   if (!consentGiven) {
@@ -31,7 +41,7 @@ export async function signUp(formData: FormData) {
   const { error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { full_name: fullName, consent_accepted_at: new Date().toISOString() } },
+    options: { data: { full_name: full_name ?? null, consent_accepted_at: new Date().toISOString() } },
   })
 
   if (error) {

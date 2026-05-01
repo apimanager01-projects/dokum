@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getImageFilePath } from '@/lib/dal'
 import { STORAGE_BUCKET, SIGNED_URL_EXPIRY_SECONDS } from '@/lib/constants'
 
 export async function GET(
@@ -10,17 +9,40 @@ export async function GET(
   const { imageId } = await params
   const supabase = await createClient()
 
-  // Auth check — middleware also guards this route, but belt-and-suspenders
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     return NextResponse.redirect(new URL('/auth/login', request.url))
   }
 
-  // Fetch the document_images row — RLS ensures only images under published Kurse are accessible
-  const img = await getImageFilePath(imageId)
+  const isAdmin = user.app_metadata?.['role'] === 'admin'
 
-  if (!img) {
+  // Fetch image with parent course published status via join (document_images → documents → tasks → units → kurse).
+  // The `!inner` joins guarantee the relations exist; we cast to `any` because
+  // deep nested join types are not automatically inferred without generated types.
+  const { data: img, error } = await supabase
+    .from('document_images')
+    .select(`
+      file_path,
+      documents!inner (
+        tasks!inner (
+          units!inner (
+            kurse!inner ( published )
+          )
+        )
+      )
+    `)
+    .eq('id', imageId)
+    .single()
+
+  if (error || !img) {
     return new NextResponse('Bild nicht gefunden.', { status: 404 })
+  }
+
+  // Non-admins cannot access images from unpublished courses
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const published = (img as any).documents?.tasks?.units?.kurse?.published ?? false
+  if (!isAdmin && !published) {
+    return new NextResponse('Zugriff verweigert.', { status: 403 })
   }
 
   // Generate a short-lived signed URL (60 s — only used server-side for the fetch below)

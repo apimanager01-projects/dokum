@@ -28,8 +28,9 @@ export async function middleware(request: NextRequest) {
   try {
     const { data } = await supabase.auth.getUser()
     user = data.user
-  } catch {
-    // If getUser fails, treat as unauthenticated
+  } catch (err) {
+    console.error('[middleware] getUser failed:', err instanceof Error ? err.message : String(err))
+    // Treat as unauthenticated — safe fallback
   }
 
   const { pathname } = request.nextUrl

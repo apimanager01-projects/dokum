@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { getDocumentFilePath } from '@/lib/dal'
 import { STORAGE_BUCKET, SIGNED_URL_EXPIRY_SECONDS } from '@/lib/constants'
 
 export async function GET(
@@ -10,17 +9,42 @@ export async function GET(
   const { docId } = await params
   const supabase = await createClient()
 
-  // Auth check — middleware also guards this route, but belt-and-suspenders
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     return NextResponse.redirect(new URL('/auth/login', request.url))
   }
 
-  // Fetch document — RLS ensures only documents under published Kurse are accessible
-  const doc = await getDocumentFilePath(docId)
+  const isAdmin = user.app_metadata?.['role'] === 'admin'
 
-  if (!doc || !doc.file_path) {
+  // Fetch document with parent course published status via join.
+  // The `!inner` joins guarantee the relations exist; we cast to `any` because
+  // deep nested join types are not automatically inferred without generated types.
+  const { data: doc, error } = await supabase
+    .from('documents')
+    .select(`
+      file_path,
+      tasks!inner (
+        units!inner (
+          kurse!inner ( published )
+        )
+      )
+    `)
+    .eq('id', docId)
+    .single()
+
+  if (error || !doc) {
     return new NextResponse('Dokument nicht gefunden.', { status: 404 })
+  }
+
+  // Non-admins cannot access documents from unpublished courses
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const published = (doc as any).tasks?.units?.kurse?.published ?? false
+  if (!isAdmin && !published) {
+    return new NextResponse('Zugriff verweigert.', { status: 403 })
+  }
+
+  if (!doc.file_path) {
+    return new NextResponse('Keine Datei vorhanden.', { status: 404 })
   }
 
   // Generate a short-lived signed URL (60 s — only used server-side for the fetch below)

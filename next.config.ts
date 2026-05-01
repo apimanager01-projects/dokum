@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   experimental: {
     serverActions: {
+      // Must match MAX_FILE_SIZE_BYTES in src/lib/constants.ts
       bodySizeLimit: '4mb',
     },
   },

@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { STORAGE_BUCKET, MAX_FILE_SIZE_BYTES, ALLOWED_IMAGE_MIMES, ALLOWED_FILE_MIMES, MIME_TO_EXT } from '@/lib/constants'
 
 type ActionResult = {
   error?: string
@@ -91,16 +92,6 @@ export async function createTask(formData: FormData): Promise<ActionResult> {
   return { success: true, id: data.id }
 }
 
-const IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
-const ALLOWED_MIMES = ['application/pdf', ...IMAGE_MIMES]
-const MIME_TO_EXT: Record<string, string> = {
-  'application/pdf': '.pdf',
-  'image/jpeg': '.jpg',
-  'image/png': '.png',
-  'image/gif': '.gif',
-  'image/webp': '.webp',
-}
-
 function sanitise(name: string, maxLen = 60) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, maxLen)
 }
@@ -124,9 +115,9 @@ export async function createDocument(formData: FormData): Promise<ActionResult> 
     if (validImages.length === 0) return { error: 'At least one image is required.' }
 
     for (const img of validImages) {
-      if (!IMAGE_MIMES.includes(img.type))
+      if (!(ALLOWED_IMAGE_MIMES as readonly string[]).includes(img.type))
         return { error: `"${img.name}" ist kein unterstütztes Bildformat (JPEG, PNG, GIF, WebP).` }
-      if (img.size > 4 * 1024 * 1024)
+      if (img.size > MAX_FILE_SIZE_BYTES)
         return { error: `"${img.name}" ist zu groß (${(img.size / 1024 / 1024).toFixed(1)} MB). Maximal 4 MB pro Bild.` }
     }
 
@@ -146,13 +137,13 @@ export async function createDocument(formData: FormData): Promise<ActionResult> 
       const storagePath = `documents/${user.id}/${Date.now()}-${i}-${sanitise(img.name, 40)}${ext}`
 
       const { error: uploadError } = await supabase.storage
-        .from('pdfs')
+        .from(STORAGE_BUCKET)
         .upload(storagePath, img, { contentType: img.type, upsert: false })
 
       if (uploadError) {
         // Rollback: delete document + already-uploaded images
         await supabase.from('documents').delete().eq('id', docData.id)
-        if (uploadedPaths.length) await supabase.storage.from('pdfs').remove(uploadedPaths)
+        if (uploadedPaths.length) await supabase.storage.from(STORAGE_BUCKET).remove(uploadedPaths)
         return { error: `Upload fehlgeschlagen: ${uploadError.message}` }
       }
       uploadedPaths.push(storagePath)
@@ -167,7 +158,7 @@ export async function createDocument(formData: FormData): Promise<ActionResult> 
     const { error: imgInsertError } = await supabase.from('document_images').insert(imgRows)
     if (imgInsertError) {
       await supabase.from('documents').delete().eq('id', docData.id)
-      await supabase.storage.from('pdfs').remove(uploadedPaths)
+      await supabase.storage.from(STORAGE_BUCKET).remove(uploadedPaths)
       return { error: `Failed to save images: ${imgInsertError.message}` }
     }
 
@@ -179,14 +170,14 @@ export async function createDocument(formData: FormData): Promise<ActionResult> 
   // ── Single-file branch (pdf / image) ────────────────────────────────────
   const file = formData.get('pdf') as File | null
   if (!file || file.size === 0) return { error: 'A file is required.' }
-  if (!ALLOWED_MIMES.includes(file.type)) return { error: 'Only PDF, JPEG, PNG, GIF, or WebP files are allowed.' }
+  if (!(ALLOWED_FILE_MIMES as readonly string[]).includes(file.type)) return { error: 'Only PDF, JPEG, PNG, GIF, or WebP files are allowed.' }
 
-  const file_type = IMAGE_MIMES.includes(file.type) ? 'image' : 'pdf'
+  const file_type = (ALLOWED_IMAGE_MIMES as readonly string[]).includes(file.type) ? 'image' : 'pdf'
   const ext = MIME_TO_EXT[file.type] ?? '.bin'
   const storagePath = `documents/${user.id}/${Date.now()}-${sanitise(title)}${ext}`
 
   const { error: uploadError } = await supabase.storage
-    .from('pdfs')
+    .from(STORAGE_BUCKET)
     .upload(storagePath, file, { contentType: file.type, upsert: false })
 
   if (uploadError) return { error: `Upload failed: ${uploadError.message}` }
@@ -196,7 +187,7 @@ export async function createDocument(formData: FormData): Promise<ActionResult> 
     .insert({ task_id, title, description, file_path: storagePath, file_type, position })
 
   if (insertError) {
-    await supabase.storage.from('pdfs').remove([storagePath])
+    await supabase.storage.from(STORAGE_BUCKET).remove([storagePath])
     return { error: `Failed to save document: ${insertError.message}` }
   }
 
@@ -225,7 +216,7 @@ export async function deleteTask(taskId: string): Promise<{ error?: string }> {
       return p
     })
     .filter(Boolean)
-  if (paths.length) await supabase.storage.from('pdfs').remove(paths)
+  if (paths.length) await supabase.storage.from(STORAGE_BUCKET).remove(paths)
 
   revalidatePath('/admin/tasks/new')
   revalidatePath('/', 'layout')
@@ -254,7 +245,7 @@ export async function deleteUnit(unitId: string): Promise<{ error?: string }> {
       })
     )
     .filter(Boolean)
-  if (paths.length) await supabase.storage.from('pdfs').remove(paths)
+  if (paths.length) await supabase.storage.from(STORAGE_BUCKET).remove(paths)
 
   revalidatePath('/admin/units/new')
   revalidatePath('/', 'layout')
@@ -285,7 +276,7 @@ export async function deleteKurs(kursId: string): Promise<{ error?: string }> {
       )
     )
     .filter(Boolean)
-  if (paths.length) await supabase.storage.from('pdfs').remove(paths)
+  if (paths.length) await supabase.storage.from(STORAGE_BUCKET).remove(paths)
 
   revalidatePath('/admin/kurse/new')
   revalidatePath('/', 'layout')
@@ -310,7 +301,7 @@ export async function deleteDocument(docId: string): Promise<{ error?: string }>
   if (doc.file_type === 'image_collection') {
     pathsToDelete.push(...((doc.document_images ?? []) as { file_path: string }[]).map((i) => i.file_path))
   }
-  if (pathsToDelete.length) await supabase.storage.from('pdfs').remove(pathsToDelete)
+  if (pathsToDelete.length) await supabase.storage.from(STORAGE_BUCKET).remove(pathsToDelete)
 
   revalidatePath('/admin/documents/new')
   revalidatePath('/', 'layout')
@@ -384,24 +375,24 @@ export async function updateDocument(docId: string, formData: FormData): Promise
   // pdf / image: optionally replace the file
   const pdfFile = formData.get('pdf') as File | null
   if (pdfFile && pdfFile.size > 0) {
-    if (!ALLOWED_MIMES.includes(pdfFile.type)) return { error: 'Only PDF, JPEG, PNG, GIF, or WebP files are allowed.' }
+    if (!(ALLOWED_FILE_MIMES as readonly string[]).includes(pdfFile.type)) return { error: 'Only PDF, JPEG, PNG, GIF, or WebP files are allowed.' }
 
-    const file_type = IMAGE_MIMES.includes(pdfFile.type) ? 'image' : 'pdf'
+    const file_type = (ALLOWED_IMAGE_MIMES as readonly string[]).includes(pdfFile.type) ? 'image' : 'pdf'
     const ext = MIME_TO_EXT[pdfFile.type] ?? '.bin'
     const newPath = `documents/${user.id}/${Date.now()}-${sanitise(title)}${ext}`
 
     const { error: uploadErr } = await supabase.storage
-      .from('pdfs')
+      .from(STORAGE_BUCKET)
       .upload(newPath, pdfFile, { contentType: pdfFile.type, upsert: false })
     if (uploadErr) return { error: `Upload failed: ${uploadErr.message}` }
 
     const { error: dbErr } = await supabase.from('documents').update({ title, description, position, file_path: newPath, file_type }).eq('id', docId)
     if (dbErr) {
-      await supabase.storage.from('pdfs').remove([newPath])
+      await supabase.storage.from(STORAGE_BUCKET).remove([newPath])
       return { error: dbErr.message }
     }
 
-    if (currentDoc.file_path) await supabase.storage.from('pdfs').remove([currentDoc.file_path])
+    if (currentDoc.file_path) await supabase.storage.from(STORAGE_BUCKET).remove([currentDoc.file_path])
   } else {
     const { error } = await supabase.from('documents').update({ title, description, position }).eq('id', docId)
     if (error) return { error: error.message }

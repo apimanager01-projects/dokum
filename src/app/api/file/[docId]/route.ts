@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { STORAGE_BUCKET, SIGNED_URL_EXPIRY_SECONDS } from '@/lib/constants'
 
 export async function GET(
   request: NextRequest,
@@ -27,8 +28,8 @@ export async function GET(
 
   // Generate a short-lived signed URL (60 s — only used server-side for the fetch below)
   const { data: urlData, error: urlError } = await supabase.storage
-    .from('pdfs')
-    .createSignedUrl(doc.file_path, 60, { download: false })
+    .from(STORAGE_BUCKET)
+    .createSignedUrl(doc.file_path, SIGNED_URL_EXPIRY_SECONDS, { download: false })
 
   if (urlError || !urlData?.signedUrl) {
     return new NextResponse('Datei konnte nicht geladen werden.', { status: 500 })

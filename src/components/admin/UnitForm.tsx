@@ -3,7 +3,8 @@
 import { useActionState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { createKurs, updateKurs } from '@/actions/admin'
+import { createUnit, updateUnit } from '@/actions/admin'
+import type { Kurs } from '@/types'
 import type { ActionResult } from '@/types'
 
 type FormState = ActionResult<{ id?: string }> | null
@@ -14,14 +15,25 @@ type DefaultValues = {
   title: string
   description: string | null
   position: number
-  published: boolean
 }
 
-export function AddKursForm({ editId, defaultValues }: { editId?: string; defaultValues?: DefaultValues }) {
+export function UnitForm({
+  kurse,
+  onKursChange,
+  defaultKursId = '',
+  editId,
+  defaultValues,
+}: {
+  kurse: Pick<Kurs, 'id' | 'title'>[]
+  onKursChange?: (kursId: string) => void
+  defaultKursId?: string
+  editId?: string
+  defaultValues?: DefaultValues
+}) {
   const router = useRouter()
   const [state, action, pending] = useActionState(
     async (_prev: FormState, formData: FormData): Promise<FormState> => {
-      const result = editId ? await updateKurs(editId, formData) : await createKurs(formData)
+      const result = editId ? await updateUnit(editId, formData) : await createUnit(formData)
       return result as FormState
     },
     initialState
@@ -41,7 +53,7 @@ export function AddKursForm({ editId, defaultValues }: { editId?: string; defaul
       {state?.ok === true && (
         <div className="rounded-md border border-green-200 bg-green-50 px-3 py-3">
           <p className="text-sm font-medium text-green-800">
-            {editId ? 'Kurs erfolgreich aktualisiert!' : 'Kurs erfolgreich angelegt!'}
+            {editId ? 'Unit erfolgreich aktualisiert!' : 'Unit erfolgreich angelegt!'}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Link
@@ -52,10 +64,10 @@ export function AddKursForm({ editId, defaultValues }: { editId?: string; defaul
             </Link>
             {!editId && state.data?.id && (
               <Link
-                href={`/admin/units/new?kursId=${state.data.id}`}
+                href={`/admin/tasks/new?unitId=${state.data.id}`}
                 className="rounded-md border border-brand px-3 py-1.5 text-sm font-medium text-brand hover:bg-brand/5 btn-brand"
               >
-                Unit hinzufügen →
+                Task hinzufügen →
               </Link>
             )}
           </div>
@@ -63,11 +75,33 @@ export function AddKursForm({ editId, defaultValues }: { editId?: string; defaul
       )}
 
       <div className="flex flex-col gap-1">
-        <label htmlFor="kurs-title" className="text-sm font-medium text-gray-700">
+        <label htmlFor="unit-kurs" className="text-sm font-medium text-gray-700">
+          Kurs <span className="text-red-500">*</span>
+        </label>
+        <select
+          id="unit-kurs"
+          name="kurs_id"
+          required
+          defaultValue={defaultKursId}
+          disabled={!!editId}
+          onChange={(e) => onKursChange?.(e.target.value)}
+          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand disabled:bg-gray-50 disabled:text-gray-500"
+        >
+          <option value="">— Select a Kurs —</option>
+          {kurse.map((k) => (
+            <option key={k.id} value={k.id}>
+              {k.title}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label htmlFor="unit-title" className="text-sm font-medium text-gray-700">
           Title <span className="text-red-500">*</span>
         </label>
         <input
-          id="kurs-title"
+          id="unit-title"
           name="title"
           type="text"
           required
@@ -77,11 +111,11 @@ export function AddKursForm({ editId, defaultValues }: { editId?: string; defaul
       </div>
 
       <div className="flex flex-col gap-1">
-        <label htmlFor="kurs-description" className="text-sm font-medium text-gray-700">
+        <label htmlFor="unit-description" className="text-sm font-medium text-gray-700">
           Description
         </label>
         <textarea
-          id="kurs-description"
+          id="unit-description"
           name="description"
           rows={3}
           defaultValue={defaultValues?.description ?? ''}
@@ -90,31 +124,17 @@ export function AddKursForm({ editId, defaultValues }: { editId?: string; defaul
       </div>
 
       <div className="flex flex-col gap-1">
-        <label htmlFor="kurs-position" className="text-sm font-medium text-gray-700">
+        <label htmlFor="unit-position" className="text-sm font-medium text-gray-700">
           Position
         </label>
         <input
-          id="kurs-position"
+          id="unit-position"
           name="position"
           type="number"
           defaultValue={defaultValues?.position ?? 0}
           className="w-24 rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
         />
-        <p className="text-xs text-gray-400">Lower numbers appear first. Ties are broken by creation time.</p>
-      </div>
-
-      <div className="flex items-center gap-2">
-        <input
-          id="kurs-published"
-          name="published"
-          type="checkbox"
-          value="true"
-          defaultChecked={defaultValues?.published ?? false}
-          className="h-4 w-4 rounded border-gray-300"
-        />
-        <label htmlFor="kurs-published" className="text-sm font-medium text-gray-700">
-          Publish immediately
-        </label>
+        <p className="text-xs text-gray-400">Lower numbers appear first within the Kurs.</p>
       </div>
 
       <button
@@ -122,7 +142,7 @@ export function AddKursForm({ editId, defaultValues }: { editId?: string; defaul
         disabled={pending}
         className="self-start rounded-md border border-brand px-4 py-2 text-sm font-medium text-brand hover:bg-brand/5 disabled:opacity-50 btn-brand"
       >
-        {pending ? 'Saving…' : editId ? 'Aktualisieren' : 'Add Kurs'}
+        {pending ? 'Saving…' : editId ? 'Aktualisieren' : 'Add Unit'}
       </button>
     </form>
   )

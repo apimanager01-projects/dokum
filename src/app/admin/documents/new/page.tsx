@@ -1,8 +1,6 @@
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import { getDocumentById, getAllKurseDeep } from '@/lib/dal'
-import { NewDocumentPageClient } from '@/components/admin/NewDocumentPageClient'
+import { DocumentPageClient } from '@/components/admin/DocumentPageClient'
 import { AdminSubpageNav } from '@/components/admin/AdminSubpageNav'
 
 export default async function NewDocumentPage({
@@ -10,15 +8,6 @@ export default async function NewDocumentPage({
 }: {
   searchParams: Promise<{ taskId?: string; editId?: string }>
 }) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user || user.app_metadata?.['role'] !== 'admin') {
-    redirect('/')
-  }
-
   const { taskId, editId } = await searchParams
 
   let defaultTaskId = taskId ?? ''
@@ -46,7 +35,7 @@ export default async function NewDocumentPage({
           </Link>
         )}
       </div>
-      <NewDocumentPageClient
+      <DocumentPageClient
         key={editId ?? 'new'}
         kurseTree={kurse}
         defaultTaskId={defaultTaskId}

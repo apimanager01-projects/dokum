@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { AddTaskForm } from '@/components/admin/AddTaskForm'
+import { TaskForm } from '@/components/admin/TaskForm'
 import { AdminTree } from '@/components/admin/AdminTree'
 
 type Task = { id: string; title: string; position: number; created_at: string }
@@ -17,7 +17,7 @@ type Props = {
   defaultValues?: DefaultValues
 }
 
-export function NewTaskPageClient({ kurseWithUnitsAndTasks, defaultUnitId, editId, defaultValues }: Props) {
+export function TaskPageClient({ kurseWithUnitsAndTasks, defaultUnitId, editId, defaultValues }: Props) {
   const [selectedUnitId, setSelectedUnitId] = useState(defaultUnitId)
 
   // Flatten units with kurs title for the form dropdown
@@ -30,7 +30,7 @@ export function NewTaskPageClient({ kurseWithUnitsAndTasks, defaultUnitId, editI
 
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-[7fr_3fr]">
-      <AddTaskForm
+      <TaskForm
         units={units}
         onUnitChange={setSelectedUnitId}
         defaultUnitId={defaultUnitId}

@@ -1,8 +1,6 @@
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import { getUnitById, getAllKurseWithUnits } from '@/lib/dal'
-import { NewUnitPageClient } from '@/components/admin/NewUnitPageClient'
+import { UnitPageClient } from '@/components/admin/UnitPageClient'
 import { AdminSubpageNav } from '@/components/admin/AdminSubpageNav'
 
 export default async function NewUnitPage({
@@ -10,15 +8,6 @@ export default async function NewUnitPage({
 }: {
   searchParams: Promise<{ kursId?: string; editId?: string }>
 }) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user || user.app_metadata?.['role'] !== 'admin') {
-    redirect('/')
-  }
-
   const { kursId, editId } = await searchParams
 
   let defaultKursId = kursId ?? ''
@@ -46,7 +35,7 @@ export default async function NewUnitPage({
           </Link>
         )}
       </div>
-      <NewUnitPageClient
+      <UnitPageClient
         key={editId ?? 'new'}
         kurseWithUnits={kurse}
         defaultKursId={defaultKursId}

@@ -19,7 +19,7 @@ type DefaultValues = {
   position: number
 }
 
-export function AddTaskForm({
+export function TaskForm({
   units,
   onUnitChange,
   defaultUnitId = '',

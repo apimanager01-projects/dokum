@@ -8,6 +8,24 @@ import { KursFormSchema, UnitFormSchema, TaskFormSchema, DocumentMetaSchema, Doc
 import type { ActionResult } from '@/types'
 import { logAdminAction } from '@/lib/audit'
 
+type DocumentFileRef = {
+  file_path: string | null
+  file_type: string
+  document_images?: { file_path: string }[]
+}
+
+function collectStoragePaths(documents: DocumentFileRef[]): string[] {
+  return documents
+    .flatMap((d) => {
+      const paths: string[] = []
+      if (d.file_path) paths.push(d.file_path)
+      if (d.file_type === 'image_collection') {
+        paths.push(...(d.document_images ?? []).map((i) => i.file_path))
+      }
+      return paths
+    })
+}
+
 function parseForm<T>(schema: { safeParse: (data: unknown) => { success: true; data: T } | { success: false; error: { issues: { message: string }[] } } }, formData: FormData, fields: string[]): { ok: true; data: T } | { ok: false; error: string } {
   const raw: Record<string, unknown> = {}
   for (const field of fields) {
@@ -221,14 +239,7 @@ export async function deleteTask(taskId: string): Promise<ActionResult> {
   const { error } = await supabase.from('tasks').delete().eq('id', taskId)
   if (error) return { ok: false, error: error.message }
 
-  const paths = ((task?.documents ?? []) as { file_path: string | null; file_type: string; document_images: { file_path: string }[] }[])
-    .flatMap((d) => {
-      const p: string[] = []
-      if (d.file_path) p.push(d.file_path)
-      if (d.file_type === 'image_collection') p.push(...(d.document_images ?? []).map((i) => i.file_path))
-      return p
-    })
-    .filter(Boolean)
+  const paths = collectStoragePaths((task?.documents ?? []) as DocumentFileRef[])
   if (paths.length) await supabase.storage.from(STORAGE_BUCKET).remove(paths)
 
   await logAdminAction({ actorId: user.id, action: 'delete', entityType: 'task', entityId: taskId, metadata: { paths_deleted: paths.length } })
@@ -249,16 +260,8 @@ export async function deleteUnit(unitId: string): Promise<ActionResult> {
   const { error } = await supabase.from('units').delete().eq('id', unitId)
   if (error) return { ok: false, error: error.message }
 
-  const paths = ((unit?.tasks ?? []) as { documents: { file_path: string | null; file_type: string; document_images: { file_path: string }[] }[] }[])
-    .flatMap((t) =>
-      t.documents.flatMap((d) => {
-        const p: string[] = []
-        if (d.file_path) p.push(d.file_path)
-        if (d.file_type === 'image_collection') p.push(...(d.document_images ?? []).map((i) => i.file_path))
-        return p
-      })
-    )
-    .filter(Boolean)
+  const allDocs = (unit?.tasks ?? []).flatMap((t) => (t as any).documents ?? []) as DocumentFileRef[]
+  const paths = collectStoragePaths(allDocs)
   if (paths.length) await supabase.storage.from(STORAGE_BUCKET).remove(paths)
 
   await logAdminAction({ actorId: user.id, action: 'delete', entityType: 'unit', entityId: unitId, metadata: { paths_deleted: paths.length } })
@@ -279,18 +282,10 @@ export async function deleteKurs(kursId: string): Promise<ActionResult> {
   const { error } = await supabase.from('kurse').delete().eq('id', kursId)
   if (error) return { ok: false, error: error.message }
 
-  const paths = ((kurs?.units ?? []) as { tasks: { documents: { file_path: string | null; file_type: string; document_images: { file_path: string }[] }[] }[] }[])
-    .flatMap((u) =>
-      u.tasks.flatMap((t) =>
-        t.documents.flatMap((d) => {
-          const p: string[] = []
-          if (d.file_path) p.push(d.file_path)
-          if (d.file_type === 'image_collection') p.push(...(d.document_images ?? []).map((i) => i.file_path))
-          return p
-        })
-      )
-    )
-    .filter(Boolean)
+  const allDocs = (kurs?.units ?? [])
+    .flatMap((u) => (u as any).tasks ?? [])
+    .flatMap((t: any) => t.documents ?? []) as DocumentFileRef[]
+  const paths = collectStoragePaths(allDocs)
   if (paths.length) await supabase.storage.from(STORAGE_BUCKET).remove(paths)
 
   await logAdminAction({ actorId: user.id, action: 'delete', entityType: 'kurs', entityId: kursId, metadata: { paths_deleted: paths.length } })
@@ -312,11 +307,7 @@ export async function deleteDocument(docId: string): Promise<ActionResult> {
   const { error: dbErr } = await supabase.from('documents').delete().eq('id', docId)
   if (dbErr) return { ok: false, error: dbErr.message }
 
-  const pathsToDelete: string[] = []
-  if (doc.file_path) pathsToDelete.push(doc.file_path)
-  if (doc.file_type === 'image_collection') {
-    pathsToDelete.push(...((doc.document_images ?? []) as { file_path: string }[]).map((i) => i.file_path))
-  }
+  const pathsToDelete = collectStoragePaths([doc as DocumentFileRef])
   if (pathsToDelete.length) await supabase.storage.from(STORAGE_BUCKET).remove(pathsToDelete)
 
   await logAdminAction({ actorId: user.id, action: 'delete', entityType: 'document', entityId: docId, metadata: { paths_deleted: pathsToDelete.length } })

@@ -21,7 +21,7 @@ type DefaultValues = {
   file_type?: 'pdf' | 'image' | 'image_collection'
 }
 
-export function AddDocumentForm({
+export function DocumentForm({
   tasks,
   onTaskChange,
   defaultTaskId = '',

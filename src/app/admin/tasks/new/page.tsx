@@ -1,8 +1,6 @@
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import { getTaskById, getAllKurseDeep } from '@/lib/dal'
-import { NewTaskPageClient } from '@/components/admin/NewTaskPageClient'
+import { TaskPageClient } from '@/components/admin/TaskPageClient'
 import { AdminSubpageNav } from '@/components/admin/AdminSubpageNav'
 
 export default async function NewTaskPage({
@@ -10,15 +8,6 @@ export default async function NewTaskPage({
 }: {
   searchParams: Promise<{ unitId?: string; editId?: string }>
 }) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user || user.app_metadata?.['role'] !== 'admin') {
-    redirect('/')
-  }
-
   const { unitId, editId } = await searchParams
 
   let defaultUnitId = unitId ?? ''
@@ -46,7 +35,7 @@ export default async function NewTaskPage({
           </Link>
         )}
       </div>
-      <NewTaskPageClient
+      <TaskPageClient
         key={editId ?? 'new'}
         kurseWithUnitsAndTasks={kurse}
         defaultUnitId={defaultUnitId}

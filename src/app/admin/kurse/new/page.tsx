@@ -1,8 +1,6 @@
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import { getKursById, getAllKurseWithUnits } from '@/lib/dal'
-import { AddKursForm } from '@/components/admin/AddKursForm'
+import { KursForm } from '@/components/admin/KursForm'
 import { AdminTree } from '@/components/admin/AdminTree'
 import { AdminSubpageNav } from '@/components/admin/AdminSubpageNav'
 
@@ -11,15 +9,6 @@ export default async function NewKursPage({
 }: {
   searchParams: Promise<{ editId?: string }>
 }) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user || user.app_metadata?.['role'] !== 'admin') {
-    redirect('/')
-  }
-
   const { editId } = await searchParams
 
   const [editDefaults, kurse] = await Promise.all([
@@ -42,7 +31,7 @@ export default async function NewKursPage({
       </div>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[7fr_3fr]">
-        <AddKursForm key={editId ?? 'new'} editId={editId} defaultValues={editDefaults ?? undefined} />
+        <KursForm key={editId ?? 'new'} editId={editId} defaultValues={editDefaults ?? undefined} />
         <div>
           <p className="mb-3 text-sm font-medium text-gray-500">Vorhandene Kurse</p>
           <AdminTree kurse={kurse} selectedId="" deleteLevel="kurs" />

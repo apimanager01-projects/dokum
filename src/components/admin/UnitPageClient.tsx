@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { AddUnitForm } from '@/components/admin/AddUnitForm'
+import { UnitForm } from '@/components/admin/UnitForm'
 import { AdminTree } from '@/components/admin/AdminTree'
 
 type Unit = {
@@ -26,14 +26,14 @@ type Props = {
   defaultValues?: DefaultValues
 }
 
-export function NewUnitPageClient({ kurseWithUnits, defaultKursId, editId, defaultValues }: Props) {
+export function UnitPageClient({ kurseWithUnits, defaultKursId, editId, defaultValues }: Props) {
   const [selectedKursId, setSelectedKursId] = useState(defaultKursId)
 
   const kurse = kurseWithUnits.map(({ id, title }) => ({ id, title }))
 
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-[7fr_3fr]">
-      <AddUnitForm
+      <UnitForm
         kurse={kurse}
         onKursChange={setSelectedKursId}
         defaultKursId={defaultKursId}

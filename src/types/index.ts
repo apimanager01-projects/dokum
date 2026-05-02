@@ -72,3 +72,16 @@ export interface KursWithUnits extends Kurs {
 export type ActionSuccess<T = void> = { ok: true; data: T }
 export type ActionError = { ok: false; error: string }
 export type ActionResult<T = void> = ActionSuccess<T> | ActionError
+
+// ── Audit log ───────────────────────────────────────────────────────────────
+
+export interface AuditLog {
+  id: string
+  actor_id: string
+  action: 'create' | 'update' | 'delete'
+  entity_type: 'kurs' | 'unit' | 'task' | 'document'
+  entity_id: string
+  entity_title: string | null
+  metadata: Record<string, unknown> | null
+  created_at: string
+}

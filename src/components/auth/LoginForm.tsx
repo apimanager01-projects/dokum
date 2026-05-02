@@ -4,13 +4,15 @@ import { useActionState } from 'react'
 import { signIn } from '@/actions/auth'
 import Link from 'next/link'
 
-const initialState = { error: undefined as string | undefined }
+type AuthState = { ok: false; error: string } | null
+
+const initialState: AuthState = null
 
 export function LoginForm({ message }: { message?: string }) {
   const [state, action, pending] = useActionState(
-    async (_prev: typeof initialState, formData: FormData) => {
+    async (_prev: AuthState, formData: FormData): Promise<AuthState> => {
       const result = await signIn(formData)
-      return result ?? initialState
+      return result ?? null
     },
     initialState
   )
@@ -23,7 +25,7 @@ export function LoginForm({ message }: { message?: string }) {
         </p>
       )}
 
-      {state.error && (
+      {state && (
         <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
           {state.error}
         </p>

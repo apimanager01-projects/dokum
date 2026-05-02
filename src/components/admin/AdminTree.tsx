@@ -46,7 +46,7 @@ export function AdminTree({ kurse, selectedId = '', deleteLevel }: Props) {
     setLoadingId(id)
     const result = await deleteActions[level](id)
     setLoadingId(null)
-    if (result.error) alert(`Fehler: ${result.error}`)
+    if (!result.ok) alert(`Fehler: ${result.error}`)
     else router.refresh()
   }
 

@@ -5,12 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { STORAGE_BUCKET, MAX_FILE_SIZE_BYTES, ALLOWED_IMAGE_MIMES, ALLOWED_FILE_MIMES, MIME_TO_EXT } from '@/lib/constants'
 import { KursFormSchema, UnitFormSchema, TaskFormSchema, DocumentMetaSchema, DocumentUpdateMetaSchema } from '@/lib/schemas'
-
-type ActionResult = {
-  error?: string
-  success?: boolean
-  id?: string
-}
+import type { ActionResult } from '@/types'
 
 function parseForm<T>(schema: { safeParse: (data: unknown) => { success: true; data: T } | { success: false; error: { issues: { message: string }[] } } }, formData: FormData, fields: string[]): { ok: true; data: T } | { ok: false; error: string } {
   const raw: Record<string, unknown> = {}
@@ -35,11 +30,11 @@ async function getAdminUser() {
   return { supabase, user }
 }
 
-export async function createKurs(formData: FormData): Promise<ActionResult> {
+export async function createKurs(formData: FormData): Promise<ActionResult<{ id: string }>> {
   const { supabase } = await getAdminUser()
 
   const parsed = parseForm(KursFormSchema, formData, ['title', 'description', 'position', 'published'])
-  if (!parsed.ok) return { error: parsed.error }
+  if (!parsed.ok) return { ok: false, error: parsed.error }
   const { title, description, position, published } = parsed.data
 
   const { data, error } = await supabase
@@ -47,18 +42,18 @@ export async function createKurs(formData: FormData): Promise<ActionResult> {
     .insert({ title, description, position, published })
     .select('id')
     .single()
-  if (error) return { error: `Failed to create Kurs: ${error.message}` }
+  if (error) return { ok: false, error: `Failed to create Kurs: ${error.message}` }
 
   revalidatePath('/admin/kurse/new')
   revalidatePath('/', 'layout')
-  return { success: true, id: data.id }
+  return { ok: true, data: { id: data.id } }
 }
 
-export async function createUnit(formData: FormData): Promise<ActionResult> {
+export async function createUnit(formData: FormData): Promise<ActionResult<{ id: string }>> {
   const { supabase } = await getAdminUser()
 
   const parsed = parseForm(UnitFormSchema, formData, ['kurs_id', 'title', 'description', 'position'])
-  if (!parsed.ok) return { error: parsed.error }
+  if (!parsed.ok) return { ok: false, error: parsed.error }
   const { kurs_id, title, description, position } = parsed.data
 
   const { data, error } = await supabase
@@ -66,18 +61,18 @@ export async function createUnit(formData: FormData): Promise<ActionResult> {
     .insert({ kurs_id, title, description, position })
     .select('id')
     .single()
-  if (error) return { error: `Failed to create Unit: ${error.message}` }
+  if (error) return { ok: false, error: `Failed to create Unit: ${error.message}` }
 
   revalidatePath('/admin/units/new')
   revalidatePath('/', 'layout')
-  return { success: true, id: data.id }
+  return { ok: true, data: { id: data.id } }
 }
 
-export async function createTask(formData: FormData): Promise<ActionResult> {
+export async function createTask(formData: FormData): Promise<ActionResult<{ id: string }>> {
   const { supabase } = await getAdminUser()
 
   const parsed = parseForm(TaskFormSchema, formData, ['unit_id', 'title', 'description', 'position'])
-  if (!parsed.ok) return { error: parsed.error }
+  if (!parsed.ok) return { ok: false, error: parsed.error }
   const { unit_id, title, description, position } = parsed.data
 
   const { data, error } = await supabase
@@ -85,11 +80,11 @@ export async function createTask(formData: FormData): Promise<ActionResult> {
     .insert({ unit_id, title, description, position })
     .select('id')
     .single()
-  if (error) return { error: `Failed to create Task: ${error.message}` }
+  if (error) return { ok: false, error: `Failed to create Task: ${error.message}` }
 
   revalidatePath('/admin/tasks/new')
   revalidatePath('/', 'layout')
-  return { success: true, id: data.id }
+  return { ok: true, data: { id: data.id } }
 }
 
 function sanitise(name: string, maxLen = 60) {
@@ -100,20 +95,20 @@ export async function createDocument(formData: FormData): Promise<ActionResult> 
   const { supabase, user } = await getAdminUser()
 
   const parsed = parseForm(DocumentMetaSchema, formData, ['task_id', 'title', 'description', 'position', 'doc_type'])
-  if (!parsed.ok) return { error: parsed.error }
+  if (!parsed.ok) return { ok: false, error: parsed.error }
   const { task_id, title, description, position, doc_type } = parsed.data
 
   // ── Image collection branch ──────────────────────────────────────────────
   if (doc_type === 'image_collection') {
     const images = formData.getAll('images') as File[]
     const validImages = images.filter((f) => f.size > 0)
-    if (validImages.length === 0) return { error: 'At least one image is required.' }
+    if (validImages.length === 0) return { ok: false, error: 'At least one image is required.' }
 
     for (const img of validImages) {
       if (!(ALLOWED_IMAGE_MIMES as readonly string[]).includes(img.type))
-        return { error: `"${img.name}" ist kein unterstütztes Bildformat (JPEG, PNG, GIF, WebP).` }
+        return { ok: false, error: `"${img.name}" ist kein unterstütztes Bildformat (JPEG, PNG, GIF, WebP).` }
       if (img.size > MAX_FILE_SIZE_BYTES)
-        return { error: `"${img.name}" ist zu groß (${(img.size / 1024 / 1024).toFixed(1)} MB). Maximal 4 MB pro Bild.` }
+        return { ok: false, error: `"${img.name}" ist zu groß (${(img.size / 1024 / 1024).toFixed(1)} MB). Maximal 4 MB pro Bild.` }
     }
 
     // Insert document record (no file_path for image collections)
@@ -122,7 +117,7 @@ export async function createDocument(formData: FormData): Promise<ActionResult> 
       .insert({ task_id, title, description, file_path: null, file_type: 'image_collection', position })
       .select('id')
       .single()
-    if (insertError) return { error: `Failed to save document: ${insertError.message}` }
+    if (insertError) return { ok: false, error: `Failed to save document: ${insertError.message}` }
 
     // Upload each image and collect paths
     const uploadedPaths: string[] = []
@@ -136,19 +131,17 @@ export async function createDocument(formData: FormData): Promise<ActionResult> 
         .upload(storagePath, img, { contentType: img.type, upsert: false })
 
       if (uploadError) {
-        // Rollback: delete document + already-uploaded images
         const [dbRollback, storageRollback] = await Promise.allSettled([
           supabase.from('documents').delete().eq('id', docData.id),
           uploadedPaths.length
             ? supabase.storage.from(STORAGE_BUCKET).remove(uploadedPaths)
             : Promise.resolve(null),
         ])
-        // Log rollback failures for observability — do not throw
         const dbErr = dbRollback.status === 'rejected' ? dbRollback.reason : (dbRollback.value as any)?.error
         const stErr = storageRollback.status === 'rejected' ? storageRollback.reason : null
         if (dbErr) console.error('[createDocument rollback] DB delete failed:', dbErr)
         if (stErr) console.error('[createDocument rollback] Storage remove failed:', stErr)
-        return { error: `Upload fehlgeschlagen: ${uploadError.message}` }
+        return { ok: false, error: `Upload fehlgeschlagen: ${uploadError.message}` }
       }
       uploadedPaths.push(storagePath)
     }
@@ -167,23 +160,22 @@ export async function createDocument(formData: FormData): Promise<ActionResult> 
           ? supabase.storage.from(STORAGE_BUCKET).remove(uploadedPaths)
           : Promise.resolve(null),
       ])
-      // Log rollback failures for observability — do not throw
       const dbErr = dbRollback.status === 'rejected' ? dbRollback.reason : (dbRollback.value as any)?.error
       const stErr = storageRollback.status === 'rejected' ? storageRollback.reason : null
       if (dbErr) console.error('[createDocument rollback] DB delete failed:', dbErr)
       if (stErr) console.error('[createDocument rollback] Storage remove failed:', stErr)
-      return { error: `Failed to save images: ${imgInsertError.message}` }
+      return { ok: false, error: `Failed to save images: ${imgInsertError.message}` }
     }
 
     revalidatePath('/admin/documents/new')
     revalidatePath('/', 'layout')
-    return { success: true }
+    return { ok: true, data: undefined }
   }
 
   // ── Single-file branch (pdf / image) ────────────────────────────────────
   const file = formData.get('pdf') as File | null
-  if (!file || file.size === 0) return { error: 'A file is required.' }
-  if (!(ALLOWED_FILE_MIMES as readonly string[]).includes(file.type)) return { error: 'Only PDF, JPEG, PNG, GIF, or WebP files are allowed.' }
+  if (!file || file.size === 0) return { ok: false, error: 'A file is required.' }
+  if (!(ALLOWED_FILE_MIMES as readonly string[]).includes(file.type)) return { ok: false, error: 'Only PDF, JPEG, PNG, GIF, or WebP files are allowed.' }
 
   const file_type = (ALLOWED_IMAGE_MIMES as readonly string[]).includes(file.type) ? 'image' : 'pdf'
   const ext = MIME_TO_EXT[file.type] ?? '.bin'
@@ -193,7 +185,7 @@ export async function createDocument(formData: FormData): Promise<ActionResult> 
     .from(STORAGE_BUCKET)
     .upload(storagePath, file, { contentType: file.type, upsert: false })
 
-  if (uploadError) return { error: `Upload failed: ${uploadError.message}` }
+  if (uploadError) return { ok: false, error: `Upload failed: ${uploadError.message}` }
 
   const { error: insertError } = await supabase
     .from('documents')
@@ -201,15 +193,15 @@ export async function createDocument(formData: FormData): Promise<ActionResult> 
 
   if (insertError) {
     await supabase.storage.from(STORAGE_BUCKET).remove([storagePath])
-    return { error: `Failed to save document: ${insertError.message}` }
+    return { ok: false, error: `Failed to save document: ${insertError.message}` }
   }
 
   revalidatePath('/admin/documents/new')
   revalidatePath('/', 'layout')
-  return { success: true }
+  return { ok: true, data: undefined }
 }
 
-export async function deleteTask(taskId: string): Promise<{ error?: string }> {
+export async function deleteTask(taskId: string): Promise<ActionResult> {
   const { supabase } = await getAdminUser()
 
   const { data: task } = await supabase
@@ -219,7 +211,7 @@ export async function deleteTask(taskId: string): Promise<{ error?: string }> {
     .single()
 
   const { error } = await supabase.from('tasks').delete().eq('id', taskId)
-  if (error) return { error: error.message }
+  if (error) return { ok: false, error: error.message }
 
   const paths = ((task?.documents ?? []) as { file_path: string | null; file_type: string; document_images: { file_path: string }[] }[])
     .flatMap((d) => {
@@ -233,10 +225,10 @@ export async function deleteTask(taskId: string): Promise<{ error?: string }> {
 
   revalidatePath('/admin/tasks/new')
   revalidatePath('/', 'layout')
-  return {}
+  return { ok: true, data: undefined }
 }
 
-export async function deleteUnit(unitId: string): Promise<{ error?: string }> {
+export async function deleteUnit(unitId: string): Promise<ActionResult> {
   const { supabase } = await getAdminUser()
 
   const { data: unit } = await supabase
@@ -246,7 +238,7 @@ export async function deleteUnit(unitId: string): Promise<{ error?: string }> {
     .single()
 
   const { error } = await supabase.from('units').delete().eq('id', unitId)
-  if (error) return { error: error.message }
+  if (error) return { ok: false, error: error.message }
 
   const paths = ((unit?.tasks ?? []) as { documents: { file_path: string | null; file_type: string; document_images: { file_path: string }[] }[] }[])
     .flatMap((t) =>
@@ -262,10 +254,10 @@ export async function deleteUnit(unitId: string): Promise<{ error?: string }> {
 
   revalidatePath('/admin/units/new')
   revalidatePath('/', 'layout')
-  return {}
+  return { ok: true, data: undefined }
 }
 
-export async function deleteKurs(kursId: string): Promise<{ error?: string }> {
+export async function deleteKurs(kursId: string): Promise<ActionResult> {
   const { supabase } = await getAdminUser()
 
   const { data: kurs } = await supabase
@@ -275,7 +267,7 @@ export async function deleteKurs(kursId: string): Promise<{ error?: string }> {
     .single()
 
   const { error } = await supabase.from('kurse').delete().eq('id', kursId)
-  if (error) return { error: error.message }
+  if (error) return { ok: false, error: error.message }
 
   const paths = ((kurs?.units ?? []) as { tasks: { documents: { file_path: string | null; file_type: string; document_images: { file_path: string }[] }[] }[] }[])
     .flatMap((u) =>
@@ -293,10 +285,10 @@ export async function deleteKurs(kursId: string): Promise<{ error?: string }> {
 
   revalidatePath('/admin/kurse/new')
   revalidatePath('/', 'layout')
-  return {}
+  return { ok: true, data: undefined }
 }
 
-export async function deleteDocument(docId: string): Promise<{ error?: string }> {
+export async function deleteDocument(docId: string): Promise<ActionResult> {
   const { supabase } = await getAdminUser()
 
   const { data: doc, error: fetchErr } = await supabase
@@ -304,10 +296,10 @@ export async function deleteDocument(docId: string): Promise<{ error?: string }>
     .select('file_path, file_type, document_images(file_path)')
     .eq('id', docId)
     .single()
-  if (fetchErr || !doc) return { error: 'Document not found' }
+  if (fetchErr || !doc) return { ok: false, error: 'Document not found' }
 
   const { error: dbErr } = await supabase.from('documents').delete().eq('id', docId)
-  if (dbErr) return { error: dbErr.message }
+  if (dbErr) return { ok: false, error: dbErr.message }
 
   const pathsToDelete: string[] = []
   if (doc.file_path) pathsToDelete.push(doc.file_path)
@@ -318,49 +310,49 @@ export async function deleteDocument(docId: string): Promise<{ error?: string }>
 
   revalidatePath('/admin/documents/new')
   revalidatePath('/', 'layout')
-  return {}
+  return { ok: true, data: undefined }
 }
 
 export async function updateKurs(kursId: string, formData: FormData): Promise<ActionResult> {
   const { supabase } = await getAdminUser()
   const parsed = parseForm(KursFormSchema, formData, ['title', 'description', 'position', 'published'])
-  if (!parsed.ok) return { error: parsed.error }
+  if (!parsed.ok) return { ok: false, error: parsed.error }
   const { title, description, position, published } = parsed.data
   const { error } = await supabase.from('kurse').update({ title, description, position, published }).eq('id', kursId)
-  if (error) return { error: error.message }
+  if (error) return { ok: false, error: error.message }
   revalidatePath('/admin/kurse/new')
   revalidatePath('/', 'layout')
-  return { success: true }
+  return { ok: true, data: undefined }
 }
 
 export async function updateUnit(unitId: string, formData: FormData): Promise<ActionResult> {
   const { supabase } = await getAdminUser()
   const parsed = parseForm(DocumentUpdateMetaSchema, formData, ['title', 'description', 'position'])
-  if (!parsed.ok) return { error: parsed.error }
+  if (!parsed.ok) return { ok: false, error: parsed.error }
   const { title, description, position } = parsed.data
   const { error } = await supabase.from('units').update({ title, description, position }).eq('id', unitId)
-  if (error) return { error: error.message }
+  if (error) return { ok: false, error: error.message }
   revalidatePath('/admin/units/new')
   revalidatePath('/', 'layout')
-  return { success: true }
+  return { ok: true, data: undefined }
 }
 
 export async function updateTask(taskId: string, formData: FormData): Promise<ActionResult> {
   const { supabase } = await getAdminUser()
   const parsed = parseForm(DocumentUpdateMetaSchema, formData, ['title', 'description', 'position'])
-  if (!parsed.ok) return { error: parsed.error }
+  if (!parsed.ok) return { ok: false, error: parsed.error }
   const { title, description, position } = parsed.data
   const { error } = await supabase.from('tasks').update({ title, description, position }).eq('id', taskId)
-  if (error) return { error: error.message }
+  if (error) return { ok: false, error: error.message }
   revalidatePath('/admin/tasks/new')
   revalidatePath('/', 'layout')
-  return { success: true }
+  return { ok: true, data: undefined }
 }
 
 export async function updateDocument(docId: string, formData: FormData): Promise<ActionResult> {
   const { supabase, user } = await getAdminUser()
   const parsed = parseForm(DocumentUpdateMetaSchema, formData, ['title', 'description', 'position'])
-  if (!parsed.ok) return { error: parsed.error }
+  if (!parsed.ok) return { ok: false, error: parsed.error }
   const { title, description, position } = parsed.data
 
   // Fetch current document to know its type
@@ -369,21 +361,21 @@ export async function updateDocument(docId: string, formData: FormData): Promise
     .select('file_path, file_type')
     .eq('id', docId)
     .single()
-  if (fetchErr || !currentDoc) return { error: 'Document not found.' }
+  if (fetchErr || !currentDoc) return { ok: false, error: 'Document not found.' }
 
   // image_collection: only metadata editable (no file replacement)
   if (currentDoc.file_type === 'image_collection') {
     const { error } = await supabase.from('documents').update({ title, description, position }).eq('id', docId)
-    if (error) return { error: error.message }
+    if (error) return { ok: false, error: error.message }
     revalidatePath('/admin/documents/new')
     revalidatePath('/', 'layout')
-    return { success: true }
+    return { ok: true, data: undefined }
   }
 
   // pdf / image: optionally replace the file
   const pdfFile = formData.get('pdf') as File | null
   if (pdfFile && pdfFile.size > 0) {
-    if (!(ALLOWED_FILE_MIMES as readonly string[]).includes(pdfFile.type)) return { error: 'Only PDF, JPEG, PNG, GIF, or WebP files are allowed.' }
+    if (!(ALLOWED_FILE_MIMES as readonly string[]).includes(pdfFile.type)) return { ok: false, error: 'Only PDF, JPEG, PNG, GIF, or WebP files are allowed.' }
 
     const file_type = (ALLOWED_IMAGE_MIMES as readonly string[]).includes(pdfFile.type) ? 'image' : 'pdf'
     const ext = MIME_TO_EXT[pdfFile.type] ?? '.bin'
@@ -392,26 +384,25 @@ export async function updateDocument(docId: string, formData: FormData): Promise
     const { error: uploadErr } = await supabase.storage
       .from(STORAGE_BUCKET)
       .upload(newPath, pdfFile, { contentType: pdfFile.type, upsert: false })
-    if (uploadErr) return { error: `Upload failed: ${uploadErr.message}` }
+    if (uploadErr) return { ok: false, error: `Upload failed: ${uploadErr.message}` }
 
     const { error: dbErr } = await supabase.from('documents').update({ title, description, position, file_path: newPath, file_type }).eq('id', docId)
     if (dbErr) {
       const [storageRollback] = await Promise.allSettled([
         supabase.storage.from(STORAGE_BUCKET).remove([newPath]),
       ])
-      // Log rollback failures for observability — do not throw
       const stErr = storageRollback.status === 'rejected' ? storageRollback.reason : null
       if (stErr) console.error('[updateDocument rollback] Storage remove failed:', stErr)
-      return { error: dbErr.message }
+      return { ok: false, error: dbErr.message }
     }
 
     if (currentDoc.file_path) await supabase.storage.from(STORAGE_BUCKET).remove([currentDoc.file_path])
   } else {
     const { error } = await supabase.from('documents').update({ title, description, position }).eq('id', docId)
-    if (error) return { error: error.message }
+    if (error) return { ok: false, error: error.message }
   }
 
   revalidatePath('/admin/documents/new')
   revalidatePath('/', 'layout')
-  return { success: true }
+  return { ok: true, data: undefined }
 }

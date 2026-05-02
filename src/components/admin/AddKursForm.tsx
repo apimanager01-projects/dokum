@@ -4,14 +4,11 @@ import { useActionState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createKurs, updateKurs } from '@/actions/admin'
+import type { ActionResult } from '@/types'
 
-type ActionState = {
-  error?: string
-  success?: boolean
-  id?: string
-}
+type FormState = ActionResult<{ id?: string }> | null
 
-const initialState: ActionState = {}
+const initialState: FormState = null
 
 type DefaultValues = {
   title: string
@@ -23,25 +20,25 @@ type DefaultValues = {
 export function AddKursForm({ editId, defaultValues }: { editId?: string; defaultValues?: DefaultValues }) {
   const router = useRouter()
   const [state, action, pending] = useActionState(
-    async (_prev: ActionState, formData: FormData) => {
+    async (_prev: FormState, formData: FormData): Promise<FormState> => {
       const result = editId ? await updateKurs(editId, formData) : await createKurs(formData)
-      return result ?? initialState
+      return result as FormState
     },
     initialState
   )
 
   useEffect(() => {
-    if (state.success) router.refresh()
-  }, [state.success])
+    if (state?.ok === true) router.refresh()
+  }, [state?.ok])
 
   return (
     <form action={action} className="flex flex-col gap-5">
-      {state.error && (
+      {state?.ok === false && (
         <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
           {state.error}
         </p>
       )}
-      {state.success && (
+      {state?.ok === true && (
         <div className="rounded-md border border-green-200 bg-green-50 px-3 py-3">
           <p className="text-sm font-medium text-green-800">
             {editId ? 'Kurs erfolgreich aktualisiert!' : 'Kurs erfolgreich angelegt!'}
@@ -53,9 +50,9 @@ export function AddKursForm({ editId, defaultValues }: { editId?: string; defaul
             >
               ← Zurück zur Übersicht
             </Link>
-            {!editId && state.id && (
+            {!editId && state.data?.id && (
               <Link
-                href={`/admin/units/new?kursId=${state.id}`}
+                href={`/admin/units/new?kursId=${state.data.id}`}
                 className="rounded-md border border-brand px-3 py-1.5 text-sm font-medium text-brand hover:bg-brand/5 btn-brand"
               >
                 Unit hinzufügen →

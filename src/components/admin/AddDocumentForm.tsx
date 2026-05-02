@@ -5,13 +5,11 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createDocument, updateDocument } from '@/actions/admin'
 import type { Task, Unit, Kurs } from '@/types'
+import type { ActionResult } from '@/types'
 
-type ActionState = {
-  error?: string
-  success?: boolean
-}
+type FormState = ActionResult | null
 
-const initialState: ActionState = {}
+const initialState: FormState = null
 
 type TaskWithUnit = Task & { units: Unit & { kurse: Pick<Kurs, 'title'> } }
 
@@ -42,16 +40,15 @@ export function AddDocumentForm({
     defaultValues?.file_type ?? 'pdf'
   )
   const [state, action, pending] = useActionState(
-    async (_prev: ActionState, formData: FormData) => {
-      const result = editId ? await updateDocument(editId, formData) : await createDocument(formData)
-      return result ?? initialState
+    async (_prev: FormState, formData: FormData): Promise<FormState> => {
+      return editId ? await updateDocument(editId, formData) : await createDocument(formData)
     },
     initialState
   )
 
   useEffect(() => {
-    if (state.success) router.refresh()
-  }, [state.success])
+    if (state?.ok === true) router.refresh()
+  }, [state?.ok])
 
   function validateFiles(files: FileList | null) {
     if (!files) return
@@ -68,12 +65,12 @@ export function AddDocumentForm({
 
   return (
     <form action={action} className="flex flex-col gap-5">
-      {state.error && (
+      {state?.ok === false && (
         <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
           {state.error}
         </p>
       )}
-      {state.success && (
+      {state?.ok === true && (
         <div className="rounded-md border border-green-200 bg-green-50 px-3 py-3">
           <p className="text-sm font-medium text-green-800">
             {editId ? 'Dokument erfolgreich aktualisiert!' : 'Dokument erfolgreich hochgeladen!'}

@@ -66,3 +66,9 @@ export interface UnitWithTasks extends Unit {
 export interface KursWithUnits extends Kurs {
   units: UnitWithTasks[]
 }
+
+// ── Server action result types ──────────────────────────────────────────────
+
+export type ActionSuccess<T = void> = { ok: true; data: T }
+export type ActionError = { ok: false; error: string }
+export type ActionResult<T = void> = ActionSuccess<T> | ActionError

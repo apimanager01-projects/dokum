@@ -9,14 +9,14 @@ export async function signIn(formData: FormData) {
     email: formData.get('email'),
     password: formData.get('password'),
   })
-  if (!result.success) return { error: result.error.issues[0].message }
+  if (!result.success) return { ok: false as const, error: result.error.issues[0].message }
   const { email, password } = result.data
 
   const supabase = await createClient()
   const { error } = await supabase.auth.signInWithPassword({ email, password })
 
   if (error) {
-    return { error: 'Invalid email or password.' }
+    return { ok: false as const, error: 'Invalid email or password.' }
   }
 
   redirect('/')
@@ -28,13 +28,13 @@ export async function signUp(formData: FormData) {
     password: formData.get('password'),
     full_name: formData.get('fullName'),
   })
-  if (!result.success) return { error: result.error.issues[0].message }
+  if (!result.success) return { ok: false as const, error: result.error.issues[0].message }
   const { email, password, full_name } = result.data
 
   const consentGiven = formData.get('consentGiven') === 'true'
 
   if (!consentGiven) {
-    return { error: 'Du musst die Datenschutzerklärung akzeptieren.' }
+    return { ok: false as const, error: 'Du musst die Datenschutzerklärung akzeptieren.' }
   }
 
   const supabase = await createClient()
@@ -45,7 +45,7 @@ export async function signUp(formData: FormData) {
   })
 
   if (error) {
-    return { error: error.message ?? 'Registrierung fehlgeschlagen.' }
+    return { ok: false as const, error: error.message ?? 'Registrierung fehlgeschlagen.' }
   }
   redirect('/auth/login?message=Bitte bestätige deine E-Mail-Adresse.')
 }

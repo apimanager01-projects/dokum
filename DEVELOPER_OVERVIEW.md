@@ -303,9 +303,20 @@ npm run dev
 
 Visit `http://localhost:3000`
 
+### Two Supabase Projects
+
+The app talks to **two completely separate Supabase projects** — not one project with branches.
+
+| Env | Project ref | Selected by | `NEXT_PUBLIC_APP_ENV` |
+|-----|-------------|-------------|------------------------|
+| Dev  | `elnupcpwhvfbmbpcbwrc` | `npm run dev` (loads `.env.local`) | `dev` |
+| Prod | `pnooldcnqlsqjatbtimz` | `npm run build` / `npm run start` and Vercel (loads `.env.production.local`) | `prod` |
+
+The dev project is a sandbox — fine to wipe and reseed. The prod project holds real users and content; treat it accordingly. Schema changes go to **dev first**, then prod once verified. Both projects are reachable from the configured Supabase MCP server (`.mcp.json`); pass the matching `project_id` on every call.
+
 ### Database Migrations
 
-Migrations live in `supabase/`. Apply them in order via the Supabase SQL editor or CLI:
+Migrations live in `supabase/`. Apply them in order to **each project** (dev first, then prod) via the Supabase SQL editor, the CLI, or `mcp__supabase__apply_migration`:
 
 | File | Description |
 |------|-------------|

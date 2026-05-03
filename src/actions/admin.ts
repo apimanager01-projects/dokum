@@ -36,6 +36,14 @@ function parseForm<T>(schema: { safeParse: (data: unknown) => { success: true; d
   return { ok: true, data: result.data }
 }
 
+function revalidateAdminPages() {
+  revalidatePath('/admin/kurse/new')
+  revalidatePath('/admin/units/new')
+  revalidatePath('/admin/tasks/new')
+  revalidatePath('/admin/documents/new')
+  revalidatePath('/', 'layout')
+}
+
 async function getAdminUser() {
   const supabase = await createClient()
   const {
@@ -64,8 +72,7 @@ export async function createKurs(formData: FormData): Promise<ActionResult<{ id:
   if (error) return { ok: false, error: `Failed to create Kurs: ${error.message}` }
 
   await logAdminAction({ actorId: user.id, action: 'create', entityType: 'kurs', entityId: data.id, entityTitle: title })
-  revalidatePath('/admin/kurse/new')
-  revalidatePath('/', 'layout')
+  revalidateAdminPages()
   return { ok: true, data: { id: data.id } }
 }
 
@@ -84,8 +91,7 @@ export async function createUnit(formData: FormData): Promise<ActionResult<{ id:
   if (error) return { ok: false, error: `Failed to create Unit: ${error.message}` }
 
   await logAdminAction({ actorId: user.id, action: 'create', entityType: 'unit', entityId: data.id, entityTitle: title })
-  revalidatePath('/admin/units/new')
-  revalidatePath('/', 'layout')
+  revalidateAdminPages()
   return { ok: true, data: { id: data.id } }
 }
 
@@ -104,8 +110,7 @@ export async function createTask(formData: FormData): Promise<ActionResult<{ id:
   if (error) return { ok: false, error: `Failed to create Task: ${error.message}` }
 
   await logAdminAction({ actorId: user.id, action: 'create', entityType: 'task', entityId: data.id, entityTitle: title })
-  revalidatePath('/admin/tasks/new')
-  revalidatePath('/', 'layout')
+  revalidateAdminPages()
   return { ok: true, data: { id: data.id } }
 }
 
@@ -190,8 +195,7 @@ export async function createDocument(formData: FormData): Promise<ActionResult> 
     }
 
     await logAdminAction({ actorId: user.id, action: 'create', entityType: 'document', entityId: docData.id, entityTitle: title })
-    revalidatePath('/admin/documents/new')
-    revalidatePath('/', 'layout')
+    revalidateAdminPages()
     return { ok: true, data: undefined }
   }
 
@@ -222,8 +226,7 @@ export async function createDocument(formData: FormData): Promise<ActionResult> 
   }
 
   await logAdminAction({ actorId: user.id, action: 'create', entityType: 'document', entityId: insertedDoc.id, entityTitle: title })
-  revalidatePath('/admin/documents/new')
-  revalidatePath('/', 'layout')
+  revalidateAdminPages()
   return { ok: true, data: undefined }
 }
 
@@ -243,8 +246,7 @@ export async function deleteTask(taskId: string): Promise<ActionResult> {
   if (paths.length) await supabase.storage.from(STORAGE_BUCKET).remove(paths)
 
   await logAdminAction({ actorId: user.id, action: 'delete', entityType: 'task', entityId: taskId, metadata: { paths_deleted: paths.length } })
-  revalidatePath('/admin/tasks/new')
-  revalidatePath('/', 'layout')
+  revalidateAdminPages()
   return { ok: true, data: undefined }
 }
 
@@ -265,8 +267,7 @@ export async function deleteUnit(unitId: string): Promise<ActionResult> {
   if (paths.length) await supabase.storage.from(STORAGE_BUCKET).remove(paths)
 
   await logAdminAction({ actorId: user.id, action: 'delete', entityType: 'unit', entityId: unitId, metadata: { paths_deleted: paths.length } })
-  revalidatePath('/admin/units/new')
-  revalidatePath('/', 'layout')
+  revalidateAdminPages()
   return { ok: true, data: undefined }
 }
 
@@ -289,8 +290,7 @@ export async function deleteKurs(kursId: string): Promise<ActionResult> {
   if (paths.length) await supabase.storage.from(STORAGE_BUCKET).remove(paths)
 
   await logAdminAction({ actorId: user.id, action: 'delete', entityType: 'kurs', entityId: kursId, metadata: { paths_deleted: paths.length } })
-  revalidatePath('/admin/kurse/new')
-  revalidatePath('/', 'layout')
+  revalidateAdminPages()
   return { ok: true, data: undefined }
 }
 
@@ -311,8 +311,7 @@ export async function deleteDocument(docId: string): Promise<ActionResult> {
   if (pathsToDelete.length) await supabase.storage.from(STORAGE_BUCKET).remove(pathsToDelete)
 
   await logAdminAction({ actorId: user.id, action: 'delete', entityType: 'document', entityId: docId, metadata: { paths_deleted: pathsToDelete.length } })
-  revalidatePath('/admin/documents/new')
-  revalidatePath('/', 'layout')
+  revalidateAdminPages()
   return { ok: true, data: undefined }
 }
 
@@ -324,8 +323,7 @@ export async function updateKurs(kursId: string, formData: FormData): Promise<Ac
   const { error } = await supabase.from('kurse').update({ title, description, position, published }).eq('id', kursId)
   if (error) return { ok: false, error: error.message }
   await logAdminAction({ actorId: user.id, action: 'update', entityType: 'kurs', entityId: kursId, entityTitle: title })
-  revalidatePath('/admin/kurse/new')
-  revalidatePath('/', 'layout')
+  revalidateAdminPages()
   return { ok: true, data: undefined }
 }
 
@@ -337,8 +335,7 @@ export async function updateUnit(unitId: string, formData: FormData): Promise<Ac
   const { error } = await supabase.from('units').update({ title, description, position }).eq('id', unitId)
   if (error) return { ok: false, error: error.message }
   await logAdminAction({ actorId: user.id, action: 'update', entityType: 'unit', entityId: unitId, entityTitle: title })
-  revalidatePath('/admin/units/new')
-  revalidatePath('/', 'layout')
+  revalidateAdminPages()
   return { ok: true, data: undefined }
 }
 
@@ -350,8 +347,7 @@ export async function updateTask(taskId: string, formData: FormData): Promise<Ac
   const { error } = await supabase.from('tasks').update({ title, description, position }).eq('id', taskId)
   if (error) return { ok: false, error: error.message }
   await logAdminAction({ actorId: user.id, action: 'update', entityType: 'task', entityId: taskId, entityTitle: title })
-  revalidatePath('/admin/tasks/new')
-  revalidatePath('/', 'layout')
+  revalidateAdminPages()
   return { ok: true, data: undefined }
 }
 
@@ -374,8 +370,7 @@ export async function updateDocument(docId: string, formData: FormData): Promise
     const { error } = await supabase.from('documents').update({ title, description, position }).eq('id', docId)
     if (error) return { ok: false, error: error.message }
     await logAdminAction({ actorId: user.id, action: 'update', entityType: 'document', entityId: docId, entityTitle: title })
-    revalidatePath('/admin/documents/new')
-    revalidatePath('/', 'layout')
+    revalidateAdminPages()
     return { ok: true, data: undefined }
   }
 
@@ -410,7 +405,6 @@ export async function updateDocument(docId: string, formData: FormData): Promise
   }
 
   await logAdminAction({ actorId: user.id, action: 'update', entityType: 'document', entityId: docId, entityTitle: title })
-  revalidatePath('/admin/documents/new')
-  revalidatePath('/', 'layout')
+  revalidateAdminPages()
   return { ok: true, data: undefined }
 }

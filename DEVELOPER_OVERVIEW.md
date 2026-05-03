@@ -312,11 +312,11 @@ The app talks to **two completely separate Supabase projects** — not one proje
 | Dev  | `elnupcpwhvfbmbpcbwrc` | `npm run dev` (loads `.env.local`) | `dev` |
 | Prod | `pnooldcnqlsqjatbtimz` | `npm run build` / `npm run start` and Vercel (loads `.env.production.local`) | `prod` |
 
-The dev project is a sandbox — fine to wipe and reseed. The prod project holds real users and content; treat it accordingly. Schema changes go to **dev first**, then prod once verified. Both projects are reachable from the configured Supabase MCP server (`.mcp.json`); pass the matching `project_id` on every call.
+The dev project is a sandbox — fine to wipe and reseed. The prod project holds real users and content; treat it accordingly. Schema changes go to **dev first**, then prod once verified. The Supabase MCP server (`.mcp.json`) is pinned to the **dev project only** (`--project-ref=elnupcpwhvfbmbpcbwrc`); prod is intentionally not reachable via MCP and must be modified manually through the Supabase dashboard or CLI.
 
 ### Database Migrations
 
-Migrations live in `supabase/`. Apply them in order to **each project** (dev first, then prod) via the Supabase SQL editor, the CLI, or `mcp__supabase__apply_migration`:
+Migrations live in `supabase/`. Apply them in order — first to dev (Supabase SQL editor, CLI, or `mcp__supabase__apply_migration`), then to prod once verified (Supabase SQL editor or CLI; MCP is dev-only):
 
 | File | Description |
 |------|-------------|

@@ -57,19 +57,18 @@ There are **two separate Supabase projects**, not one project with branches:
 
 The dev project is a free playground — break it freely. The prod project has real users and content.
 
-**Default to dev for any destructive or schema-changing MCP call.** Only target prod when the user explicitly asks. When unsure which project to use, ask.
-
 ## Database changes
 
 Migrations are plain SQL in [supabase/](supabase/) — apply via the Supabase SQL editor or CLI. Order matters: `migration.sql` first, then `add_audit_log.sql`. There is no migration runner; new migrations must be applied manually.
 
-**Workflow for a new migration:** apply to **dev first** via `mcp__supabase__apply_migration` (project_id = dev ref), verify with `get_advisors` and a quick read, then apply the same migration to prod after the user confirms.
+**Workflow for a new migration:** apply to **dev first** via `mcp__supabase__apply_migration`, verify with `get_advisors` and a quick read, then have the user apply the same migration to prod manually (MCP cannot reach prod — see below).
 
 ## Supabase MCP
 
-A Supabase MCP server is configured (`mcp__supabase__*` tools — see [.mcp.json](.mcp.json)). Use it to inspect and modify Supabase directly instead of asking the user to run SQL by hand: `list_tables`, `execute_sql`, `apply_migration`, `list_migrations`, `get_advisors`, `generate_typescript_types`, `get_logs`, plus edge function and branch management.
+A Supabase MCP server is configured (`mcp__supabase__*` tools — see [.mcp.json](.mcp.json)) and is **pinned to the dev project only** via `--project-ref=elnupcpwhvfbmbpcbwrc`. Prod is intentionally unreachable through MCP; any prod change must be made by the user via the Supabase dashboard or CLI. Auth uses `SUPABASE_ACCESS_TOKEN` from the environment.
 
-- **Every call needs `project_id`** — pick from the table above. Don't guess.
+Use the MCP to inspect and modify the dev project instead of asking the user to run SQL by hand: `list_tables`, `execute_sql`, `apply_migration`, `list_migrations`, `get_advisors`, `generate_typescript_types`, `get_logs`, plus edge function and branch management.
+
 - Prefer `apply_migration` over `execute_sql` for schema changes so the change is tracked.
 - Run `get_advisors` after schema changes to catch missing RLS or index issues.
 - After schema changes, regenerate types with `generate_typescript_types` and update [src/types/index.ts](src/types/index.ts) if the shape changed.

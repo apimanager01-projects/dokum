@@ -79,6 +79,7 @@ export async function middleware(request: NextRequest) {
   return supabaseResponse
 }
 
+// tells Next.js to skip the middleware entirely for static assets
 export const config = {
   matcher: [
     // Run on all routes except Next.js internals and static files

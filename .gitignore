@@ -41,6 +41,9 @@ yarn-error.log*
 # claude code
 .claude/
 
+# MCP server config (project-scoped, may contain sensitive URLs)
+.mcp.json
+
 # vercel
 .vercel
 

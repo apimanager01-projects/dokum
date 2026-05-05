@@ -1,8 +1,30 @@
 'use server'
 
+import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { SignInSchema, SignUpSchema } from '@/lib/schemas'
+
+type OAuthProvider = 'google' | 'github' | 'apple'
+
+export async function signInWithOAuth(provider: OAuthProvider) {
+  const supabase = await createClient()
+  const headerStore = await headers()
+  const origin = headerStore.get('origin') ?? process.env.NEXT_PUBLIC_SITE_URL ?? ''
+
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider,
+    options: {
+      redirectTo: `${origin}/auth/callback`,
+    },
+  })
+
+  if (error || !data.url) {
+    redirect('/auth/login?message=Social login konnte nicht gestartet werden.')
+  }
+
+  redirect(data.url)
+}
 
 export async function signIn(formData: FormData) {
   const result = SignInSchema.safeParse({

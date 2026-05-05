@@ -2,13 +2,30 @@ import { RegisterForm } from '@/components/auth/RegisterForm'
 
 export default function RegisterPage() {
   return (
-    <main className="flex flex-1 items-center justify-center px-4 mt-20 sm:mt-15">
-      <div className="max-w-sm rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
-        <h1 className="mb-6 text-center text-2xl font-bold tracking-tight text-gray-900">
-          Konto erstellen
-        </h1>
+    <main className="-mx-4 flex flex-1 flex-col items-center justify-center bg-[#fffdf8] px-4 py-10 sm:-mx-8">
+      <section className="w-full max-w-[430px]">
+        <div className="mb-10 text-center">
+          <h1 className="text-[2rem] font-black tracking-tight text-gray-950">
+            Create your account
+          </h1>
+          <p className="mt-2 text-sm font-medium text-gray-500">
+            Structured practice materials for mastering finance courses
+          </p>
+        </div>
         <RegisterForm />
-      </div>
+      </section>
+
+      <p className="mt-auto max-w-[430px] pt-10 text-center text-sm leading-snug text-gray-500">
+        By creating an account, you agree to our{' '}
+        <a href="/impressum" className="underline underline-offset-2">
+          Terms
+        </a>{' '}
+        and{' '}
+        <a href="/datenschutz" className="underline underline-offset-2">
+          Privacy policy
+        </a>
+        .
+      </p>
     </main>
   )
 }

@@ -3,10 +3,27 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
+  const { pathname } = request.nextUrl
+  const isAuthPage = pathname.startsWith('/auth')
+  const isAdminPage = pathname.startsWith('/admin')
+  const isConsentPage = pathname === '/consent'
+  const isPublicPage = pathname === '/' || pathname === '/impressum' || pathname === '/datenschutz' || isConsentPage
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    if (!isAuthPage && !isPublicPage) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/auth/login'
+      return NextResponse.redirect(url)
+    }
+
+    return supabaseResponse
+  }
 
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll() {
@@ -32,12 +49,6 @@ export async function middleware(request: NextRequest) {
     console.error('[middleware] getUser failed:', err instanceof Error ? err.message : String(err))
     // Treat as unauthenticated — safe fallback
   }
-
-  const { pathname } = request.nextUrl
-  const isAuthPage = pathname.startsWith('/auth')
-  const isAdminPage = pathname.startsWith('/admin')
-  const isConsentPage = pathname === '/consent'
-  const isPublicPage = pathname === '/impressum' || pathname === '/datenschutz' || isConsentPage
 
   // Unauthenticated user trying to access a protected page → redirect to login
   if (!user && !isAuthPage && !isPublicPage) {

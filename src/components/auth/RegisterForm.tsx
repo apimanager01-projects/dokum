@@ -1,14 +1,24 @@
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useState } from 'react'
 import { signUp } from '@/actions/auth'
 import Link from 'next/link'
+import { SocialAuthButtons } from '@/components/auth/SocialAuthButtons'
 
 type AuthState = { ok: false; error: string } | null
+type RegisterFieldErrors = {
+  email?: string
+  fullName?: string
+  password?: string
+  consentGiven?: string
+}
 
 const initialState: AuthState = null
 
 export function RegisterForm() {
+  const [email, setEmail] = useState('')
+  const [showDetails, setShowDetails] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<RegisterFieldErrors>({})
   const [state, action, pending] = useActionState(
     async (_prev: AuthState, formData: FormData): Promise<AuthState> => {
       const result = await signUp(formData)
@@ -18,81 +28,185 @@ export function RegisterForm() {
   )
 
   return (
-    <form action={action} className="flex flex-col gap-4">
+    <div className="flex flex-col gap-5">
       {state && (
-        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+        <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
           {state.error}
         </p>
       )}
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="fullName" className="text-sm font-medium text-gray-700">
-          Full name
-        </label>
-        <input
-          id="fullName"
-          name="fullName"
-          type="text"
-          required
-          autoComplete="name"
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
-        />
+      {!showDetails ? (
+        <form
+          className="flex flex-col gap-4"
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault()
+            const nextEmail = email.trim()
+
+            if (!nextEmail) {
+              setFieldErrors({ email: 'Enter your email address.' })
+              return
+            }
+
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) {
+              setFieldErrors({ email: 'Enter a valid email address.' })
+              return
+            }
+
+            setEmail(nextEmail)
+            setFieldErrors({})
+            setShowDetails(true)
+          }}
+        >
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="registerEmail" className="text-sm font-semibold text-gray-700">
+              Email
+            </label>
+            <input
+              id="registerEmail"
+              type="text"
+              inputMode="email"
+              autoComplete="email"
+              placeholder="Type your email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              aria-invalid={Boolean(fieldErrors.email)}
+              aria-describedby={fieldErrors.email ? 'register-email-error' : undefined}
+              className="h-11 rounded-md border border-gray-300 bg-white px-3 text-sm shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10 aria-invalid:border-red-300 aria-invalid:bg-red-50/40"
+            />
+            {fieldErrors.email && (
+              <p id="register-email-error" className="text-sm font-medium text-red-600">
+                {fieldErrors.email}
+              </p>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            className="h-11 rounded-md bg-gray-950 px-4 text-sm font-bold text-white transition-colors hover:bg-black"
+          >
+            Create account
+          </button>
+        </form>
+      ) : (
+        <form
+          action={action}
+          noValidate
+          className="flex flex-col gap-4"
+          onSubmit={(event) => {
+            const formData = new FormData(event.currentTarget)
+            const fullName = String(formData.get('fullName') ?? '').trim()
+            const password = String(formData.get('password') ?? '')
+            const consentGiven = formData.get('consentGiven') === 'true'
+
+            if (!fullName) {
+              event.preventDefault()
+              setFieldErrors({ fullName: 'Enter your full name.' })
+              return
+            }
+
+            if (password.length < 8) {
+              event.preventDefault()
+              setFieldErrors({ password: 'Use a password with at least 8 characters.' })
+              return
+            }
+
+            if (!consentGiven) {
+              event.preventDefault()
+              setFieldErrors({ consentGiven: 'Accept the privacy policy to continue.' })
+              return
+            }
+
+            setFieldErrors({})
+          }}
+        >
+          <input type="hidden" name="email" value={email} />
+
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="fullName" className="text-sm font-semibold text-gray-700">
+              Full name
+            </label>
+            <input
+              id="fullName"
+              name="fullName"
+              type="text"
+              autoComplete="name"
+              placeholder="Type your name"
+              aria-invalid={Boolean(fieldErrors.fullName)}
+              aria-describedby={fieldErrors.fullName ? 'full-name-error' : undefined}
+              className="h-11 rounded-md border border-gray-300 bg-white px-3 text-sm shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10 aria-invalid:border-red-300 aria-invalid:bg-red-50/40"
+            />
+            {fieldErrors.fullName && (
+              <p id="full-name-error" className="text-sm font-medium text-red-600">
+                {fieldErrors.fullName}
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="password" className="text-sm font-semibold text-gray-700">
+              Password
+            </label>
+            <input
+              id="password"
+              name="password"
+              type="password"
+              autoComplete="new-password"
+              placeholder="Create a password"
+              aria-invalid={Boolean(fieldErrors.password)}
+              aria-describedby={fieldErrors.password ? 'register-password-error' : undefined}
+              className="h-11 rounded-md border border-gray-300 bg-white px-3 text-sm shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10 aria-invalid:border-red-300 aria-invalid:bg-red-50/40"
+            />
+            {fieldErrors.password && (
+              <p id="register-password-error" className="text-sm font-medium text-red-600">
+                {fieldErrors.password}
+              </p>
+            )}
+          </div>
+
+          <div className="flex items-start gap-2">
+            <input
+              id="consentGiven"
+              name="consentGiven"
+              type="checkbox"
+              value="true"
+              aria-invalid={Boolean(fieldErrors.consentGiven)}
+              aria-describedby={fieldErrors.consentGiven ? 'consent-error' : undefined}
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-brand"
+            />
+            <label htmlFor="consentGiven" className="text-sm leading-snug text-gray-600">
+              I have read the{' '}
+              <Link href="/datenschutz" className="font-medium text-brand underline" target="_blank">
+                privacy policy
+              </Link>{' '}
+              and agree to the processing of my data.
+            </label>
+          </div>
+          {fieldErrors.consentGiven && (
+            <p id="consent-error" className="text-sm font-medium text-red-600">
+              {fieldErrors.consentGiven}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={pending}
+            className="h-11 rounded-md bg-gray-950 px-4 text-sm font-bold text-white transition-colors hover:bg-black disabled:opacity-50"
+          >
+            {pending ? 'Creating account...' : 'Create account'}
+          </button>
+        </form>
+      )}
+
+      <div className="flex items-center gap-3">
+        <div className="h-px flex-1 bg-gray-200" />
+        <span className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-400">
+          or continue with
+        </span>
+        <div className="h-px flex-1 bg-gray-200" />
       </div>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="email" className="text-sm font-medium text-gray-700">
-          Email
-        </label>
-        <input
-          id="email"
-          name="email"
-          type="email"
-          required
-          autoComplete="email"
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
-        />
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label htmlFor="password" className="text-sm font-medium text-gray-700">
-          Password
-        </label>
-        <input
-          id="password"
-          name="password"
-          type="password"
-          required
-          minLength={8}
-          autoComplete="new-password"
-          className="rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
-        />
-      </div>
-
-      <div className="flex items-start gap-2">
-        <input
-          id="consentGiven"
-          name="consentGiven"
-          type="checkbox"
-          value="true"
-          required
-          className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-brand"
-        />
-        <label htmlFor="consentGiven" className="text-sm text-gray-600 leading-snug">
-          Ich habe die{' '}
-          <Link href="/datenschutz" className="font-medium text-brand underline" target="_blank">
-            Datenschutzerklärung
-          </Link>{' '}
-          gelesen und stimme der Verarbeitung meiner Daten zu.
-        </label>
-      </div>
-
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-md border border-brand px-4 py-2 text-sm font-medium text-brand hover:bg-brand/5 disabled:opacity-50 btn-brand"
-      >
-        {pending ? 'Creating account…' : 'Create account'}
-      </button>
+      <SocialAuthButtons />
 
       <p className="text-center text-sm text-gray-500">
         Already have an account?{' '}
@@ -100,6 +214,6 @@ export function RegisterForm() {
           Sign in
         </Link>
       </p>
-    </form>
+    </div>
   )
 }

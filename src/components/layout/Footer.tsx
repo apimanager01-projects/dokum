@@ -4,10 +4,10 @@ export function Footer() {
   const year = new Date().getFullYear()
 
   return (
-    <footer className="border-t border-gray-100 bg-white">
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4 text-sm text-gray-400">
-        <span>© {year} Dokum</span>
-        <div className="flex gap-4">
+    <footer className="border-t border-gray-200 bg-[#fffdf8]">
+      <div className="mx-auto flex max-w-[1420px] items-center justify-between px-5 py-7 text-base font-medium text-gray-500 sm:px-8 lg:px-12">
+        <span>© {year} DOKUM</span>
+        <div className="flex gap-12">
           <Link href="/impressum" className="transition-colors hover:text-gray-700">
             Impressum
           </Link>

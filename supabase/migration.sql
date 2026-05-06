@@ -250,6 +250,46 @@ CREATE POLICY "Admins can delete PDFs"
     AND (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
   );
 
+-- Admins can read every object in the pdfs bucket
+CREATE POLICY "Admins can view PDFs"
+  ON storage.objects FOR SELECT
+  TO authenticated
+  USING (
+    bucket_id = 'pdfs'
+    AND (auth.jwt() -> 'app_metadata' ->> 'role') = 'admin'
+  );
+
+-- Authenticated users can read storage objects whose path is referenced by a document
+-- (or document_image) belonging to a published kurs. Mirrors the public.documents
+-- "View documents of published kurse" policy so the file-proxy route can issue signed URLs.
+CREATE POLICY "View PDFs of published kurse"
+  ON storage.objects FOR SELECT
+  TO authenticated
+  USING (
+    bucket_id = 'pdfs'
+    AND (
+      EXISTS (
+        SELECT 1
+        FROM public.documents d
+        JOIN public.tasks t ON t.id = d.task_id
+        JOIN public.units u ON u.id = t.unit_id
+        JOIN public.kurse k ON k.id = u.kurs_id
+        WHERE d.file_path = storage.objects.name
+          AND k.published = true
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM public.document_images di
+        JOIN public.documents d ON d.id = di.document_id
+        JOIN public.tasks t ON t.id = d.task_id
+        JOIN public.units u ON u.id = t.unit_id
+        JOIN public.kurse k ON k.id = u.kurs_id
+        WHERE di.file_path = storage.objects.name
+          AND k.published = true
+      )
+    )
+  );
+
 -- ─────────────────────────────────────────────
 -- Granting admin role (run once per admin user)
 -- ─────────────────────────────────────────────

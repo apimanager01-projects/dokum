@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { STORAGE_BUCKET } from '@/lib/constants'
 
 export type DocumentFileRef = {
   file_path: string | null
@@ -57,4 +58,26 @@ export async function getAdminUser() {
 
 export function sanitise(name: string, maxLen = 60) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, maxLen)
+}
+
+type SupabaseClient = Awaited<ReturnType<typeof createClient>>
+
+// storage.remove() returns {data, error} where data lists what was actually deleted;
+// RLS denial or missing files surface as an empty data array, not an error.
+export async function removeStorageObjects(
+  supabase: SupabaseClient,
+  paths: string[],
+  context: string,
+): Promise<void> {
+  if (paths.length === 0) return
+  const { data, error } = await supabase.storage.from(STORAGE_BUCKET).remove(paths)
+  if (error) {
+    console.error(`[${context}] storage.remove failed`, { paths, error })
+    return
+  }
+  const deleted = new Set((data ?? []).map((o) => o.name))
+  const missed = paths.filter((p) => !deleted.has(p))
+  if (missed.length) {
+    console.error(`[${context}] storage.remove returned without error but did not delete`, { missed })
+  }
 }

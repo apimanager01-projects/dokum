@@ -19,12 +19,18 @@ const nextConfig: NextConfig = {
     // Content-Security-Policy notes:
     //   • script-src 'unsafe-inline' — required by Next.js App Router (hydration scripts).
     //     Replace with nonces for a stricter policy in the future.
+    //   • script-src 'unsafe-eval' / 'wasm-unsafe-eval' — Turbopack's dev HMR runtime
+    //     uses eval() and WebAssembly.compile to load module updates. Dev-only.
     //   • style-src 'unsafe-inline'  — required by Tailwind v4 and Next.js style injection.
     //   • font-src 'self'            — next/font/google self-hosts fonts at build time;
     //     no external font CDN request is made at runtime.
+    const isDev = process.env.NODE_ENV !== 'production'
+    const scriptSrc = ["'self'", "'unsafe-inline'"]
+    if (isDev) scriptSrc.push("'unsafe-eval'", "'wasm-unsafe-eval'")
+
     const csp = [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline'",
+      `script-src ${scriptSrc.join(' ')}`,
       "style-src 'self' 'unsafe-inline'",
       `connect-src ${connectSrc.join(' ')}`,
       "font-src 'self'",

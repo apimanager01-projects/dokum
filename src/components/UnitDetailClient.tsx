@@ -13,21 +13,64 @@ interface LightboxState {
   index: number
 }
 
-export default function UnitDetailClient({ tasks }: { tasks: TaskWithDocs[] }) {
-  const [openTaskIds, setOpenTaskIds] = useState<Set<string>>(new Set())
+function trackMiniCase(docId: string) {
+  const raw = document.cookie
+    .split('; ')
+    .find((row) => row.startsWith('recent_minicases='))
+    ?.split('=')[1]
+  const ids = raw ? decodeURIComponent(raw).split(',').filter(Boolean) : []
+  const next = [docId, ...ids.filter((id) => id !== docId)].slice(0, 4)
+  document.cookie = `recent_minicases=${encodeURIComponent(next.join(','))}; path=/; max-age=${60 * 60 * 24 * 30}`
+}
+
+function Watermark({ id }: { id: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        position: 'absolute', inset: 0,
+        overflow: 'hidden', pointerEvents: 'none', userSelect: 'none',
+      }}
+    >
+      {Array.from({ length: 24 }, (_, i) => (
+        <span
+          key={i}
+          style={{
+            position: 'absolute',
+            top: `${(Math.floor(i / 4) * 22) + 5}%`,
+            left: `${((i % 4) * 28) - 8}%`,
+            transform: 'rotate(-35deg)',
+            fontFamily: 'monospace',
+            fontSize: '14px',
+            fontWeight: 'bold',
+            color: 'rgba(0,0,0,0.35)',
+            whiteSpace: 'nowrap',
+            mixBlendMode: 'multiply',
+          }}
+        >
+          {id}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+export default function UnitDetailClient({ tasks, openTaskId, watermarkId }: { tasks: TaskWithDocs[]; openTaskId?: string; watermarkId: string }) {
+  const [openTaskIds, setOpenTaskIds] = useState<Set<string>>(openTaskId ? new Set([openTaskId]) : new Set())
   const [lightbox, setLightbox] = useState<LightboxState | null>(null)
 
   function openLightbox(images: string[], index: number) {
     setLightbox({ slides: images.map((src) => ({ src })), index })
   }
 
-  function toggleTask(taskId: string) {
+  function toggleTask(taskId: string, docs: DocumentWithImages[]) {
     setOpenTaskIds((prev) => {
       const next = new Set(prev)
       if (next.has(taskId)) {
         next.delete(taskId)
       } else {
         next.add(taskId)
+        docs.forEach((doc) => trackMiniCase(doc.id))
       }
       return next
     })
@@ -39,21 +82,24 @@ export default function UnitDetailClient({ tasks }: { tasks: TaskWithDocs[] }) {
 
   return (
     <>
-    <Lightbox
-      open={lightbox !== null}
-      close={() => setLightbox(null)}
-      slides={lightbox?.slides ?? []}
-      index={lightbox?.index ?? 0}
-      plugins={[Zoom]}
-      zoom={{ scrollToZoom: true, maxZoomPixelRatio: 4 }}
-    />
+    {/* onContextMenu wrapper blocks right-click "Save Image" inside the lightbox */}
+    <div onContextMenu={(e) => e.preventDefault()}>
+      <Lightbox
+        open={lightbox !== null}
+        close={() => setLightbox(null)}
+        slides={lightbox?.slides ?? []}
+        index={lightbox?.index ?? 0}
+        plugins={[Zoom]}
+        zoom={{ scrollToZoom: true, maxZoomPixelRatio: 4 }}
+      />
+    </div>
     <div className="mt-8 space-y-8">
       {tasks.map((task) => {
         const isOpen = openTaskIds.has(task.id)
         return (
           <section key={task.id}>
             <button
-              onClick={() => toggleTask(task.id)}
+              onClick={() => toggleTask(task.id, task.documents)}
               className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-colors text-left"
             >
               <span
@@ -93,16 +139,29 @@ export default function UnitDetailClient({ tasks }: { tasks: TaskWithDocs[] }) {
                               )}
                               <div className="mt-2 grid grid-cols-1 gap-2">
                                 {(doc.document_images ?? []).map((img, imgIndex) => (
-                                  <img
-                                    key={img.id}
-                                    src={`/api/image/${img.id}`}
-                                    alt={doc.title}
-                                    className="rounded-md object-contain w-full max-h-[400px] cursor-zoom-in"
-                                    onClick={() => openLightbox(
-                                      (doc.document_images ?? []).map((i) => `/api/image/${i.id}`),
-                                      imgIndex
-                                    )}
-                                  />
+                                  <div key={img.id} className="mt-1">
+                                    <div
+                                      className="relative inline-block rounded-md overflow-hidden max-w-full"
+                                      onContextMenu={(e) => e.preventDefault()}
+                                    >
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={`/api/image/${img.id}`}
+                                      alt={doc.title}
+                                      className="block max-w-full max-h-[400px] select-none"
+                                      style={{ pointerEvents: 'none', userSelect: 'none', WebkitUserDrag: 'none' } as React.CSSProperties}
+                                      draggable={false}
+                                    />
+                                    <div
+                                      className="absolute inset-0 cursor-zoom-in"
+                                      onClick={() => openLightbox(
+                                        (doc.document_images ?? []).map((i) => `/api/image/${i.id}`),
+                                        imgIndex
+                                      )}
+                                    />
+                                    <Watermark id={watermarkId} />
+                                    </div>
+                                  </div>
                                 ))}
                               </div>
                             </div>
@@ -112,12 +171,26 @@ export default function UnitDetailClient({ tasks }: { tasks: TaskWithDocs[] }) {
                               {doc.description && (
                                 <p className="text-xs text-gray-500">{doc.description}</p>
                               )}
-                              <img
-                                src={`/api/file/${doc.id}`}
-                                alt={doc.title}
-                                className="mt-2 w-full rounded-md object-contain max-h-[600px] cursor-zoom-in"
-                                onClick={() => openLightbox([`/api/file/${doc.id}`], 0)}
-                              />
+                              <div className="mt-2 inline-block max-w-full">
+                                <div
+                                  className="relative rounded-md overflow-hidden"
+                                  onContextMenu={(e) => e.preventDefault()}
+                                >
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={`/api/file/${doc.id}`}
+                                    alt={doc.title}
+                                    className="block max-w-full max-h-[600px] select-none"
+                                    style={{ pointerEvents: 'none', userSelect: 'none', WebkitUserDrag: 'none' } as React.CSSProperties}
+                                    draggable={false}
+                                  />
+                                  <div
+                                    className="absolute inset-0 cursor-zoom-in"
+                                    onClick={() => openLightbox([`/api/file/${doc.id}`], 0)}
+                                  />
+                                  <Watermark id={watermarkId} />
+                                </div>
+                              </div>
                             </div>
                           ) : (
                             <div className="flex items-center justify-between gap-4">

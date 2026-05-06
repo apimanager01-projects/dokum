@@ -41,7 +41,7 @@ export async function signIn(formData: FormData) {
     return { ok: false as const, error: 'Invalid email or password.' }
   }
 
-  redirect('/')
+  redirect('/kurse')
 }
 
 export async function signUp(formData: FormData) {

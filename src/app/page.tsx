@@ -14,7 +14,7 @@ function CaseCard({
   className: string
 }) {
   return (
-    <article className={`flex min-h-[342px] flex-col rounded-[32px] border border-gray-700/80 bg-[#fffdf8] px-7 pb-5 pt-8 shadow-[0_13px_0_#070707] ${className}`}>
+    <article className={`flex min-h-[342px] flex-col items-center rounded-[32px] border border-gray-700/80 bg-[#fffdf8] px-7 pb-5 pt-8 text-center shadow-[0_13px_0_#070707] ${className}`}>
       <p className="mb-3 font-mono text-sm font-bold text-brand">{number}</p>
       <h2 className="max-w-[210px] text-[1.55rem] font-black leading-[1.08] tracking-[0] text-black">
         {title}
@@ -32,15 +32,20 @@ function CaseCard({
 export default function HomePage() {
   return (
     <div className="-mx-4 -mt-px flex h-[calc(100svh-45px)] flex-col overflow-hidden bg-[#fffdf8] text-black sm:-mx-8">
-      <section className="mx-auto flex h-full w-full max-w-[1160px] flex-col items-center px-5 pt-8 text-center sm:px-8 lg:pt-9">
-        <h1 className="max-w-[1040px] font-mono text-[clamp(2.55rem,3.8vw,4.1rem)] font-semibold leading-[1.2] tracking-[0]">
-          <span>Master finance </span>
-          <span className="relative inline-block bg-brand/12 px-5 text-brand">
-            <span className="absolute -left-[3px] top-0 h-full w-[3px] bg-brand" />
-            <span className="absolute -left-[10px] -top-[10px] h-5 w-5 rounded-full bg-brand" />
-            <span className="absolute -right-[3px] bottom-0 h-full w-[3px] bg-brand" />
-            <span className="absolute -bottom-[10px] -right-[10px] h-5 w-5 rounded-full bg-brand" />
-            Mini Cases.
+      <section className="mx-auto flex h-full w-full max-w-[1480px] flex-col items-center px-5 pt-8 text-center sm:px-8 lg:pt-9">
+        <h1
+          className="max-w-[1420px] font-mono font-semibold tracking-[0]"
+          style={{ fontSize: 'clamp(3rem, 4.15vw, 5rem)', lineHeight: 1.08 }}
+        >
+          <span className="inline md:whitespace-nowrap">
+            Master finance{' '}
+            <span className="relative inline-block bg-brand/12 px-5 text-brand">
+              <span className="absolute -left-[3px] top-0 h-full w-[3px] bg-brand" />
+              <span className="absolute -left-[10px] -top-[10px] h-5 w-5 rounded-full bg-brand" />
+              <span className="absolute -right-[3px] bottom-0 h-full w-[3px] bg-brand" />
+              <span className="absolute -bottom-[10px] -right-[10px] h-5 w-5 rounded-full bg-brand" />
+              Mini Cases.
+            </span>
           </span>
           <br />
           <span>Pass faster.</span>

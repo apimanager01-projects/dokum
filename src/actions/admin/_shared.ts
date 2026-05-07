@@ -26,7 +26,8 @@ export function parseForm<T>(
 ): { ok: true; data: T } | { ok: false; error: string } {
   const raw: Record<string, unknown> = {}
   for (const field of fields) {
-    raw[field] = formData.get(field)
+    const value = formData.get(field)
+    raw[field] = value === null ? undefined : value
   }
   const result = schema.safeParse(raw)
   if (!result.success) return { ok: false, error: result.error.issues[0].message }

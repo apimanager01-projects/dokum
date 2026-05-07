@@ -1,7 +1,15 @@
+'use client'
+
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 
 export function Footer() {
+  const pathname = usePathname()
   const year = new Date().getFullYear()
+
+  if (pathname !== '/') {
+    return null
+  }
 
   return (
     <footer className="border-t border-gray-200 bg-[#fffdf8]">

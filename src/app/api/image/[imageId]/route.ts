@@ -65,6 +65,7 @@ export async function GET(
   const headers = new Headers({
     'Content-Type': contentType,
     'Content-Disposition': 'inline',
+    'Cache-Control': 'no-store',
   })
 
   const contentLength = storageRes.headers.get('Content-Length')

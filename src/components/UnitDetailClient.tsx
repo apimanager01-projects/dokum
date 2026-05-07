@@ -139,7 +139,7 @@ export default function UnitDetailClient({ tasks, openTaskId, watermarkId }: { t
                               )}
                               <div className="mt-2 grid grid-cols-1 gap-2">
                                 {(doc.document_images ?? []).map((img, imgIndex) => (
-                                  <div key={img.id} className="mt-1">
+                                  <div key={img.id} className="mt-1 flex w-full justify-center">
                                     <div
                                       className="relative inline-block rounded-md overflow-hidden max-w-full"
                                       onContextMenu={(e) => e.preventDefault()}
@@ -171,9 +171,9 @@ export default function UnitDetailClient({ tasks, openTaskId, watermarkId }: { t
                               {doc.description && (
                                 <p className="text-xs text-gray-500">{doc.description}</p>
                               )}
-                              <div className="mt-2 inline-block max-w-full">
+                              <div className="mt-2 flex w-full justify-center">
                                 <div
-                                  className="relative rounded-md overflow-hidden"
+                                  className="relative inline-block max-w-full overflow-hidden rounded-md"
                                   onContextMenu={(e) => e.preventDefault()}
                                 >
                                   {/* eslint-disable-next-line @next/next/no-img-element */}

@@ -55,7 +55,13 @@ export function RecentMiniCases({ initialItems }: { initialItems: RecentItem[] }
 
   function handleContextMenu(e: React.MouseEvent, itemId: string) {
     e.preventDefault()
-    setMenu({ x: e.clientX, y: e.clientY, itemId })
+    const menuWidth = 144
+    const menuHeight = 42
+    const inset = 12
+    const x = Math.min(e.clientX, window.innerWidth - menuWidth - inset)
+    const y = Math.min(e.clientY, window.innerHeight - menuHeight - inset)
+
+    setMenu({ x: Math.max(inset, x), y: Math.max(inset, y), itemId })
   }
 
   function handleRemove(itemId: string) {
@@ -95,15 +101,18 @@ export function RecentMiniCases({ initialItems }: { initialItems: RecentItem[] }
         <div
           ref={menuRef}
           style={{ position: 'fixed', top: menu.y, left: menu.x, zIndex: 50 }}
-          className="min-w-36 overflow-hidden rounded-lg border border-gray-200 bg-white py-1 shadow-lg"
+          className="min-w-36 overflow-hidden rounded-md border border-gray-200 bg-white py-1 shadow-lg"
         >
           <button
             onClick={() => handleRemove(menu.itemId)}
-            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-50 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20"
           >
-            <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
-              <path d="M10 11v6M14 11v6" />
+            <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M3 6h18" />
+              <path d="M8 6V4h8v2" />
+              <path d="m19 6-1 14H6L5 6" />
+              <path d="M10 11v6" />
+              <path d="M14 11v6" />
             </svg>
             Remove
           </button>

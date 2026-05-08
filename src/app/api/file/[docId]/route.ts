@@ -15,6 +15,7 @@ export async function GET(
   }
 
   const isAdmin = user.app_metadata?.['role'] === 'admin'
+  const isBrowserNav = request.headers.get('sec-fetch-dest') === 'document'
 
   // Fetch document with parent course published status via join.
   // The `!inner` joins guarantee the relations exist; we cast to `any` because
@@ -33,6 +34,9 @@ export async function GET(
     .single()
 
   if (error || !doc) {
+    if (isBrowserNav) {
+      return NextResponse.redirect(new URL('/document-not-found', request.url))
+    }
     return new NextResponse('Dokument nicht gefunden.', { status: 404 })
   }
 
@@ -44,6 +48,9 @@ export async function GET(
   }
 
   if (!doc.file_path) {
+    if (isBrowserNav) {
+      return NextResponse.redirect(new URL('/document-not-found', request.url))
+    }
     return new NextResponse('Keine Datei vorhanden.', { status: 404 })
   }
 

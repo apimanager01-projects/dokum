@@ -15,6 +15,7 @@ export async function GET(
   }
 
   const isAdmin = user.app_metadata?.['role'] === 'admin'
+  const isBrowserNav = request.headers.get('sec-fetch-dest') === 'document'
 
   // Fetch image with parent course published status via join (document_images → documents → tasks → units → kurse).
   // The `!inner` joins guarantee the relations exist; we cast to `any` because
@@ -35,6 +36,9 @@ export async function GET(
     .single()
 
   if (error || !img) {
+    if (isBrowserNav) {
+      return NextResponse.redirect(new URL('/document-not-found', request.url))
+    }
     return new NextResponse('Bild nicht gefunden.', { status: 404 })
   }
 

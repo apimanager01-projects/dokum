@@ -30,7 +30,7 @@ export default async function KursePage() {
               No courses available.
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-8">
               {allKurse.map((kurs) => (
                 <KursCard
                   key={kurs.id}

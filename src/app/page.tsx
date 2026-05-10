@@ -31,7 +31,7 @@ function CaseCard({
 
 export default function HomePage() {
   return (
-    <div className="-mx-4 -mt-px flex h-[calc(100svh-45px)] flex-col overflow-hidden bg-[#fffdf8] text-black sm:-mx-8">
+    <div className="-mx-4 -mt-px flex flex-col bg-[#fffdf8] text-black sm:-mx-8 md:h-[calc(100svh-45px)] md:overflow-hidden">
       <section className="mx-auto flex h-full w-full max-w-[1480px] flex-col items-center px-5 pt-8 text-center sm:px-8 lg:pt-9">
         <h1
           className="max-w-[1420px] font-mono font-semibold tracking-[0]"
@@ -71,14 +71,14 @@ export default function HomePage() {
             title="Step-by-step solutions"
             body="Understand the calculation logic, not just the final number."
             imagePosition="center center"
-            className="relative z-10 md:min-h-[350px]"
+            className="hidden md:flex relative z-10 md:min-h-[350px]"
           />
           <CaseCard
             number="03"
             title="Built for exam prep"
             body="Practice by unit and repeat the cases that matter most."
             imagePosition="right center"
-            className="origin-bottom md:rotate-[4deg]"
+            className="hidden md:flex origin-bottom md:rotate-[4deg]"
           />
         </div>
       </section>

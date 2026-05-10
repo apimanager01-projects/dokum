@@ -12,7 +12,8 @@ type OAuthProvider = 'google' | 'github' | 'apple'
 export async function signInWithOAuth(provider: OAuthProvider) {
   const supabase = await createClient()
   const headerStore = await headers()
-  const origin = headerStore.get('origin') ?? process.env.NEXT_PUBLIC_SITE_URL ?? ''
+  const rawOrigin = headerStore.get('origin') ?? process.env.NEXT_PUBLIC_SITE_URL ?? ''
+  const origin = rawOrigin.startsWith('http') ? rawOrigin : `https://${rawOrigin}`
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider,

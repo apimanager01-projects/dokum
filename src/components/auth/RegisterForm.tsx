@@ -3,7 +3,6 @@
 import { useActionState, useState } from 'react'
 import { signUp } from '@/actions/auth'
 import Link from 'next/link'
-import { SocialAuthButtons } from '@/components/auth/SocialAuthButtons'
 
 type AuthState = { ok: false; error: string } | null
 type RegisterFieldErrors = {
@@ -197,16 +196,6 @@ export function RegisterForm() {
           </button>
         </form>
       )}
-
-      <div className="flex items-center gap-3">
-        <div className="h-px flex-1 bg-gray-200" />
-        <span className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-400">
-          or continue with
-        </span>
-        <div className="h-px flex-1 bg-gray-200" />
-      </div>
-
-      <SocialAuthButtons />
 
       <p className="text-center text-sm text-gray-500">
         Already have an account?{' '}

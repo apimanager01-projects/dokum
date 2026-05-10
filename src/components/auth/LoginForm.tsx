@@ -3,7 +3,6 @@
 import { useActionState, useState } from 'react'
 import { signIn } from '@/actions/auth'
 import Link from 'next/link'
-import { SocialAuthButtons } from '@/components/auth/SocialAuthButtons'
 
 type AuthState = { ok: false; error: string } | null
 type LoginFieldErrors = {
@@ -118,16 +117,6 @@ export function LoginForm({ message }: { message?: string }) {
           {pending ? 'Signing in...' : 'Sign in'}
         </button>
       </form>
-
-      <div className="flex items-center gap-3">
-        <div className="h-px flex-1 bg-gray-200" />
-        <span className="text-xs font-semibold uppercase tracking-[0.08em] text-gray-400">
-          or continue with
-        </span>
-        <div className="h-px flex-1 bg-gray-200" />
-      </div>
-
-      <SocialAuthButtons />
 
       <p className="text-center text-sm text-gray-500">
         No account?{' '}

@@ -1,10 +1,9 @@
 'use server'
 
-import { STORAGE_BUCKET } from '@/lib/constants'
 import { KursFormSchema } from '@/lib/schemas'
 import type { ActionResult } from '@/types'
 import { logAdminAction } from '@/lib/audit'
-import { getAdminUser, parseForm, revalidateAdminPages, collectStoragePaths, type DocumentFileRef } from './_shared'
+import { getAdminUser, parseForm, revalidateAdminPages, collectStoragePaths, removeStorageObjects, type DocumentFileRef } from './_shared'
 
 export async function createKurs(formData: FormData): Promise<ActionResult<{ id: string }>> {
   const { supabase, user } = await getAdminUser()
@@ -56,7 +55,7 @@ export async function deleteKurs(kursId: string): Promise<ActionResult> {
     .flatMap((u) => (u as any).tasks ?? [])
     .flatMap((t: any) => t.documents ?? []) as DocumentFileRef[]
   const paths = collectStoragePaths(allDocs)
-  if (paths.length) await supabase.storage.from(STORAGE_BUCKET).remove(paths)
+  await removeStorageObjects(supabase, paths, 'deleteKurs')
 
   await logAdminAction({ actorId: user.id, action: 'delete', entityType: 'kurs', entityId: kursId, metadata: { paths_deleted: paths.length } })
   revalidateAdminPages()

@@ -1,10 +1,9 @@
 'use server'
 
-import { STORAGE_BUCKET } from '@/lib/constants'
 import { UnitFormSchema, DocumentUpdateMetaSchema } from '@/lib/schemas'
 import type { ActionResult } from '@/types'
 import { logAdminAction } from '@/lib/audit'
-import { getAdminUser, parseForm, revalidateAdminPages, collectStoragePaths, type DocumentFileRef } from './_shared'
+import { getAdminUser, parseForm, revalidateAdminPages, collectStoragePaths, removeStorageObjects, type DocumentFileRef } from './_shared'
 
 export async function createUnit(formData: FormData): Promise<ActionResult<{ id: string }>> {
   const { supabase, user } = await getAdminUser()
@@ -54,7 +53,7 @@ export async function deleteUnit(unitId: string): Promise<ActionResult> {
 
   const allDocs = (unit?.tasks ?? []).flatMap((t) => (t as any).documents ?? []) as DocumentFileRef[]
   const paths = collectStoragePaths(allDocs)
-  if (paths.length) await supabase.storage.from(STORAGE_BUCKET).remove(paths)
+  await removeStorageObjects(supabase, paths, 'deleteUnit')
 
   await logAdminAction({ actorId: user.id, action: 'delete', entityType: 'unit', entityId: unitId, metadata: { paths_deleted: paths.length } })
   revalidateAdminPages()

@@ -1,10 +1,9 @@
 'use server'
 
-import { STORAGE_BUCKET } from '@/lib/constants'
 import { TaskFormSchema, DocumentUpdateMetaSchema } from '@/lib/schemas'
 import type { ActionResult } from '@/types'
 import { logAdminAction } from '@/lib/audit'
-import { getAdminUser, parseForm, revalidateAdminPages, collectStoragePaths, type DocumentFileRef } from './_shared'
+import { getAdminUser, parseForm, revalidateAdminPages, collectStoragePaths, removeStorageObjects, type DocumentFileRef } from './_shared'
 
 export async function createTask(formData: FormData): Promise<ActionResult<{ id: string }>> {
   const { supabase, user } = await getAdminUser()
@@ -53,7 +52,7 @@ export async function deleteTask(taskId: string): Promise<ActionResult> {
   if (error) return { ok: false, error: error.message }
 
   const paths = collectStoragePaths((task?.documents ?? []) as DocumentFileRef[])
-  if (paths.length) await supabase.storage.from(STORAGE_BUCKET).remove(paths)
+  await removeStorageObjects(supabase, paths, 'deleteTask')
 
   await logAdminAction({ actorId: user.id, action: 'delete', entityType: 'task', entityId: taskId, metadata: { paths_deleted: paths.length } })
   revalidateAdminPages()

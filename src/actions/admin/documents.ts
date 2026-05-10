@@ -4,7 +4,7 @@ import { STORAGE_BUCKET, MAX_FILE_SIZE_BYTES, ALLOWED_IMAGE_MIMES, ALLOWED_FILE_
 import { DocumentMetaSchema, DocumentUpdateMetaSchema } from '@/lib/schemas'
 import type { ActionResult } from '@/types'
 import { logAdminAction } from '@/lib/audit'
-import { getAdminUser, parseForm, revalidateAdminPages, collectStoragePaths, sanitise, type DocumentFileRef } from './_shared'
+import { getAdminUser, parseForm, revalidateAdminPages, collectStoragePaths, sanitise, removeStorageObjects, type DocumentFileRef } from './_shared'
 
 export async function createDocument(formData: FormData): Promise<ActionResult> {
   const { supabase, user } = await getAdminUser()
@@ -82,7 +82,7 @@ export async function createDocument(formData: FormData): Promise<ActionResult> 
     .select('id')
     .single()
   if (insertError) {
-    await supabase.storage.from(STORAGE_BUCKET).remove([storagePath])
+    await removeStorageObjects(supabase, [storagePath], 'createDocument rollback')
     return { ok: false, error: `Failed to save document: ${insertError.message}` }
   }
 
@@ -130,13 +130,13 @@ export async function updateDocument(docId: string, formData: FormData): Promise
 
     const { error: dbErr } = await supabase.from('documents').update({ title, description, position, file_path: newPath, file_type }).eq('id', docId)
     if (dbErr) {
-      const [storageRollback] = await Promise.allSettled([supabase.storage.from(STORAGE_BUCKET).remove([newPath])])
-      const stErr = storageRollback.status === 'rejected' ? storageRollback.reason : null
-      if (stErr) console.error('[updateDocument rollback] Storage remove failed:', stErr)
+      await removeStorageObjects(supabase, [newPath], 'updateDocument rollback')
       return { ok: false, error: dbErr.message }
     }
 
-    if (currentDoc.file_path) await supabase.storage.from(STORAGE_BUCKET).remove([currentDoc.file_path])
+    if (currentDoc.file_path) {
+      await removeStorageObjects(supabase, [currentDoc.file_path], 'updateDocument old-file cleanup')
+    }
   } else {
     const { error } = await supabase.from('documents').update({ title, description, position }).eq('id', docId)
     if (error) return { ok: false, error: error.message }
@@ -161,7 +161,7 @@ export async function deleteDocument(docId: string): Promise<ActionResult> {
   if (dbErr) return { ok: false, error: dbErr.message }
 
   const pathsToDelete = collectStoragePaths([doc as DocumentFileRef])
-  if (pathsToDelete.length) await supabase.storage.from(STORAGE_BUCKET).remove(pathsToDelete)
+  await removeStorageObjects(supabase, pathsToDelete, 'deleteDocument')
 
   await logAdminAction({ actorId: user.id, action: 'delete', entityType: 'document', entityId: docId, metadata: { paths_deleted: pathsToDelete.length } })
   revalidateAdminPages()
@@ -173,12 +173,7 @@ export async function deleteDocument(docId: string): Promise<ActionResult> {
 type SupabaseClient = Awaited<ReturnType<typeof getAdminUser>>['supabase']
 
 async function rollback(supabase: SupabaseClient, docId: string, uploadedPaths: string[]) {
-  const [dbRollback, storageRollback] = await Promise.allSettled([
-    supabase.from('documents').delete().eq('id', docId),
-    uploadedPaths.length ? supabase.storage.from(STORAGE_BUCKET).remove(uploadedPaths) : Promise.resolve(null),
-  ])
-  const dbErr = dbRollback.status === 'rejected' ? dbRollback.reason : (dbRollback.value as any)?.error
-  const stErr = storageRollback.status === 'rejected' ? storageRollback.reason : null
+  const { error: dbErr } = await supabase.from('documents').delete().eq('id', docId)
   if (dbErr) console.error('[createDocument rollback] DB delete failed:', dbErr)
-  if (stErr) console.error('[createDocument rollback] Storage remove failed:', stErr)
+  await removeStorageObjects(supabase, uploadedPaths, 'createDocument rollback')
 }

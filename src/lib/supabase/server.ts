@@ -18,7 +18,7 @@ export async function createClient() {
               cookieStore.set(name, value, options)
             )
           } catch {
-            // Called from a Server Component — cookie setting will be handled by middleware
+            // Called from a Server Component — cookie setting will be handled by Proxy
           }
         },
       },

@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
   const { pathname } = request.nextUrl
   const isAuthPage = pathname.startsWith('/auth')
@@ -46,7 +46,7 @@ export async function middleware(request: NextRequest) {
     const { data } = await supabase.auth.getUser()
     user = data.user
   } catch (err) {
-    console.error('[middleware] getUser failed:', err instanceof Error ? err.message : String(err))
+    console.error('[proxy] getUser failed:', err instanceof Error ? err.message : String(err))
     // Treat as unauthenticated — safe fallback
   }
 
@@ -90,7 +90,7 @@ export async function middleware(request: NextRequest) {
   return supabaseResponse
 }
 
-// tells Next.js to skip the middleware entirely for static assets
+// Tells Next.js to skip Proxy entirely for static assets.
 export const config = {
   matcher: [
     // Run on all routes except Next.js internals and static files

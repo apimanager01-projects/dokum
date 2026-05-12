@@ -189,3 +189,35 @@ export async function getImageFilePath(
     .single()
   return data ?? null
 }
+
+// ── Entitlement queries ─────────────────────────────────────────────────────
+
+// Returns the set of unit IDs the current user has access to via a paid
+// purchase or admin grant. Admins are treated as entitled to every unit;
+// callers that have an admin user can skip this query entirely.
+export async function getEntitledUnitIds(userId: string): Promise<Set<string>> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('entitlements')
+    .select('unit_id')
+    .eq('user_id', userId)
+  return new Set((data ?? []).map((row) => row.unit_id as string))
+}
+
+// Single-unit access check. Pass the `app_metadata.role` value (or undefined)
+// so admins short-circuit without a DB round-trip.
+export async function userHasUnitAccess(
+  userId: string,
+  unitId: string,
+  role: string | undefined,
+): Promise<boolean> {
+  if (role === 'admin') return true
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('entitlements')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('unit_id', unitId)
+    .maybeSingle()
+  return data !== null
+}

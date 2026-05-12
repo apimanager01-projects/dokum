@@ -13,7 +13,13 @@ const nextConfig: NextConfig = {
     // Falls back to the wildcard if the env var isn't present at build time.
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
 
-    const connectSrc = ["'self'", 'https://*.supabase.co', 'wss://*.supabase.co']
+    const connectSrc = [
+      "'self'",
+      'https://*.supabase.co',
+      'wss://*.supabase.co',
+      // Stripe.js + Checkout fetches from the browser
+      'https://api.stripe.com',
+    ]
     if (supabaseUrl) connectSrc.push(supabaseUrl)
 
     // Content-Security-Policy notes:
@@ -21,11 +27,17 @@ const nextConfig: NextConfig = {
     //     Replace with nonces for a stricter policy in the future.
     //   • script-src 'unsafe-eval' / 'wasm-unsafe-eval' — Turbopack's dev HMR runtime
     //     uses eval() and WebAssembly.compile to load module updates. Dev-only.
+    //   • script-src https://js.stripe.com — Stripe.js loader (forward-compat; harmless
+    //     for the current redirect-only checkout flow).
+    //   • frame-src — Stripe injects iframes from these origins for embedded Elements,
+    //     3DS challenges, and post-checkout hooks.
     //   • style-src 'unsafe-inline'  — required by Tailwind v4 and Next.js style injection.
     //   • font-src 'self'            — next/font/google self-hosts fonts at build time;
     //     no external font CDN request is made at runtime.
+    //   • form-action — redirect-mode Stripe Checkout is a server 303; including
+    //     checkout.stripe.com here keeps form-post fallback paths working too.
     const isDev = process.env.NODE_ENV !== 'production'
-    const scriptSrc = ["'self'", "'unsafe-inline'"]
+    const scriptSrc = ["'self'", "'unsafe-inline'", 'https://js.stripe.com']
     if (isDev) scriptSrc.push("'unsafe-eval'", "'wasm-unsafe-eval'")
 
     const csp = [
@@ -35,11 +47,11 @@ const nextConfig: NextConfig = {
       `connect-src ${connectSrc.join(' ')}`,
       "font-src 'self'",
       "img-src 'self' data: blob:",
-      "frame-src 'none'",
+      "frame-src https://js.stripe.com https://hooks.stripe.com https://checkout.stripe.com",
       "frame-ancestors 'none'",
       "object-src 'none'",
       "base-uri 'self'",
-      "form-action 'self'",
+      "form-action 'self' https://checkout.stripe.com",
     ].join('; ')
 
     return [

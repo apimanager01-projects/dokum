@@ -4,6 +4,12 @@ import { NextResponse, type NextRequest } from 'next/server'
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
   const { pathname } = request.nextUrl
+
+  // Stripe's servers post here with no cookies and no auth; running the
+  // session-refresh + redirect logic on them would 302 the webhook into a
+  // login page and break signature verification. Skip the middleware entirely.
+  if (pathname === '/api/stripe/webhook') return supabaseResponse
+
   const isAuthPage = pathname.startsWith('/auth')
   const isAdminPage = pathname.startsWith('/admin')
   const isConsentPage = pathname === '/consent'

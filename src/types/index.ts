@@ -78,10 +78,21 @@ export type ActionResult<T = void> = ActionSuccess<T> | ActionError
 export interface AuditLog {
   id: string
   actor_id: string
-  action: 'create' | 'update' | 'delete'
-  entity_type: 'kurs' | 'unit' | 'task' | 'document'
+  action: 'create' | 'update' | 'delete' | 'grant' | 'revoke'
+  entity_type: 'kurs' | 'unit' | 'task' | 'document' | 'entitlement'
   entity_id: string
   entity_title: string | null
   metadata: Record<string, unknown> | null
   created_at: string
+}
+
+// ── Entitlements ────────────────────────────────────────────────────────────
+
+export interface Entitlement {
+  id: string
+  user_id: string
+  unit_id: string
+  granted_at: string
+  source: 'purchase' | 'admin'
+  stripe_session_id: string | null
 }

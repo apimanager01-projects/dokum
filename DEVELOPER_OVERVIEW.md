@@ -18,17 +18,29 @@
 
 ```
 Kurs (Course)
-  └── Unit
+  └── Unit                    ← paid unit-of-purchase (see Payments below)
         └── Task
               └── Document (PDF | Image | Image Collection)
                     └── DocumentImage (for collections only)
 ```
 
 **Key Rules:**
-- Only `kurse` has a `published` boolean — child visibility is inherited via RLS
+- Only `kurse` has a `published` boolean — units inherit visibility from it
+- **Tasks / Documents / DocumentImages require an `entitlements` row** (or admin role) — not just the parent Kurs being published
 - All levels support `position` ordering (non-unique integers; ties broken by `created_at ASC`)
 - Sorting is applied inside the DAL (`src/lib/dal.ts`) — no manual sorting in page components
 - `ON DELETE CASCADE` at every foreign key level
+
+### Payments (per-Unit, one-time, flat €3)
+
+- **Model:** each `Unit` is bought once for a flat €3 (test mode price `price_1TWLu0CbBje0sCsEadcen6py`). Lifetime entitlement, no subscription.
+- **`entitlements` table:** `(user_id, unit_id, granted_at, source: 'purchase'|'admin', stripe_session_id)`. UNIQUE on `(user_id, unit_id)`; partial UNIQUE on `stripe_session_id` for webhook idempotency.
+- **RLS:** SELECT on tasks/documents/document_images and storage.objects (bucket `pdfs`) requires `EXISTS` in `entitlements` for the ancestor `unit_id`, OR admin role.
+- **Flow:** user clicks "Freischalten – €3" → form posts to `/api/checkout/[unitId]` → server creates Checkout Session and redirects → user pays on Stripe → Stripe redirects to `/api/checkout/success?session_id=…` which eager-inserts the entitlement using the service-role client (idempotent on `stripe_session_id`) → `/api/stripe/webhook` covers the case where the user closes the tab.
+- **Admin grants:** insert directly into `entitlements` with `source = 'admin'` (via Supabase dashboard or a future admin action) — audit-log with `action='grant', entity_type='entitlement'`.
+- **Env requirements:** `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_UNIT_PRICE_ID`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_SITE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
+- **CSP:** `connect-src` allows `api.stripe.com`; `frame-src` allows `js.stripe.com`, `hooks.stripe.com`, `checkout.stripe.com`; `form-action` allows `checkout.stripe.com`.
+- **Middleware:** `/api/stripe/webhook` bypasses middleware entirely (Stripe has no cookies).
 
 ### Authentication & Authorization
 
@@ -53,7 +65,8 @@ Kurs (Course)
 | `tasks` | Unit assignments | `id`, `unit_id` (FK), `title`, `description`, `position`, `created_at` |
 | `documents` | PDFs/images | `id`, `task_id` (FK), `title`, `description`, `file_path`, `file_type` (`pdf`\|`image`\|`image_collection`), `position`, `created_at` |
 | `document_images` | Image collection items | `id`, `document_id` (FK CASCADE), `file_path`, `position`, `created_at` |
-| `audit_logs` | Admin action log | `id`, `actor_id` (FK auth.users), `action` (`create`\|`update`\|`delete`), `entity_type`, `entity_id`, `entity_title`, `metadata` (JSONB), `created_at` |
+| `audit_logs` | Admin + purchase action log | `id`, `actor_id` (FK auth.users), `action` (`create`\|`update`\|`delete`\|`grant`\|`revoke`), `entity_type` (incl. `entitlement`), `entity_id`, `entity_title`, `metadata` (JSONB), `created_at` |
+| `entitlements` | Per-(user, unit) paid access | `id`, `user_id` (FK auth.users), `unit_id` (FK units), `granted_at`, `source` (`purchase`\|`admin`), `stripe_session_id` |
 
 ### Row-Level Security (RLS)
 
@@ -61,9 +74,11 @@ Kurs (Course)
 |-------|--------|--------|
 | `profiles` | SELECT where `id = auth.uid()` | Users see only their own profile |
 | `kurse` | SELECT where `published = TRUE` (auth); INSERT/UPDATE/DELETE where role = admin | Published courses visible to all; admins manage |
-| `units/tasks/documents` | SELECT via subquery to `kurse.published`; INSERT/UPDATE/DELETE where role = admin | Inherit parent visibility; admin manage |
-| `document_images` | SELECT via join to `kurse.published` + admin override; INSERT/DELETE where role = admin | Visibility inherited; admin manage |
-| `storage.objects` (`pdfs` bucket) | INSERT/DELETE where bucket = `pdfs` and role = admin | Only admins upload files |
+| `units` | SELECT via subquery to `kurse.published`; INSERT/UPDATE/DELETE where role = admin | Units stay browseable for non-purchasers (so they can see what to buy) |
+| `tasks/documents` | SELECT via subquery to `entitlements` + admin override; INSERT/UPDATE/DELETE where role = admin | Content gated by purchase |
+| `document_images` | SELECT via join to `entitlements` + admin override; INSERT/DELETE where role = admin | Content gated by purchase |
+| `entitlements` | SELECT own rows or admin; INSERT/DELETE where role = admin (webhook inserts via service-role) | Users see their grants; admins manage |
+| `storage.objects` (`pdfs` bucket) | INSERT/DELETE where bucket = `pdfs` and role = admin; SELECT requires entitlement for the unit owning the path | File access matches in-DB access |
 | `audit_logs` | SELECT/INSERT where role = admin; no UPDATE/DELETE | Immutable audit trail; admin-readable only |
 
 ## Project Structure
@@ -322,6 +337,7 @@ Migrations live in `supabase/`. Apply them in order — first to dev (Supabase S
 |------|-------------|
 | `migration.sql` | Initial schema (all tables, RLS, storage policies) |
 | `add_audit_log.sql` | Audit log table and policies |
+| `add_entitlements.sql` | `entitlements` table + RLS rewire so tasks/documents/storage require a purchase |
 
 ## Common Tasks
 

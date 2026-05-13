@@ -46,7 +46,7 @@ const nextConfig: NextConfig = {
       "style-src 'self' 'unsafe-inline'",
       `connect-src ${connectSrc.join(' ')}`,
       "font-src 'self'",
-      "img-src 'self' data: blob:",
+      "img-src 'self' data: blob: https://*.supabase.co",
       "frame-src https://js.stripe.com https://hooks.stripe.com https://checkout.stripe.com",
       "frame-ancestors 'none'",
       "object-src 'none'",

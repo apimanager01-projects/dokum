@@ -51,8 +51,6 @@ export default async function UnitPage({ params, searchParams }: Props) {
   const unit = await getUnitWithTasks(unitId)
   if (!unit) notFound()
 
-  const watermarkId = user.id.slice(0, 8).toUpperCase()
-
   return (
     <div className="-mx-4 border-t border-gray-200 bg-[#fffdf8] sm:-mx-8" style={{ minHeight: 'calc(100svh - 66px)' }}>
       <div className="mx-auto max-w-5xl px-8 py-10 sm:px-12 lg:px-16">
@@ -68,7 +66,7 @@ export default async function UnitPage({ params, searchParams }: Props) {
           Zahlung erfolgreich – die Einheit ist freigeschaltet.
         </p>
       )}
-        <UnitDetailClient tasks={unit.tasks} openTaskId={openTask} watermarkId={watermarkId} />
+        <UnitDetailClient tasks={unit.tasks} openTaskId={openTask} />
       </div>
     </div>
   )

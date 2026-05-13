@@ -46,10 +46,6 @@ export async function POST(
     )
   }
 
-  const successUrl = `${siteUrl()}/api/checkout/success?session_id={CHECKOUT_SESSION_ID}`
-  const cancelUrl = `${siteUrl()}/kurse/${unit.kurs_id}/units/${unitId}?canceled=1`
-  console.log('[checkout] siteUrl env =', JSON.stringify(process.env.NEXT_PUBLIC_SITE_URL), 'resolved =', JSON.stringify(siteUrl()), 'success_url =', JSON.stringify(successUrl))
-
   let session
   try {
     session = await getStripe().checkout.sessions.create({
@@ -59,8 +55,8 @@ export async function POST(
       customer_email: user.email ?? undefined,
       // Webhook + success-return handler both rely on these.
       metadata: { user_id: user.id, unit_id: unitId },
-      success_url: successUrl,
-      cancel_url: cancelUrl,
+      success_url: `${siteUrl()}/api/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${siteUrl()}/kurse/${unit.kurs_id}/units/${unitId}?canceled=1`,
       // Customers should always pay in their own session; allow promo codes
       // for future flexibility without round-tripping through Stripe.
       allow_promotion_codes: true,

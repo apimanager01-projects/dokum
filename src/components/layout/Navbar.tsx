@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { signOut } from '@/actions/auth'
+import { NavbarActions } from '@/components/layout/NavbarActions'
 
 export async function Navbar() {
   const hasSupabaseEnv = Boolean(
@@ -12,10 +12,18 @@ export async function Navbar() {
   } = supabase ? await supabase.auth.getUser() : { data: { user: null } }
 
   const isAdmin = user?.app_metadata?.['role'] === 'admin'
+  const userName =
+    user?.user_metadata?.['full_name'] ||
+    user?.user_metadata?.['name'] ||
+    user?.email?.split('@')[0] ||
+    null
 
   return (
-    <nav className="sticky top-0 z-50 bg-[#fffdf8]/95 backdrop-blur-sm">
-      <div className="mx-auto flex max-w-[1420px] items-center justify-between px-5 py-2 sm:px-8 lg:px-12">
+    <nav
+      className="sticky top-0 z-50 bg-[#fffdf8]/95 backdrop-blur-sm"
+      style={{ height: 66, paddingTop: 16 }}
+    >
+      <div className="mx-auto flex max-w-[1420px] items-start justify-between px-5 sm:px-8 lg:px-12">
         <Link href="/" className="flex items-center gap-2 text-lg font-black uppercase tracking-tight text-gray-950">
           <span className="flex h-7 w-7 items-center justify-center rounded bg-brand text-xl font-black text-white shadow-[inset_0_1px_0_rgb(255_255_255_/_0.25)]">
             D
@@ -23,30 +31,7 @@ export async function Navbar() {
           DOKUM
         </Link>
 
-        <div className="flex items-center justify-end gap-5">
-          {isAdmin && (
-            <Link href="/admin" className="text-sm font-medium text-gray-700 transition-colors hover:text-gray-900">
-              Admin
-            </Link>
-          )}
-
-          {user && (
-            <form action={signOut}>
-              <button
-                type="submit"
-                className="rounded-full border border-brand px-5 py-1.5 text-sm font-semibold text-brand transition-colors hover:bg-brand hover:text-white"
-              >
-                Sign out
-              </button>
-            </form>
-          )}
-
-          {!user && (
-            <Link href="/auth/login" className="rounded-full border border-brand px-5 py-1.5 text-sm font-semibold text-brand transition-colors hover:bg-brand hover:text-white">
-              Sign in
-            </Link>
-          )}
-        </div>
+        <NavbarActions isAdmin={isAdmin} userName={userName} />
       </div>
     </nav>
   )

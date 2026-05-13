@@ -14,20 +14,12 @@ function GoogleIcon() {
   )
 }
 
-function AppleIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5 fill-current">
-      <path d="M16.5 12.9c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.7-1.8-3.3-1.9-1.4-.1-2.7.8-3.4.8s-1.8-.8-3-.8c-1.5 0-2.9.9-3.7 2.2-1.6 2.8-.4 7 1.1 9.2.8 1.1 1.7 2.4 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7c1.3 0 2.1-1.1 2.8-2.3.9-1.3 1.2-2.5 1.2-2.6 0 0-2.6-1-2.6-3.4zM14.3 6.1c.6-.8 1.1-1.9 1-3-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.8-1 2.9 1 0 2-.5 2.7-1.3z" />
-    </svg>
-  )
-}
-
 function SocialButton({
   provider,
   label,
   children,
 }: {
-  provider: 'google' | 'apple'
+  provider: 'google'
   label: string
   children: ReactNode
 }) {
@@ -49,9 +41,6 @@ export function SocialAuthButtons() {
     <div className="grid gap-3">
       <SocialButton provider="google" label="Continue with Google">
         <GoogleIcon />
-      </SocialButton>
-      <SocialButton provider="apple" label="Continue with Apple">
-        <AppleIcon />
       </SocialButton>
     </div>
   )

@@ -2,8 +2,10 @@
 
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { createClient as createSupabaseAdminClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { SignInSchema, SignUpSchema } from '@/lib/schemas'
+import type { ActionResult } from '@/types'
 
 type OAuthProvider = 'google' | 'github' | 'apple'
 
@@ -41,7 +43,7 @@ export async function signIn(formData: FormData) {
     return { ok: false as const, error: 'Invalid email or password.' }
   }
 
-  redirect('/')
+  redirect('/kurse')
 }
 
 export async function signUp(formData: FormData) {
@@ -76,6 +78,46 @@ export async function signOut() {
   const supabase = await createClient()
   await supabase.auth.signOut()
   redirect('/auth/login')
+}
+
+export async function deleteAccount(
+  _prevState: ActionResult | null,
+  formData: FormData
+): Promise<ActionResult> {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) redirect('/auth/login')
+
+  const confirmation = String(formData.get('confirmation') ?? '').trim()
+  if (!user.email || confirmation !== user.email) {
+    return { ok: false, error: 'Type your email address exactly to confirm account deletion.' }
+  }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    return {
+      ok: false,
+      error: 'Account deletion is not configured yet. Add SUPABASE_SERVICE_ROLE_KEY on the server.',
+    }
+  }
+
+  const admin = createSupabaseAdminClient(supabaseUrl, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  })
+
+  const { error } = await admin.auth.admin.deleteUser(user.id)
+  if (error) return { ok: false, error: error.message }
+
+  await supabase.auth.signOut()
+  redirect('/auth/login?message=Account deleted.')
 }
 
 export async function acceptConsent() {

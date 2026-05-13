@@ -88,6 +88,39 @@ export async function getAllKurseDeep(): Promise<KursWithUnits[]> {
   return kurse
 }
 
+export async function getPublishedKurseDeep(): Promise<KursWithUnits[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('kurse')
+    .select(`
+      *,
+      units(
+        *,
+        tasks(
+          *,
+          documents(
+            id, title, position, created_at, file_type,
+            document_images(id)
+          )
+        )
+      )
+    `)
+    .eq('published', true)
+    .order('position', { ascending: true })
+    .order('created_at', { ascending: true })
+  const kurse = (data ?? []) as KursWithUnits[]
+  kurse.forEach((k) => {
+    k.units = sortByPosition(k.units ?? [])
+    k.units.forEach((u) => {
+      u.tasks = sortByPosition(u.tasks ?? [])
+      u.tasks.forEach((t) => {
+        t.documents = sortByPosition(t.documents ?? [])
+      })
+    })
+  })
+  return kurse
+}
+
 // Returns Kurs with sorted Units. Used by public Kurs detail page.
 export async function getKursWithUnits(kursId: string): Promise<KursWithUnits | null> {
   const supabase = await createClient()

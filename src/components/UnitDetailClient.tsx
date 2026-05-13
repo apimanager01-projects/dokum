@@ -23,39 +23,7 @@ function trackMiniCase(docId: string) {
   document.cookie = `recent_minicases=${encodeURIComponent(next.join(','))}; path=/; max-age=${60 * 60 * 24 * 30}`
 }
 
-function Watermark({ id }: { id: string }) {
-  return (
-    <div
-      aria-hidden="true"
-      style={{
-        position: 'absolute', inset: 0,
-        overflow: 'hidden', pointerEvents: 'none', userSelect: 'none',
-      }}
-    >
-      {Array.from({ length: 24 }, (_, i) => (
-        <span
-          key={i}
-          style={{
-            position: 'absolute',
-            top: `${(Math.floor(i / 4) * 22) + 5}%`,
-            left: `${((i % 4) * 28) - 8}%`,
-            transform: 'rotate(-35deg)',
-            fontFamily: 'monospace',
-            fontSize: '14px',
-            fontWeight: 'bold',
-            color: 'rgba(0,0,0,0.35)',
-            whiteSpace: 'nowrap',
-            mixBlendMode: 'multiply',
-          }}
-        >
-          {id}
-        </span>
-      ))}
-    </div>
-  )
-}
-
-export default function UnitDetailClient({ tasks, openTaskId, watermarkId }: { tasks: TaskWithDocs[]; openTaskId?: string; watermarkId: string }) {
+export default function UnitDetailClient({ tasks, openTaskId }: { tasks: TaskWithDocs[]; openTaskId?: string }) {
   const [openTaskIds, setOpenTaskIds] = useState<Set<string>>(openTaskId ? new Set([openTaskId]) : new Set())
   const [lightbox, setLightbox] = useState<LightboxState | null>(null)
 
@@ -159,7 +127,6 @@ export default function UnitDetailClient({ tasks, openTaskId, watermarkId }: { t
                                         imgIndex
                                       )}
                                     />
-                                    <Watermark id={watermarkId} />
                                     </div>
                                   </div>
                                 ))}
@@ -188,7 +155,6 @@ export default function UnitDetailClient({ tasks, openTaskId, watermarkId }: { t
                                     className="absolute inset-0 cursor-zoom-in"
                                     onClick={() => openLightbox([`/api/file/${doc.id}`], 0)}
                                   />
-                                  <Watermark id={watermarkId} />
                                 </div>
                               </div>
                             </div>

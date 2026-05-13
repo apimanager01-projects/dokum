@@ -29,6 +29,9 @@ export default async function KursPage({ params }: { params: Promise<{ kursId: s
             {kurs.description && (
               <p className="mt-3 max-w-2xl text-base leading-relaxed text-gray-600">{kurs.description}</p>
             )}
+            <p className="mt-3 max-w-2xl text-xs text-gray-400">
+              Alle Lernunterlagen ohne Gewähr auf Richtigkeit und Vollständigkeit. Fehler können nicht ausgeschlossen werden.
+            </p>
           </div>
           <ShareButton title={kurs.title} />
         </div>

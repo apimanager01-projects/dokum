@@ -16,7 +16,7 @@ export default async function UnitPage({ params, searchParams }: Props) {
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  // Middleware already redirects unauthenticated visitors away from protected
+  // Proxy already redirects unauthenticated visitors away from protected
   // pages, but guard defensively in case the matcher is ever loosened.
   if (!user) notFound()
 

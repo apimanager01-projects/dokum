@@ -11,7 +11,7 @@ You'll need:
 
 ---
 
-## 1. Authentication & middleware ([src/middleware.ts](src/middleware.ts))
+## 1. Authentication & proxy ([src/proxy.ts](src/proxy.ts))
 
 ### 1.1 Unauthenticated user is redirected from /admin
 1. Sign out (or use private window).
@@ -40,7 +40,7 @@ You'll need:
 
 ### 1.5 Consent enforcement
 1. As a brand-new user (no consent record), sign in.
-2. **Expect:** middleware redirects to `/consent`.
+2. **Expect:** proxy redirects to `/consent`.
 3. Accept consent → can now reach `/`.
 4. Visit `/consent/withdraw`, withdraw consent.
 5. **Expect:** future requests redirect back to `/consent`.

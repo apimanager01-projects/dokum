@@ -7,7 +7,7 @@ export async function proxy(request: NextRequest) {
 
   // Stripe's servers post here with no cookies and no auth; running the
   // session-refresh + redirect logic on them would 302 the webhook into a
-  // login page and break signature verification. Skip the middleware entirely.
+  // login page and break signature verification. Skip the proxy entirely.
   if (pathname === '/api/stripe/webhook') return supabaseResponse
 
   const isAuthPage = pathname.startsWith('/auth')

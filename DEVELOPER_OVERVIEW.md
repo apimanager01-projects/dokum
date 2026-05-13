@@ -40,7 +40,7 @@ Kurs (Course)
 - **Admin grants:** insert directly into `entitlements` with `source = 'admin'` (via Supabase dashboard or a future admin action) — audit-log with `action='grant', entity_type='entitlement'`.
 - **Env requirements:** `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_UNIT_PRICE_ID`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_SITE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
 - **CSP:** `connect-src` allows `api.stripe.com`; `frame-src` allows `js.stripe.com`, `hooks.stripe.com`, `checkout.stripe.com`; `form-action` allows `checkout.stripe.com`.
-- **Middleware:** `/api/stripe/webhook` bypasses middleware entirely (Stripe has no cookies).
+- **Proxy:** `/api/stripe/webhook` bypasses the proxy entirely (Stripe has no cookies).
 
 ### Authentication & Authorization
 
@@ -49,8 +49,8 @@ Kurs (Course)
 - **Admin**: Role stored in `auth.users.raw_app_meta_data` as `{"role": "admin"}`. Can create, edit, and delete content.
 
 **Access Control:**
-- Middleware (`src/middleware.ts`) protects `/admin/*` routes and API proxy routes
-- Admin pages do **not** duplicate the auth check — middleware is the single enforcement point
+- Proxy (`src/proxy.ts` — Next.js 16 renamed the `middleware` convention to `proxy`) protects `/admin/*` routes and API proxy routes
+- Admin pages do **not** duplicate the auth check — the proxy is the single enforcement point
 - File proxy routes (`/api/file`, `/api/image`) verify the document belongs to a published course before serving — unauthenticated or unpublished-content requests return 401/403 at the application layer
 - JWT includes role automatically — no extra DB queries needed
 - Role grants: `UPDATE auth.users SET raw_app_meta_data = ... WHERE email = '...'` (user must sign out/in to refresh JWT)
@@ -158,10 +158,10 @@ src/
 │   ├── schemas.ts                 # Zod schemas for server action input validation
 │   ├── audit.ts                   # logAdminAction() — fire-and-forget audit log writer
 │   ├── supabase/
-│   │   ├── server.ts              # Supabase SSR client (server/middleware)
+│   │   ├── server.ts              # Supabase SSR client (server/proxy)
 │   │   └── client.ts              # Supabase browser client
 │   └── utils.ts                   # cn() helper (clsx + tailwind-merge)
-├── middleware.ts                  # Request routing, auth enforcement, consent check
+├── proxy.ts                       # Request routing, auth enforcement, consent check (Next.js 16 renamed middleware → proxy)
 └── types/
     └── index.ts                   # TypeScript interfaces + ActionResult<T> union
 ```
@@ -376,7 +376,7 @@ Set `published = true/false` in the `kurse` table. All child items inherit visib
 
 | Issue | Likely Cause | Fix |
 |-------|--------------|-----|
-| Admin page accessible without being admin | Middleware not running | Check `src/middleware.ts` exists at `src/` root |
+| Admin page accessible without being admin | Proxy not running | Check `src/proxy.ts` exists at `src/` root (Next.js 16 renamed middleware → proxy) |
 | File proxy returns 403 | Course not published | Set `kurse.published = true` for the parent course |
 | Zod error on form submit | Field name mismatch | Check form field `name` attributes match schema keys in `schemas.ts` |
 | Audit log not writing | `audit_logs` table missing | Apply `supabase/add_audit_log.sql` migration |
@@ -388,7 +388,7 @@ Set `published = true/false` in the `kurse` table. All child items inherit visib
 
 | What You Need | File(s) |
 |---------------|---------|
-| Auth flow | `src/actions/auth.ts`, `src/middleware.ts` |
+| Auth flow | `src/actions/auth.ts`, `src/proxy.ts` |
 | Admin create/update/delete logic | `src/actions/admin/*.ts` |
 | All data read queries | `src/lib/dal.ts` |
 | Input validation schemas | `src/lib/schemas.ts` |

@@ -1,18 +1,20 @@
 import 'server-only'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 
-type AuditAction = 'create' | 'update' | 'delete'
-type EntityType = 'kurs' | 'unit' | 'task' | 'document'
+type AuditAction = 'create' | 'update' | 'delete' | 'grant' | 'revoke'
+type EntityType = 'kurs' | 'unit' | 'task' | 'document' | 'entitlement'
 
-export async function logAdminAction(params: {
+type AuditParams = {
   actorId: string
   action: AuditAction
   entityType: EntityType
   entityId: string
   entityTitle?: string | null
   metadata?: Record<string, unknown>
-}): Promise<void> {
-  const supabase = await createClient()
+}
+
+async function writeAudit(supabase: SupabaseClient, params: AuditParams): Promise<void> {
   const { error } = await supabase.from('audit_logs').insert({
     actor_id: params.actorId,
     action: params.action,
@@ -29,4 +31,18 @@ export async function logAdminAction(params: {
       entityId: params.entityId,
     })
   }
+}
+
+export async function logAdminAction(params: AuditParams): Promise<void> {
+  const supabase = await createClient()
+  await writeAudit(supabase, params)
+}
+
+// Webhook / checkout-success handlers run with a service-role client (no JWT)
+// and must use this variant — the SSR client would lack INSERT permission.
+export async function logAuditWith(
+  supabase: SupabaseClient,
+  params: AuditParams,
+): Promise<void> {
+  await writeAudit(supabase, params)
 }

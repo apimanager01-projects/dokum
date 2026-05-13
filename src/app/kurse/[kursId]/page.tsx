@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { getKursWithUnits } from '@/lib/dal'
+import { getKursWithUnits, getEntitledUnitIds } from '@/lib/dal'
+import { createClient } from '@/lib/supabase/server'
 import ShareButton from '@/components/ShareButton'
 import { UnitCard } from '@/components/kurse/UnitCard'
 
@@ -8,6 +9,13 @@ export default async function KursPage({ params }: { params: Promise<{ kursId: s
   const { kursId } = await params
   const kurs = await getKursWithUnits(kursId)
   if (!kurs) notFound()
+
+  // Build the per-unit lock state. Admins skip the entitlement query — they can
+  // see everything via RLS overrides anyway.
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  const isAdmin = user?.app_metadata?.['role'] === 'admin'
+  const entitledIds = !user || isAdmin ? new Set<string>() : await getEntitledUnitIds(user.id)
 
   return (
     <div className="-mx-4 border-t border-gray-200 bg-[#fffdf8] sm:-mx-8" style={{ minHeight: 'calc(100svh - 66px)' }}>
@@ -26,7 +34,12 @@ export default async function KursPage({ params }: { params: Promise<{ kursId: s
         </div>
         <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {kurs.units.map((unit) => (
-            <UnitCard key={unit.id} unit={unit} kursId={kursId} />
+            <UnitCard
+            key={unit.id}
+            unit={unit}
+            kursId={kursId}
+            locked={!isAdmin && !entitledIds.has(unit.id)}
+          />
           ))}
         </div>
       </div>

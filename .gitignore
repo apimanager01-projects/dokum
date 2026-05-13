@@ -40,6 +40,8 @@ yarn-error.log*
 
 # claude code
 .claude/
+.agents/
+skills-lock.json
 
 # MCP server config (project-scoped, may contain sensitive URLs)
 .mcp.json

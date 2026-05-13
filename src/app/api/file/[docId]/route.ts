@@ -54,7 +54,6 @@ export async function GET(
     return new NextResponse('Keine Datei vorhanden.', { status: 404 })
   }
 
-  // Generate a short-lived signed URL (60 s — only used server-side for the fetch below)
   const { data: urlData, error: urlError } = await supabase.storage
     .from(STORAGE_BUCKET)
     .createSignedUrl(doc.file_path, SIGNED_URL_EXPIRY_SECONDS, { download: false })
@@ -63,23 +62,5 @@ export async function GET(
     return new NextResponse('Datei konnte nicht geladen werden.', { status: 500 })
   }
 
-  // Fetch the file from Supabase Storage and stream it to the client
-  const storageRes = await fetch(urlData.signedUrl)
-  if (!storageRes.ok) {
-    return new NextResponse('Datei konnte nicht geladen werden.', { status: 502 })
-  }
-
-  // Use the Content-Type from Supabase so PDFs and images are served correctly
-  const contentType = storageRes.headers.get('Content-Type') ?? 'application/octet-stream'
-
-  const headers = new Headers({
-    'Content-Type': contentType,
-    'Content-Disposition': 'inline',
-  })
-
-  // Forward Content-Length if present so browsers can show a loading progress bar
-  const contentLength = storageRes.headers.get('Content-Length')
-  if (contentLength) headers.set('Content-Length', contentLength)
-
-  return new NextResponse(storageRes.body, { headers })
+  return NextResponse.redirect(urlData.signedUrl, { status: 302 })
 }

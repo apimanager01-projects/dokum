@@ -7,13 +7,12 @@ import UnitPaywall from '@/components/kurse/UnitPaywall'
 
 interface Props {
   params: Promise<{ kursId: string; unitId: string }>
-  searchParams: Promise<{ openTask?: string }>
-  searchParams: Promise<{ canceled?: string; purchased?: string }>
+  searchParams: Promise<{ openTask?: string; canceled?: string; purchased?: string }>
 }
 
 export default async function UnitPage({ params, searchParams }: Props) {
   const { kursId, unitId } = await params
-  const { canceled, purchased } = await searchParams
+  const { openTask, canceled, purchased } = await searchParams
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -49,12 +48,10 @@ export default async function UnitPage({ params, searchParams }: Props) {
     )
   }
 
-  const { openTask } = await searchParams
-  const [unit, supabase] = await Promise.all([getUnitWithTasks(unitId), createClient()])
+  const unit = await getUnitWithTasks(unitId)
   if (!unit) notFound()
 
-  const { data: { user } } = await supabase.auth.getUser()
-  const watermarkId = (user?.id ?? 'unknown').slice(0, 8).toUpperCase()
+  const watermarkId = user.id.slice(0, 8).toUpperCase()
 
   return (
     <div className="-mx-4 border-t border-gray-200 bg-[#fffdf8] sm:-mx-8" style={{ minHeight: 'calc(100svh - 66px)' }}>

@@ -13,7 +13,7 @@ export async function proxy(request: NextRequest) {
   const isAuthPage = pathname.startsWith('/auth')
   const isAdminPage = pathname.startsWith('/admin')
   const isConsentPage = pathname === '/consent'
-  const isPublicPage = pathname === '/' || pathname === '/impressum' || pathname === '/datenschutz' || isConsentPage
+  const isPublicPage = pathname === '/' || pathname === '/impressum' || pathname === '/datenschutz' || pathname === '/agb' || isConsentPage
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 

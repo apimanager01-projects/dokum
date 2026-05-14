@@ -26,7 +26,7 @@ export default async function LoginPage({ searchParams }: Props) {
 
       <p className="mt-auto max-w-[430px] pt-10 text-center text-sm leading-snug text-gray-500">
         By signing in, you agree to our{' '}
-        <a href="/impressum" className="underline underline-offset-2">
+        <a href="/agb" className="underline underline-offset-2">
           Terms
         </a>{' '}
         and{' '}

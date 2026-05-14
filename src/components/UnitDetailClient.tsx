@@ -23,7 +23,40 @@ function trackMiniCase(docId: string) {
   document.cookie = `recent_minicases=${encodeURIComponent(next.join(','))}; path=/; max-age=${60 * 60 * 24 * 30}`
 }
 
-export default function UnitDetailClient({ tasks, openTaskId }: { tasks: TaskWithDocs[]; openTaskId?: string }) {
+function Watermark({ id }: { id: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        position: 'absolute', inset: 0,
+        overflow: 'hidden', userSelect: 'none',
+        cursor: 'default',
+      }}
+    >
+      {Array.from({ length: 24 }, (_, i) => (
+        <span
+          key={i}
+          style={{
+            position: 'absolute',
+            top: `${(Math.floor(i / 4) * 22) + 5}%`,
+            left: `${((i % 4) * 28) - 8}%`,
+            transform: 'rotate(-35deg)',
+            fontFamily: 'monospace',
+            fontSize: '13px',
+            fontWeight: 'bold',
+            color: 'rgba(0,0,0,0.08)',
+            whiteSpace: 'nowrap',
+            mixBlendMode: 'multiply',
+          }}
+        >
+          {id}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+export default function UnitDetailClient({ tasks, openTaskId, watermarkId }: { tasks: TaskWithDocs[]; openTaskId?: string; watermarkId: string }) {
   const [openTaskIds, setOpenTaskIds] = useState<Set<string>>(openTaskId ? new Set([openTaskId]) : new Set())
   const [lightbox, setLightbox] = useState<LightboxState | null>(null)
 
@@ -106,7 +139,7 @@ export default function UnitDetailClient({ tasks, openTaskId }: { tasks: TaskWit
                                 <p className="text-xs text-gray-500">{doc.description}</p>
                               )}
                               <div className="mt-2 grid grid-cols-1 gap-2">
-                                {(doc.document_images ?? []).map((img, imgIndex) => (
+                                {(doc.document_images ?? []).map((img) => (
                                   <div key={img.id} className="mt-1 flex w-full justify-center">
                                     <div
                                       className="relative inline-block rounded-md overflow-hidden max-w-full"
@@ -120,13 +153,7 @@ export default function UnitDetailClient({ tasks, openTaskId }: { tasks: TaskWit
                                       style={{ pointerEvents: 'none', userSelect: 'none', WebkitUserDrag: 'none' } as React.CSSProperties}
                                       draggable={false}
                                     />
-                                    <div
-                                      className="absolute inset-0 cursor-zoom-in"
-                                      onClick={() => openLightbox(
-                                        (doc.document_images ?? []).map((i) => `/api/image/${i.id}`),
-                                        imgIndex
-                                      )}
-                                    />
+                                    <Watermark id={watermarkId} />
                                     </div>
                                   </div>
                                 ))}
@@ -151,10 +178,7 @@ export default function UnitDetailClient({ tasks, openTaskId }: { tasks: TaskWit
                                     style={{ pointerEvents: 'none', userSelect: 'none', WebkitUserDrag: 'none' } as React.CSSProperties}
                                     draggable={false}
                                   />
-                                  <div
-                                    className="absolute inset-0 cursor-zoom-in"
-                                    onClick={() => openLightbox([`/api/file/${doc.id}`], 0)}
-                                  />
+                                  <Watermark id={watermarkId} />
                                 </div>
                               </div>
                             </div>

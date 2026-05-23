@@ -76,5 +76,15 @@ function getRecentDocuments(kurse: KursWithUnits[], recentIds: string[]) {
     ),
   )
   const docMap = new Map(allDocs.map((d) => [d.id, d]))
-  return recentIds.map((id) => docMap.get(id)).filter((d) => d !== undefined)
+  const seen = new Set<string>()
+  return recentIds
+    .map((id) => docMap.get(id))
+    .filter((d) => d !== undefined)
+    .filter((d) => {
+      // Deduplizieren nach doc.id: dieselbe Document-ID soll nur einmal
+      // erscheinen. Mehrere Dokumente aus demselben Task sind erlaubt.
+      if (seen.has(d.id)) return false
+      seen.add(d.id)
+      return true
+    })
 }

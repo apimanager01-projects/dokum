@@ -48,7 +48,7 @@ export default function HomePage() {
             </span>
           </span>
           <br />
-          <span>Pass faster.</span>
+          <span>Learn Faster.</span>
         </h1>
 
         <div className="mt-7 flex justify-center">
@@ -68,8 +68,8 @@ export default function HomePage() {
           />
           <CaseCard
             number="02"
-            title="Step-by-step solutions"
-            body="Understand the calculation logic, not just the final number."
+            title="Calculation frameworks"
+            body="Understand methods, formulas, and reasoning clearly."
             imagePosition="center center"
             className="hidden md:flex relative z-10 md:min-h-[350px]"
           />

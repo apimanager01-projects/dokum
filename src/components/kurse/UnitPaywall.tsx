@@ -40,6 +40,10 @@ export default function UnitPaywall({ unitId, title, description, canceled }: Pr
       <p className="mt-3 text-center text-[11px] text-gray-400">
         Sichere Bezahlung über Stripe. Einmalige Zahlung — dauerhafter Zugriff.
       </p>
+
+      <p className="mt-2 text-center text-[11px] text-gray-400">
+        Alle Lernunterlagen ohne Gewähr auf Richtigkeit und Vollständigkeit. Fehler können nicht ausgeschlossen werden.
+      </p>
     </div>
   )
 }

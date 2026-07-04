@@ -132,6 +132,10 @@ export function EditorToolbar({
       </div>
       <div className="sep" />
       <div className="group">
+        {/* .accent replaces the reference's [onclick*="openLatexModal"] selector (see editor.css) */}
+        <button type="button" className="accent" onClick={() => ctrl()?.openLatexModal()}>
+          ƒ(x) LaTeX einfügen
+        </button>
         <button type="button" onClick={() => ctrl()?.resetEditor()}>
           Editor zurücksetzen
         </button>

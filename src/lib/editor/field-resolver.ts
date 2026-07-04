@@ -41,15 +41,32 @@
  * auto-expressions (no `=` before the output), invalid expressions, unknown
  * names.
  *
- * `resolveFieldPlaceholders` (fields inside LaTeX, output-as-input rule,
- * reference L2698) is slice 6 (#34) and will join this module.
+ * Slice 6 (#34) adds `resolveFieldPlaceholders` ← the FINAL patch layer
+ * (`patch-output-as-input-latex-fix-v1`, L2698–2728), which fully replaces
+ * the base (L912) and intermediate (L2270) versions and SUBSUMES the
+ * standalone `\cdot` display patch (L2641) by ending with
+ * `prettifyMultiplicationStars`. Consolidation notes:
+ * - The reference's `getStoredOrCalculatedValueAsReference` (L2684) collapses
+ *   into `getFieldValue` — its stored-`latexValue` short-circuit is already
+ *   `getFieldValue`'s first step (before the visited check).
+ * - The `[output:x]` write-back (the reference mutates `el.dataset.latexValue`,
+ *   pill text and `is-error` class in place, L2710–2717) goes through the
+ *   optional {@link FieldGraph.setLatexValue} seam. The mutation MUST be
+ *   visible to subsequent `byId`/`all` reads mid-pass: a later `[input:A]` in
+ *   the same raw string sees an earlier `[output:A]`'s fresh value, exactly
+ *   like the reference's live DOM.
  *
  * Operates on plain field objects behind the {@link FieldGraph} adapter —
  * pure and DOM-free, reusable by the future student-facing renderer.
  */
 
 import { evaluateExpression } from './expression-evaluator'
-import { normaliseLatexForEvaluation } from './latex-normalise'
+import { prettifyMultiplicationStars } from './latex-display'
+import {
+  getAutoExpressionFromLatexText,
+  normaliseLatexForEvaluation,
+  type PlaceholderResolver,
+} from './latex-normalise'
 import { formatValue } from './number-format'
 
 /** Plain snapshot of a field pill's configuration (mirrors its `dataset`). */
@@ -66,7 +83,7 @@ export interface FieldData {
   refId?: string
   /** Outputs: manual expression override (`''` → auto-expression). */
   expr?: string
-  /** Outputs: value persisted by a LaTeX `[output:x]` resolution (slice 6). */
+  /** Outputs: value persisted by a LaTeX `[output:x]` resolution (raw `String(v)`). */
   latexValue?: string
 }
 
@@ -89,6 +106,15 @@ export interface FieldGraph {
    * hidden store).
    */
   lineTokensFor(fieldId: string): LineToken[] | null
+  /**
+   * Write-back of an `[output:x]` calculation-target result (reference
+   * L2710–2717): finite `v` → persist `String(v)` as the field's
+   * `latexValue` (the DOM adapter also sets the pill text to `formatValue(v)`
+   * and clears `is-error`); non-finite → clear `latexValue` (pill shows
+   * „Err"). Optional so read-only graphs stay valid; the write must be
+   * visible to subsequent `byId`/`all` reads within the same resolution pass.
+   */
+  setLatexValue?(fieldId: string, v: number): void
 }
 
 function storedLatexValue(el: FieldData): number {
@@ -278,4 +304,73 @@ export function fieldDisplay(graph: FieldGraph, id: string): FieldDisplay {
   const v = getFieldValue(graph, id)
   if (!Number.isFinite(v)) return { text: 'Err', isError: true, isRef: false }
   return { text: formatValue(v), isError: false, isRef: false }
+}
+
+/**
+ * Resolves `[input:x]`/`[output:x]` placeholders in a raw LaTeX string to
+ * display values — the FINAL patch layer's output-as-input rule (reference
+ * L2698–2728):
+ *
+ * - `[output:x]` on an Output WITHOUT a manual expression is the
+ *   **calculation target** of its formula line: the expression is derived
+ *   offset-based from the raw LaTeX itself (`getAutoExpressionFromLatexText`),
+ *   evaluated, and written back via {@link FieldGraph.setLatexValue} —
+ *   finite results persist as `latexValue`, non-finite results clear it.
+ * - Everything else is **always a value reference** — `[input:x]` even when
+ *   `x` is an Output variable (that is the output-as-input fix: editing a
+ *   later formula never overwrites an earlier output), `[output:x]` with a
+ *   manual expression, and the quirk `[output:x]` naming an Input. No
+ *   write-back ever happens on this branch.
+ * - Unknown names keep the literal placeholder (visible in the rendered
+ *   code); fields already in `visited` render as `\text{Err}`; non-finite
+ *   values render as `\text{Err}`.
+ * - The final string is display-prettified (`*` → `\,\cdot\,`), which is how
+ *   the final layer subsumed the standalone `\cdot` patch.
+ *
+ * Replacement values are the German `formatValue` strings (space-grouped
+ * thousands, decimal comma) embedded verbatim in the LaTeX — reference
+ * parity. Write-backs happen mid-pass, so later placeholders in the same
+ * string see earlier `[output:x]` results.
+ */
+export function resolveFieldPlaceholders(
+  graph: FieldGraph,
+  rawLatex: string,
+  visited: Set<string> = new Set()
+): string {
+  // Nested placeholders inside an auto-expression segment resolve as VALUES
+  // with the OUTER visited set (reference normaliseAutoExpressionText,
+  // L2259): unknown or already-visited fields → null → '0' in the segment.
+  const resolveNested: PlaceholderResolver = (_kind, name) => {
+    const f = getFieldByName(graph, name)
+    if (!f) return null
+    if (visited.has(f.id)) return null
+    return getFieldValue(graph, f.id, new Set(visited))
+  }
+
+  const resolved = (rawLatex || '').replace(
+    /\[(input|output):([^\]]+)\]/g,
+    (match, kind: string, name: string, offset: number) => {
+      const el = getFieldByName(graph, (name || '').trim())
+      if (!el) return match // unbekannter Name: unverändert lassen, sichtbar im Code
+      if (visited.has(el.id)) return '\\text{Err}'
+
+      let v: number
+      if (kind === 'output' && el.type === 'output' && !(el.expr || '').trim()) {
+        // Nur ein explizites [output:Name] darf den Output aus der aktuellen
+        // LaTeX-Formel berechnen/aktualisieren (L2706–2718).
+        const expr = getAutoExpressionFromLatexText(rawLatex, offset, resolveNested)
+        v = evalFieldExpression(graph, expr, new Set(visited).add(el.id))
+        graph.setLatexValue?.(el.id, v)
+      } else {
+        // [input:Name] ist immer eine Referenz/Lese-Operation — auch wenn
+        // Name zu einer Output-Variable gehört (L2719–2723). The reference's
+        // getStoredOrCalculatedValueAsReference collapses into getFieldValue:
+        // its stored-latexValue short-circuit is already getFieldValue's
+        // first step.
+        v = getFieldValue(graph, el.id, new Set(visited))
+      }
+      return Number.isFinite(v) ? formatValue(v) : '\\text{Err}'
+    }
+  )
+  return prettifyMultiplicationStars(resolved)
 }

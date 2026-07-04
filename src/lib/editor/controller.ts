@@ -36,9 +36,12 @@
  *     of the base save. Deviation (approved in #33 planning): pill
  *     click-to-edit is DELEGATED via onEditorClick instead of per-span
  *     listeners — same behavior, and browser-cloned pills stay clickable;
- *   - `*` → `\,\cdot\,` display — the final patch layer, via
- *     latex-display.ts; full `[input:x]`/`[output:x]` resolution is
- *     slice 6 (#34).
+ *   - `[input:x]`/`[output:x]` resolution inside LaTeX (slice 6, #34) —
+ *     `resolveFieldPlaceholders` of the final patch layer
+ *     (`patch-output-as-input-latex-fix-v1`, L2698) via field-resolver.ts,
+ *     which also subsumes the `*` → `\,\cdot\,` display patch (L2641); the
+ *     DOM side here is only the `fieldGraph.setLatexValue` write-back
+ *     adapter and the `resolveForDisplay` seam.
  *
  * React renders the mount container childless and never reconciles inside it;
  * this controller owns the entire subtree (export area, contenteditable
@@ -53,11 +56,12 @@ import {
   fieldDisplay,
   findDuplicateName,
   getFieldValue,
+  resolveFieldPlaceholders,
   type FieldData,
   type FieldGraph,
   type LineToken,
 } from './field-resolver'
-import { cleanupLatex, prettifyMultiplicationStars } from './latex-display'
+import { cleanupLatex } from './latex-display'
 import { librarySyncAction, shouldAddToLibrary } from './library-sync'
 import { loadMathJax } from './mathjax-loader'
 import { formatValue } from './number-format'
@@ -413,15 +417,18 @@ export function createEditorController(container: HTMLElement): EditorController
   }
 
   /**
-   * Slice-3 stand-in for the reference's final `resolveFieldPlaceholders`
-   * (patch-output-as-input-latex-fix-v1, L2698): `[input:x]`/`[output:x]`
-   * placeholders pass through verbatim — what the final version does for
-   * unknown names — and only the display prettification applies. Slice 6
-   * (#34) replaces this with full field resolution; the field system itself
-   * (pills in text, slice 5) is already live and independent of it.
+   * The reference's final `resolveFieldPlaceholders`
+   * (patch-output-as-input-latex-fix-v1, L2698) via the pure module:
+   * `[input:x]`/`[output:x]` resolve against the live field graph
+   * (output-as-input rule, `[output:x]` write-back through
+   * `fieldGraph.setLatexValue`) and `*` is display-prettified. Single seam
+   * for all call sites — modal live preview, insert/edit, library previews,
+   * library drops and the placeholder re-render loop — so every one of them
+   * carries the reference's write-back side effect (parity, ratified in #34
+   * planning: previews DO persist output values on debounce ticks).
    */
   function resolveForDisplay(rawLatex: string): string {
-    return prettifyMultiplicationStars(rawLatex)
+    return resolveFieldPlaceholders(fieldGraph, rawLatex)
   }
 
   function openLatexModal(existingBlock?: HTMLElement | null) {
@@ -811,6 +818,25 @@ export function createEditorController(container: HTMLElement): EditorController
       if (line instanceof HTMLElement && line.id === 'hiddenFields') return null
       return tokenizeLine(line)
     },
+    // Write-back eines [output:x]-Berechnungsziels (reference L2710–2717).
+    // Wie die Reference wird nur EIN Element beschrieben (dort das
+    // by-name-Element, hier das erste mit der field-id — identisch, denn
+    // Outputs haben keine gleich-id-Klone: Referenz-Pillen bekommen eigene
+    // ids). Der Pill-Text wird sofort mitgezogen; die Sidebar folgt beim
+    // nächsten renderVariableList (1s-Sweep) — Reference-Timing.
+    setLatexValue(fieldId, v) {
+      const el = getFieldElement(fieldId)
+      if (!el) return
+      if (Number.isFinite(v)) {
+        el.dataset['latexValue'] = String(v)
+        el.textContent = formatValue(v)
+        el.classList.remove('is-error')
+      } else {
+        delete el.dataset['latexValue']
+        el.textContent = 'Err'
+        el.classList.add('is-error')
+      }
+    },
   }
 
   function makeFieldSpan(type: 'input' | 'output'): HTMLElement {
@@ -876,8 +902,8 @@ export function createEditorController(container: HTMLElement): EditorController
     isFieldBeingCreated = true
     if (isLatexActive()) {
       // LaTeX-Modus: Feld in den Hidden-Store; der Platzhalter wird nach dem
-      // Modal-Save an der gemerkten Textarea-Position eingefügt. Bis slice 6
-      // (#34) rendert er in der Formel wörtlich (wie unbekannte Namen).
+      // Modal-Save an der gemerkten Textarea-Position eingefügt und löst in
+      // der Formel live auf (resolveForDisplay).
       savedLatexTextareaPos = { start: latexInput.selectionStart, end: latexInput.selectionEnd }
       pendingLatexFieldInsert = true
       const span = makeFieldSpan(type)
@@ -1088,9 +1114,10 @@ export function createEditorController(container: HTMLElement): EditorController
   }
 
   // Re-render von Formeln mit [input:x]/[output:x]-Platzhaltern (reference
-  // L1651). Wired to the slice-3 resolveForDisplay stand-in, so this loop is
-  // a structural no-op (resolved always equals the stored dataset.latex)
-  // until slice 6 (#34) swaps in full field resolution.
+  // L1651): nur Formeln, deren aufgelöster LaTeX sich geändert hat, werden
+  // neu gerendert — abhängige Formeln folgen Wertänderungen, unabhängige
+  // bleiben unangetastet. Write-backs passieren in Dokumentreihenfolge, so
+  // dass Formel n+1 die frischen [output:x]-Werte von Formel n sieht.
   async function reRenderFormulasWithPlaceholders() {
     const targets = editor.querySelectorAll<HTMLElement>('.render-target[data-raw-latex]')
     for (const target of Array.from(targets)) {

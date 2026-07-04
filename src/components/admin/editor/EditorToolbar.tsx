@@ -7,8 +7,8 @@ import type { EditorController } from '@/lib/editor/controller'
  * Rich-text toolbar of the LaTeX editor (slice 1 of PRD #28).
  *
  * Markup and labels are a 1:1 port of the standalone editor's toolbar
- * (reference file in latexEditor/), reduced to the slice-1 controls.
- * Later slices append their groups (LaTeX, Bild, Input/Output).
+ * (reference file in latexEditor/). LaTeX arrived with slice 3, Input/Output
+ * with slice 5; „Bild einfügen" follows in slice 8 (#36).
  *
  * All controls are uncontrolled and call straight into the imperative
  * controller — no React state, so typing in the contenteditable surface
@@ -135,6 +135,13 @@ export function EditorToolbar({
         {/* .accent replaces the reference's [onclick*="openLatexModal"] selector (see editor.css) */}
         <button type="button" className="accent" onClick={() => ctrl()?.openLatexModal()}>
           ƒ(x) LaTeX einfügen
+        </button>
+        {/* Reference order (L543–544): Input/Output sit between image insert (slice 8) and reset. */}
+        <button type="button" onClick={() => ctrl()?.insertInputField()}>
+          ☐ Input
+        </button>
+        <button type="button" onClick={() => ctrl()?.insertOutputField()}>
+          ☑ Output
         </button>
         <button type="button" onClick={() => ctrl()?.resetEditor()}>
           Editor zurücksetzen

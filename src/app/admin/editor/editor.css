@@ -152,8 +152,7 @@
 
 /* ------------------------------------------------------------- workspace */
 
-/* Grid incl. the 284px sidebar column arrives with slice 4; the slice-1
-   mount container holds #exportArea directly. */
+/* Editor column + 284px library sidebar (populated since slice 4, #32) */
 .latex-editor .workspace {
   display: grid;
   grid-template-columns: minmax(720px, 1fr) 284px;
@@ -413,7 +412,7 @@
 
 .latex-editor #formulaLibrary {
   position: sticky;
-  top: 140px; /* original 74px; +66px sticky navbar (fine-tune in slice 4) */
+  top: 140px; /* original 74px; +66px sticky navbar (same shift as the toolbar's 76px) */
   max-height: calc(100vh - 158px); /* original calc(100vh - 92px) */
   overflow-y: auto;
   padding: 12px;

@@ -13,9 +13,10 @@ npm run dev      # Next.js dev server (Turbopack) on :3000
 npm run build    # Production build
 npm run start    # Serve the production build
 npm run lint     # ESLint (eslint-config-next 16)
+npm test         # Vitest (dev-only) — colocated *.test.ts unit tests
 ```
 
-No test runner is configured.
+Tests run via Vitest ([vitest.config.ts](vitest.config.ts)) in a plain Node environment: colocated `*.test.ts` files next to their modules, currently the pure DOM-free editor modules in [src/lib/editor/](src/lib/editor/). The editor-module tests are golden cases derived from the standalone reference editor and act as the port's parity contract — don't "fix" expected values without checking the reference behavior.
 
 ## Stack
 

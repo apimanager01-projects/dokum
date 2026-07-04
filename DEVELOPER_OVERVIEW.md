@@ -157,6 +157,12 @@ src/
 │   ├── dal.ts                     # Data access layer — all Supabase read queries
 │   ├── schemas.ts                 # Zod schemas for server action input validation
 │   ├── audit.ts                   # logAdminAction() — fire-and-forget audit log writer
+│   ├── editor/                    # LaTeX editor (PRD #28): imperative core + pure modules
+│   │   ├── controller.ts          # Imperative contenteditable controller (browser-only)
+│   │   ├── expression-evaluator.ts # CSP-safe math tokenizer/parser — replaces new Function; errors → NaN
+│   │   ├── latex-normalise.ts     # LaTeX→expression translation + auto-expression extraction
+│   │   ├── number-format.ts       # German display formatting (formatValue)
+│   │   └── *.test.ts              # Colocated Vitest golden tests (parity contract with the standalone editor)
 │   ├── supabase/
 │   │   ├── server.ts              # Supabase SSR client (server/proxy)
 │   │   └── client.ts              # Supabase browser client
@@ -317,6 +323,17 @@ npm run dev
 ```
 
 Visit `http://localhost:3000`
+
+### Tests
+
+Vitest (`vitest.config.ts`) is a dev-only dependency — no runtime impact.
+
+```bash
+npm test             # run all unit tests once
+npm run test:watch   # watch mode
+```
+
+Conventions: tests are colocated `*.test.ts` files next to their modules and assert **external behavior only** (inputs → outputs, no internal call structure). They run in a plain Node environment; DOM-dependent suites (later PRD #28 slices) opt into a DOM environment per file via a `@vitest-environment` docblock. The editor-module tests under `src/lib/editor/` are golden cases generated from the standalone reference editor (`latexEditor/*.html`) and double as the React port's parity contract — expected values must not be changed without checking the reference behavior first.
 
 ### Two Supabase Projects
 

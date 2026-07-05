@@ -88,6 +88,15 @@ export type EditorDocumentListItem = Pick<
   'id' | 'title' | 'created_at' | 'updated_at' | 'published_document_id'
 >
 
+// Uploaded images of editor drafts (slice 8). Mirrors DocumentImage: rows
+// cascade with their draft; storage objects are removed by the server actions.
+export interface EditorImage {
+  id: string
+  editor_document_id: string
+  file_path: string
+  created_at: string
+}
+
 // ── Server action result types ──────────────────────────────────────────────
 
 export type ActionSuccess<T = void> = { ok: true; data: T }
@@ -100,7 +109,7 @@ export interface AuditLog {
   id: string
   actor_id: string
   action: 'create' | 'update' | 'delete' | 'grant' | 'revoke'
-  entity_type: 'kurs' | 'unit' | 'task' | 'document' | 'entitlement' | 'editor_document'
+  entity_type: 'kurs' | 'unit' | 'task' | 'document' | 'entitlement' | 'editor_document' | 'editor_image'
   entity_id: string
   entity_title: string | null
   metadata: Record<string, unknown> | null

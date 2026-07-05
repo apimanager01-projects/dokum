@@ -65,9 +65,10 @@ Kurs (Course)
 | `tasks` | Unit assignments | `id`, `unit_id` (FK), `title`, `description`, `position`, `created_at` |
 | `documents` | PDFs/images | `id`, `task_id` (FK), `title`, `description`, `file_path`, `file_type` (`pdf`\|`image`\|`image_collection`), `position`, `created_at` |
 | `document_images` | Image collection items | `id`, `document_id` (FK CASCADE), `file_path`, `position`, `created_at` |
-| `audit_logs` | Admin + purchase action log | `id`, `actor_id` (FK auth.users), `action` (`create`\|`update`\|`delete`\|`grant`\|`revoke`), `entity_type` (incl. `entitlement`, `editor_document`), `entity_id`, `entity_title`, `metadata` (JSONB), `created_at` |
+| `audit_logs` | Admin + purchase action log | `id`, `actor_id` (FK auth.users), `action` (`create`\|`update`\|`delete`\|`grant`\|`revoke`), `entity_type` (incl. `entitlement`, `editor_document`, `editor_image`), `entity_id`, `entity_title`, `metadata` (JSONB), `created_at` |
 | `entitlements` | Per-(user, unit) paid access | `id`, `user_id` (FK auth.users), `unit_id` (FK units), `granted_at`, `source` (`purchase`\|`admin`), `stripe_session_id` |
 | `editor_documents` | LaTeX-editor drafts (PRD #28; outside the Kurs hierarchy until published) | `id`, `title`, `content` (JSONB, versioned document JSON), `published_document_id` (FK documents, SET NULL), `created_by` (FK auth.users, SET NULL), `created_at`, `updated_at` (trigger-maintained) |
+| `editor_images` | Uploaded images of editor drafts (slice 8; never base64 in `content` — blocks store the row id) | `id`, `editor_document_id` (FK CASCADE), `file_path` (in bucket `pdfs` under `editor-images/<draftId>/…`), `created_at` |
 
 ### Row-Level Security (RLS)
 
@@ -82,6 +83,7 @@ Kurs (Course)
 | `storage.objects` (`pdfs` bucket) | INSERT/DELETE where bucket = `pdfs` and role = admin; SELECT requires entitlement for the unit owning the path | File access matches in-DB access |
 | `audit_logs` | SELECT/INSERT where role = admin; no UPDATE/DELETE | Immutable audit trail; admin-readable only |
 | `editor_documents` | SELECT/INSERT/UPDATE/DELETE where role = admin (not filtered by `created_by`) | Drafts are admin-only; both admins see and edit all drafts |
+| `editor_images` | SELECT/INSERT/DELETE where role = admin (no UPDATE — rows are immutable) | Editor images admin-only; the bucket-wide admin storage policies cover their objects (entitlement SELECT never matches these paths) |
 
 ## Project Structure
 
@@ -95,6 +97,7 @@ src/
 │   │   ├── tasks.ts               # createTask, updateTask, deleteTask
 │   │   ├── documents.ts           # createDocument, updateDocument, deleteDocument
 │   │   ├── editor-documents.ts    # createEditorDraft, updateEditorDraft, deleteEditorDraft
+│   │   ├── editor-images.ts       # uploadEditorImage (implicit anchor draft, storage upload)
 │   │   └── index.ts               # Re-exports all actions
 │   └── auth.ts                    # signIn, signUp, signOut
 ├── app/
@@ -127,8 +130,9 @@ src/
 │   │   ├── tasks/new/page.tsx     # Create/edit Task
 │   │   └── documents/new/page.tsx # Create/edit Document
 │   └── api/
-│       ├── file/[docId]/route.ts      # Auth-gated file proxy (PDFs/images)
-│       └── image/[imageId]/route.ts   # Auth-gated image collection proxy
+│       ├── file/[docId]/route.ts          # Auth-gated file proxy (PDFs/images)
+│       ├── image/[imageId]/route.ts       # Auth-gated image collection proxy
+│       └── editor-image/[imageId]/route.ts # Admin-only editor-image proxy (STREAMS, same-origin)
 ├── components/
 │   ├── admin/
 │   │   ├── KursForm.tsx           # Create/edit Kurs form
@@ -244,12 +248,13 @@ Files are stored in the private Supabase Storage bucket `pdfs`. Access is always
 
 - `GET /api/file/[docId]` — PDFs and single images
 - `GET /api/image/[imageId]` — image collection items
+- `GET /api/editor-image/[imageId]` — LaTeX-editor draft images (admin-only)
 
-Both routes verify:
+The document routes verify:
 1. User is authenticated
 2. If not admin: the document's parent course is published (join query up to `kurse.published`)
 
-Short-lived signed URLs (60s) are generated server-side and used for a single streaming fetch. Supabase URLs are never exposed to the browser.
+Short-lived signed URLs (60s) are generated server-side. The document routes redirect to the signed URL; the editor-image route instead fetches it server-side and **streams** the body, so the browser only ever sees a same-origin response — that is what lets the PNG export (html2canvas) rasterise editor images without CORS handling or canvas tainting. Supabase URLs are never exposed to the browser.
 
 ### Error & Loading Boundaries
 
@@ -274,8 +279,9 @@ Every major route segment has scoped `error.tsx` and `loading.tsx` files. A fail
 | `updateDocument` | `documents.ts` | Update metadata, optionally replace file |
 | `deleteDocument` | `documents.ts` | Delete Document record + storage file(s) |
 | `createEditorDraft` | `editor-documents.ts` | Insert editor draft (validated document JSON); returns the new id |
-| `updateEditorDraft` | `editor-documents.ts` | Update draft title + content (`updated_at` via trigger) |
-| `deleteEditorDraft` | `editor-documents.ts` | Delete editor draft (image cleanup arrives with slice 8) |
+| `updateEditorDraft` | `editor-documents.ts` | Update draft title + content; reconciles images (rows/objects the content no longer references are deleted) |
+| `deleteEditorDraft` | `editor-documents.ts` | Delete editor draft + its `editor_images` rows (cascade) + storage objects |
+| `uploadEditorImage` | `editor-images.ts` | Upload an editor image to storage + insert `editor_images` row; creates the implicit „Unbenannt" anchor draft when no draft exists yet |
 
 All actions: validate input via Zod → auth check via `getAdminUser()` → database operation → audit log → revalidate cache.
 
@@ -363,6 +369,7 @@ Migrations live in `supabase/`. Apply them in order — first to dev (Supabase S
 | `add_audit_log.sql` | Audit log table and policies |
 | `add_entitlements.sql` | `entitlements` table + RLS rewire so tasks/documents/storage require a purchase |
 | `add_editor_documents.sql` | `editor_documents` drafts table (admin-only RLS, `updated_at` trigger) + audit `entity_type` extension |
+| `add_editor_images.sql` | `editor_images` table (admin-only RLS, cascade with draft) + audit `entity_type` extension (`editor_image`); no storage-policy changes needed |
 
 ## Common Tasks
 
@@ -422,7 +429,7 @@ Set `published = true/false` in the `kurse` table. All child items inherit visib
 | TypeScript types + ActionResult | `src/types/index.ts` |
 | Admin form components | `src/components/admin/{Kurs,Unit,Task,Document}Form.tsx` |
 | Admin tree visualizer | `src/components/admin/AdminTree.tsx` |
-| File proxy routes | `src/app/api/file/[docId]/route.ts`, `src/app/api/image/[imageId]/route.ts` |
+| File proxy routes | `src/app/api/file/[docId]/route.ts`, `src/app/api/image/[imageId]/route.ts`, `src/app/api/editor-image/[imageId]/route.ts` |
 | Error/loading boundaries | `src/app/**/error.tsx`, `src/app/**/loading.tsx` |
 
 ---

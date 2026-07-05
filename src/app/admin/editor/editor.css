@@ -280,6 +280,12 @@
   opacity: 0.35;
 }
 
+/* Upload läuft noch (slice 8): blob:-Vorschau leicht gedimmt, bis der Block
+   auf die Proxy-Route zeigt. */
+.latex-editor .image-block.is-uploading {
+  opacity: 0.6;
+}
+
 .latex-editor .formula-block .drag-handle,
 .latex-editor .image-block .drag-handle {
   position: absolute;

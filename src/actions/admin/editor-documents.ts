@@ -1,13 +1,17 @@
 'use server'
 
+import { collectReferencedImageIds } from '@/lib/editor/document-json'
 import { EditorDraftFormSchema } from '@/lib/schemas'
 import type { ActionResult } from '@/types'
 import { logAdminAction } from '@/lib/audit'
-import { getAdminUser, parseForm, revalidateAdminPages } from './_shared'
+import { getAdminUser, parseForm, revalidateAdminPages, removeStorageObjects } from './_shared'
 
 // Editor drafts (PRD #28, slice 7 — #35). Drafts live outside the
 // Kurs → Unit → Task → Document hierarchy until published (slice 11).
-// Storage cleanup for draft images arrives with slice 8 (#36).
+// Image cleanup (slice 8, #36) is reconciliation-based: contenteditable undo
+// (Ctrl+Z) can resurrect a deleted image block, so rows/objects are removed
+// when a SAVE no longer references them — never at the keystroke that removed
+// the block. Deleting a draft cleans up all its images immediately.
 
 export async function createEditorDraft(formData: FormData): Promise<ActionResult<{ id: string }>> {
   const { supabase, user } = await getAdminUser()
@@ -51,7 +55,19 @@ export async function updateEditorDraft(draftId: string, formData: FormData): Pr
     return { ok: false, error: 'Entwurf nicht gefunden.' }
   }
 
-  await logAdminAction({ actorId: user.id, action: 'update', entityType: 'editor_document', entityId: draftId, entityTitle: title })
+  // Save-time image reconciliation (slice 8): rows of this draft that the
+  // just-saved content no longer references lose their storage object and
+  // row. Cleanup failures must never fail the save (audit-log philosophy).
+  const imagesDeleted = await deleteUnreferencedImages(supabase, draftId, collectReferencedImageIds(content))
+
+  await logAdminAction({
+    actorId: user.id,
+    action: 'update',
+    entityType: 'editor_document',
+    entityId: draftId,
+    entityTitle: title,
+    ...(imagesDeleted > 0 ? { metadata: { images_deleted: imagesDeleted } } : {}),
+  })
   revalidateAdminPages()
   return { ok: true, data: undefined }
 }
@@ -61,7 +77,7 @@ export async function deleteEditorDraft(draftId: string): Promise<ActionResult> 
 
   const { data: draft, error: fetchErr } = await supabase
     .from('editor_documents')
-    .select('title')
+    .select('title, editor_images(file_path)')
     .eq('id', draftId)
     .single()
   if (fetchErr || !draft) return { ok: false, error: 'Entwurf nicht gefunden.' }
@@ -69,7 +85,52 @@ export async function deleteEditorDraft(draftId: string): Promise<ActionResult> 
   const { error } = await supabase.from('editor_documents').delete().eq('id', draftId)
   if (error) return { ok: false, error: `Entwurf konnte nicht gelöscht werden: ${error.message}` }
 
-  await logAdminAction({ actorId: user.id, action: 'delete', entityType: 'editor_document', entityId: draftId, entityTitle: draft.title })
+  // editor_images rows cascaded with the draft; the bucket objects remain
+  // until removed here (paths were captured before the delete).
+  const imagePaths = (draft.editor_images ?? []).map((i) => i.file_path)
+  await removeStorageObjects(supabase, imagePaths, 'deleteEditorDraft')
+
+  await logAdminAction({
+    actorId: user.id,
+    action: 'delete',
+    entityType: 'editor_document',
+    entityId: draftId,
+    entityTitle: draft.title,
+    metadata: { images_deleted: imagePaths.length },
+  })
   revalidateAdminPages()
   return { ok: true, data: undefined }
+}
+
+// ── Internal helpers ─────────────────────────────────────────────────────────
+
+type SupabaseClient = Awaited<ReturnType<typeof getAdminUser>>['supabase']
+
+async function deleteUnreferencedImages(
+  supabase: SupabaseClient,
+  draftId: string,
+  referencedIds: string[],
+): Promise<number> {
+  const { data: rows, error } = await supabase
+    .from('editor_images')
+    .select('id, file_path')
+    .eq('editor_document_id', draftId)
+  if (error) {
+    console.error('[updateEditorDraft image cleanup] select failed:', error)
+    return 0
+  }
+  const referenced = new Set(referencedIds)
+  const stale = (rows ?? []).filter((r) => !referenced.has(r.id))
+  if (stale.length === 0) return 0
+
+  const { error: deleteError } = await supabase
+    .from('editor_images')
+    .delete()
+    .in('id', stale.map((r) => r.id))
+  if (deleteError) {
+    console.error('[updateEditorDraft image cleanup] delete failed:', deleteError)
+    return 0
+  }
+  await removeStorageObjects(supabase, stale.map((r) => r.file_path), 'updateEditorDraft image cleanup')
+  return stale.length
 }

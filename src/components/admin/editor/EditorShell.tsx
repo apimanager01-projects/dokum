@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState, useTransition } from 'react'
-import { createEditorDraft, updateEditorDraft } from '@/actions/admin'
+import { createEditorDraft, updateEditorDraft, uploadEditorImage } from '@/actions/admin'
 import { createEditorController, type EditorController } from '@/lib/editor/controller'
 import { DocumentJsonSchema, type EditorDocumentJson } from '@/lib/editor/document-json'
 import { EditorToolbar } from './EditorToolbar'
@@ -22,6 +22,15 @@ import { EditorToolbar } from './EditorToolbar'
  * no autosave (PRD decision). After the FIRST save the page navigates to
  * `?draftId=…` (decision D6): the remount reloads the just-saved content
  * from the DB — dogfooding the export→import round-trip on every first save.
+ *
+ * Images (slice 8, #36): the controller's `uploadImage` hook is wired to the
+ * uploadEditorImage action here. All draft-mutating server calls (uploads AND
+ * saves) run strictly serialized through one promise chain: rapid consecutive
+ * pastes create the implicit „Unbenannt" anchor draft exactly once, and a
+ * save can never interleave with an in-flight upload — otherwise the save's
+ * image reconciliation could delete the row the upload just inserted.
+ * „Speichern" is additionally disabled while uploads are pending (#36
+ * decision D3).
  */
 
 type SaveStatus = { kind: 'idle' | 'saved' | 'error'; text: string }
@@ -55,10 +64,53 @@ export function EditorShell({ initialDraft }: { initialDraft?: EditorShellDraft 
       : { kind: 'idle', text: '' }
   )
   const [isPending, startTransition] = useTransition()
+  const [pendingUploads, setPendingUploads] = useState(0)
+
+  // Serializes every draft-mutating server call (image uploads and saves).
+  // Kept never-rejecting so one failed operation cannot wedge the chain.
+  const opChainRef = useRef<Promise<void>>(Promise.resolve())
+
+  function enqueueOp<T>(op: () => Promise<T>): Promise<T> {
+    const settled = opChainRef.current.then(op)
+    opChainRef.current = settled.then(
+      () => undefined,
+      () => undefined
+    )
+    return settled
+  }
+
+  // Controller hook (slice 8). Touches only refs and stable setters, so the
+  // closure the mount-effect captures never goes stale.
+  async function uploadImage(
+    file: File
+  ): Promise<{ ok: true; imageId: string } | { ok: false; error: string }> {
+    setPendingUploads((n) => n + 1)
+    try {
+      return await enqueueOp(async () => {
+        try {
+          const formData = new FormData()
+          if (draftIdRef.current) formData.set('draft_id', draftIdRef.current)
+          formData.set('file', file)
+          const result = await uploadEditorImage(formData)
+          if (!result.ok) return { ok: false as const, error: result.error }
+          const anchorCreated = draftIdRef.current === null
+          draftIdRef.current = result.data.draftId
+          // Anchor draft „Unbenannt" appears in the list. URL and key are
+          // unchanged — no remount, the live editing state is safe.
+          if (anchorCreated) router.refresh()
+          return { ok: true as const, imageId: result.data.imageId }
+        } catch {
+          return { ok: false as const, error: 'Netzwerkfehler beim Hochladen.' }
+        }
+      })
+    } finally {
+      setPendingUploads((n) => n - 1)
+    }
+  }
 
   useEffect(() => {
     if (!mountRef.current) return
-    const controller = createEditorController(mountRef.current)
+    const controller = createEditorController(mountRef.current, { uploadImage })
     controllerRef.current = controller
     if (parsedDraft && parsedDraft !== 'invalid') {
       void controller.loadDocument(parsedDraft)
@@ -67,12 +119,14 @@ export function EditorShell({ initialDraft }: { initialDraft?: EditorShellDraft 
       controller.destroy()
       controllerRef.current = null
     }
-    // parsedDraft is stable for the lifetime of this mount (never set).
+    // parsedDraft is stable for the lifetime of this mount (never set), and
+    // uploadImage reads only refs — the mount-time closure stays valid.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [parsedDraft])
 
   function handleSave() {
     const controller = controllerRef.current
-    if (!controller || isPending) return
+    if (!controller || isPending || pendingUploads > 0) return
 
     let contentJson: string
     try {
@@ -88,29 +142,41 @@ export function EditorShell({ initialDraft }: { initialDraft?: EditorShellDraft 
     formData.set('title', title.trim() || 'Unbenannt')
     formData.set('content', contentJson)
 
-    startTransition(async () => {
-      const draftId = draftIdRef.current
-      if (draftId) {
-        const result = await updateEditorDraft(draftId, formData)
-        if (!result.ok) {
-          setStatus({ kind: 'error', text: `Speichern fehlgeschlagen: ${result.error}` })
-          return
+    // Enqueued behind any in-flight upload (belt to the disabled button's
+    // braces): the save's image reconciliation must never run while an
+    // upload is still inserting its editor_images row.
+    startTransition(() =>
+      enqueueOp(async () => {
+        const draftId = draftIdRef.current
+        if (draftId) {
+          const result = await updateEditorDraft(draftId, formData)
+          if (!result.ok) {
+            setStatus({ kind: 'error', text: `Speichern fehlgeschlagen: ${result.error}` })
+            return
+          }
+          if (!initialDraft) {
+            // The draft row was anchor-created by an image upload, so the URL
+            // has no draftId yet. Navigate on this first explicit save (D6):
+            // the key-driven remount reloads the just-saved content.
+            router.replace(`/admin/editor?draftId=${draftId}`)
+            return
+          }
+          const time = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+          setStatus({ kind: 'saved', text: `Gespeichert (${time} Uhr)` })
+          router.refresh() // draft list shows the fresh updated_at
+        } else {
+          const result = await createEditorDraft(formData)
+          if (!result.ok) {
+            setStatus({ kind: 'error', text: `Speichern fehlgeschlagen: ${result.error}` })
+            return
+          }
+          draftIdRef.current = result.data.id
+          // First save → draft URL (D6). The key-driven remount reloads the
+          // saved content from the DB and refreshes the draft list.
+          router.replace(`/admin/editor?draftId=${result.data.id}`)
         }
-        const time = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
-        setStatus({ kind: 'saved', text: `Gespeichert (${time} Uhr)` })
-        router.refresh() // draft list shows the fresh updated_at
-      } else {
-        const result = await createEditorDraft(formData)
-        if (!result.ok) {
-          setStatus({ kind: 'error', text: `Speichern fehlgeschlagen: ${result.error}` })
-          return
-        }
-        draftIdRef.current = result.data.id
-        // First save → draft URL (D6). The key-driven remount reloads the
-        // saved content from the DB and refreshes the draft list.
-        router.replace(`/admin/editor?draftId=${result.data.id}`)
-      }
-    })
+      })
+    )
   }
 
   return (
@@ -130,7 +196,7 @@ export function EditorShell({ initialDraft }: { initialDraft?: EditorShellDraft 
         <button
           type="button"
           onClick={handleSave}
-          disabled={isPending}
+          disabled={isPending || pendingUploads > 0}
           className="rounded-md bg-brand px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-dark disabled:opacity-50"
         >
           {isPending ? 'Wird gespeichert …' : 'Speichern'}
@@ -139,7 +205,7 @@ export function EditorShell({ initialDraft }: { initialDraft?: EditorShellDraft 
           role="status"
           className={status.kind === 'error' ? 'text-sm text-red-700' : 'text-sm text-gray-500'}
         >
-          {status.text}
+          {pendingUploads > 0 ? 'Bild wird hochgeladen …' : status.text}
         </span>
       </div>
       <EditorToolbar controllerRef={controllerRef} />

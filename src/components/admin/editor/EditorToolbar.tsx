@@ -1,6 +1,6 @@
 'use client'
 
-import type { RefObject } from 'react'
+import { useRef, type RefObject } from 'react'
 import type { EditorController } from '@/lib/editor/controller'
 
 /**
@@ -8,7 +8,8 @@ import type { EditorController } from '@/lib/editor/controller'
  *
  * Markup and labels are a 1:1 port of the standalone editor's toolbar
  * (reference file in latexEditor/). LaTeX arrived with slice 3, Input/Output
- * with slice 5; „Bild einfügen" follows in slice 8 (#36).
+ * with slice 5, „Bild einfügen" with slice 8 (reference L541–542:
+ * saveSelection() before opening the file dialog, value reset after pick).
  *
  * All controls are uncontrolled and call straight into the imperative
  * controller — no React state, so typing in the contenteditable surface
@@ -33,6 +34,7 @@ export function EditorToolbar({
   controllerRef: RefObject<EditorController | null>
 }) {
   const ctrl = () => controllerRef.current
+  const imageInputRef = useRef<HTMLInputElement>(null)
 
   return (
     <div className="toolbar">
@@ -136,7 +138,30 @@ export function EditorToolbar({
         <button type="button" className="accent" onClick={() => ctrl()?.openLatexModal()}>
           ƒ(x) LaTeX einfügen
         </button>
-        {/* Reference order (L543–544): Input/Output sit between image insert (slice 8) and reset. */}
+        <button
+          type="button"
+          onClick={() => {
+            // Reference L541: snapshot the selection BEFORE the file dialog
+            // steals focus — the picked image is inserted at this position.
+            ctrl()?.saveSelection()
+            imageInputRef.current?.click()
+          }}
+        >
+          📷 Bild einfügen
+        </button>
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            // Reference L1172: reset so picking the same file twice re-fires.
+            e.target.value = ''
+            if (file) ctrl()?.insertImageFromFile(file)
+          }}
+        />
+        {/* Reference order (L543–544): Input/Output sit between image insert and reset. */}
         <button type="button" onClick={() => ctrl()?.insertInputField()}>
           ☐ Input
         </button>

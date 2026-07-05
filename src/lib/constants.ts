@@ -21,3 +21,10 @@ export const MIME_TO_EXT: Record<string, string> = {
   'image/gif': '.gif',
   'image/webp': '.webp',
 }
+
+// Browser URL of a stored editor image (PRD #28, slice 8) — the streaming
+// signed-URL proxy route. Single source for the path so the controller, the
+// JSON importer wiring and the route itself cannot drift apart.
+export function editorImageUrl(imageId: string): string {
+  return `/api/editor-image/${imageId}`
+}

@@ -70,6 +70,14 @@ export const EditorDraftFormSchema = z.object({
     .pipe(DocumentJsonSchema),
 })
 
+// Editor-image upload (slice 8). Only the optional draft link goes through
+// Zod — absent when the upload must create the implicit „Unbenannt" anchor
+// draft. The file itself is validated manually in the action (documents.ts
+// precedent: MIME allowlist + size limit with German messages).
+export const EditorImageUploadSchema = z.object({
+  draft_id: uuidField.optional(),
+})
+
 // ── Auth schemas ────────────────────────────────────────────────────────────
 
 export const SignInSchema = z.object({
@@ -91,3 +99,4 @@ export type TaskFormData = z.infer<typeof TaskFormSchema>
 export type DocumentMetaData = z.infer<typeof DocumentMetaSchema>
 export type DocumentUpdateMetaData = z.infer<typeof DocumentUpdateMetaSchema>
 export type EditorDraftFormData = z.infer<typeof EditorDraftFormSchema>
+export type EditorImageUploadData = z.infer<typeof EditorImageUploadSchema>

@@ -19,6 +19,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   DocumentJsonSchema,
+  collectReferencedImageIds,
+  emptyEditorDocumentJson,
   importEditorJson,
   serializeEditorState,
   type EditorDocumentJson,
@@ -34,14 +36,23 @@ function makeEditor(): HTMLElement {
   return editor
 }
 
-/** Deterministic id generator + identity resolver (the serializer never reads resolved LaTeX). */
+/**
+ * Deterministic id generator + identity resolver (the serializer never reads
+ * resolved LaTeX) + stub image-URL builder (the serializer never reads the
+ * URL back — only data-image-id).
+ */
 function makeAdapters(): ImportAdapters {
   let n = 0
   return {
     nextFieldId: () => `gen_${++n}`,
     resolvePlaceholders: (raw: string) => raw,
+    imageUrl: (imageId: string) => `stub://editor-image/${imageId}`,
   }
 }
+
+/** Fixed editor_images row ids for the slice-8 image-block tests. */
+const IMG_ID = '0f8fad5b-d9cb-469f-a165-70867728950e'
+const IMG_ID_2 = '7c9e6679-7425-40de-944b-e07fc1f90ae7'
 
 function parse(doc: unknown): EditorDocumentJson {
   const result = DocumentJsonSchema.safeParse(doc)
@@ -138,11 +149,45 @@ describe('DocumentJsonSchema', () => {
     expect(result.success).toBe(true)
   })
 
-  it('rejects unknown block types — image is slice 8, not v1.0', () => {
-    const image = { version: '1.0', variables: [], content: [{ type: 'image', src: 'data:x' }] }
-    expect(DocumentJsonSchema.safeParse(image).success).toBe(false)
+  it('rejects unknown block types', () => {
     const unknown = { version: '1.0', variables: [], content: [{ type: 'video' }] }
     expect(DocumentJsonSchema.safeParse(unknown).success).toBe(false)
+  })
+
+  it('accepts storage-reference image blocks (slice 8): imageId, optional alt and style', () => {
+    const doc = {
+      version: '1.0',
+      variables: [],
+      content: [
+        { type: 'image', imageId: IMG_ID },
+        { type: 'image', imageId: IMG_ID_2, alt: 'Screenshot', style: { align: 'center' } },
+      ],
+    }
+    expect(DocumentJsonSchema.safeParse(doc).success).toBe(true)
+  })
+
+  it('makes base64 images structurally impossible: src is rejected, imageId must be a UUID', () => {
+    // The reference import format carried { type:'image', src } — arbitrary
+    // src (base64 data URLs) is forbidden by the PRD; strictObject rejects it.
+    const withSrc = {
+      version: '1.0',
+      variables: [],
+      content: [{ type: 'image', imageId: IMG_ID, src: 'data:image/png;base64,AAAA' }],
+    }
+    expect(DocumentJsonSchema.safeParse(withSrc).success).toBe(false)
+    const srcOnly = { version: '1.0', variables: [], content: [{ type: 'image', src: 'data:x' }] }
+    expect(DocumentJsonSchema.safeParse(srcOnly).success).toBe(false)
+    const missingId = { version: '1.0', variables: [], content: [{ type: 'image' }] }
+    expect(DocumentJsonSchema.safeParse(missingId).success).toBe(false)
+    const badId = DocumentJsonSchema.safeParse({
+      version: '1.0',
+      variables: [],
+      content: [{ type: 'image', imageId: 'nicht-uuid' }],
+    })
+    expect(badId.success).toBe(false)
+    if (!badId.success) {
+      expect(badId.error.issues[0]?.message).toBe('Ungültige Bildreferenz.')
+    }
   })
 
   it('rejects unknown top-level and style keys (strict boundary)', () => {
@@ -399,6 +444,44 @@ describe('importEditorJson', () => {
     editor.remove()
   })
 
+  it('imports image blocks (slice 8): drag handle, adapter URL, data-image-id — reference DOM shape', () => {
+    const editor = makeEditor()
+    importEditorJson(
+      parse({
+        version: '1.0',
+        variables: [],
+        content: [
+          { type: 'paragraph', children: ['davor'] },
+          { type: 'image', imageId: IMG_ID, alt: 'Screenshot' },
+          { type: 'image', imageId: IMG_ID_2 },
+        ],
+      }),
+      editor,
+      makeAdapters()
+    )
+    const blocks = editor.querySelectorAll<HTMLElement>('.image-block')
+    expect(blocks.length).toBe(2)
+    // Reference image-block shape (L2555–2559): draggable block, handle, img.
+    const first = blocks[0]!
+    expect(first.getAttribute('draggable')).toBe('true')
+    const handle = first.querySelector<HTMLElement>('.drag-handle')!
+    expect(handle.getAttribute('contenteditable')).toBe('false')
+    const img = first.querySelector<HTMLImageElement>('img')!
+    expect(img.getAttribute('src')).toBe(`stub://editor-image/${IMG_ID}`)
+    expect(img.dataset['imageId']).toBe(IMG_ID)
+    expect(img.alt).toBe('Screenshot')
+    expect(img.getAttribute('contenteditable')).toBe('false')
+    expect(blocks[1]!.querySelector('img')!.alt).toBe('')
+    // Document order preserved around the paragraph.
+    expect(Array.from(editor.children).map((el) => el.className || el.tagName)).toEqual([
+      'P',
+      'image-block',
+      'image-block',
+      'DIV',
+    ])
+    editor.remove()
+  })
+
   it('restores the slice-7 variable extras as datasets', () => {
     const editor = makeEditor()
     importEditorJson(
@@ -592,6 +675,41 @@ describe('serializeEditorState', () => {
     editor.remove()
   })
 
+  it('serialises image blocks from data-image-id only — the src never enters the JSON', () => {
+    const editor = makeEditor()
+    editor.innerHTML =
+      '<div class="image-block" draggable="true">' +
+      '<span class="drag-handle" contenteditable="false">❚❚</span>' +
+      `<img src="/api/editor-image/${IMG_ID}" alt="Screenshot" contenteditable="false" data-image-id="${IMG_ID}">` +
+      '</div>' +
+      '<div class="image-block" draggable="true" style="text-align: right;">' +
+      '<span class="drag-handle" contenteditable="false">❚❚</span>' +
+      `<img src="/api/editor-image/${IMG_ID_2}" alt="" contenteditable="false" data-image-id="${IMG_ID_2}">` +
+      '</div>'
+    const json = serializeEditorState(editor, [])
+    expect(json.content).toEqual([
+      { type: 'image', imageId: IMG_ID, alt: 'Screenshot' },
+      { type: 'image', imageId: IMG_ID_2, style: { align: 'right' } },
+    ])
+    expect(JSON.stringify(json)).not.toContain('/api/editor-image')
+    expect(DocumentJsonSchema.safeParse(json).success).toBe(true)
+    editor.remove()
+  })
+
+  it('skips image blocks that are still uploading (blob: preview, no data-image-id)', () => {
+    const editor = makeEditor()
+    editor.innerHTML =
+      '<p>text</p>' +
+      '<div class="image-block is-uploading" draggable="true">' +
+      '<span class="drag-handle" contenteditable="false">❚❚</span>' +
+      '<img src="blob:http://localhost/preview" alt="pending" contenteditable="false">' +
+      '</div>'
+    const json = serializeEditorState(editor, [])
+    expect(json.content).toEqual([{ type: 'paragraph', children: ['text'] }])
+    expect(JSON.stringify(json)).not.toContain('blob:')
+    editor.remove()
+  })
+
   it('wraps stray top-level inline content into a paragraph and skips the hidden store', () => {
     const editor = makeEditor()
     editor.appendChild(document.createTextNode('lose'))
@@ -760,5 +878,56 @@ describe('export → import → export', () => {
     const j2 = roundTrip(j1)
     expect(JSON.stringify(j2)).toBe(JSON.stringify(j1))
     editor.remove()
+  })
+
+  it('is byte-stable for image blocks (slice 8), including alt and style', () => {
+    const editor = makeEditor()
+    importEditorJson(
+      parse({
+        version: '1.0',
+        variables: [],
+        content: [
+          { type: 'paragraph', children: ['davor'] },
+          { type: 'image', imageId: IMG_ID, alt: 'Screenshot' },
+          { type: 'image', imageId: IMG_ID_2, style: { align: 'center' } },
+        ],
+      }),
+      editor,
+      makeAdapters()
+    )
+    const j1 = serializeEditorState(editor, [])
+    expect(j1.content[1]).toEqual({ type: 'image', imageId: IMG_ID, alt: 'Screenshot' })
+    expect(j1.content[2]).toEqual({ type: 'image', imageId: IMG_ID_2, style: { align: 'center' } })
+    const j2 = roundTrip(j1)
+    expect(JSON.stringify(j2)).toBe(JSON.stringify(j1))
+    editor.remove()
+  })
+})
+
+// ── Image-reference helpers (slice 8, #36) ──────────────────────────────────
+
+describe('collectReferencedImageIds', () => {
+  it('returns image ids deduped in content order; empty without image blocks', () => {
+    const doc = parse({
+      version: '1.0',
+      variables: [],
+      content: [
+        { type: 'paragraph', children: ['text'] },
+        { type: 'image', imageId: IMG_ID_2 },
+        { type: 'formula', latex: 'x' },
+        { type: 'image', imageId: IMG_ID },
+        { type: 'image', imageId: IMG_ID_2 },
+      ],
+    })
+    expect(collectReferencedImageIds(doc)).toEqual([IMG_ID_2, IMG_ID])
+    expect(collectReferencedImageIds(emptyEditorDocumentJson())).toEqual([])
+  })
+})
+
+describe('emptyEditorDocumentJson', () => {
+  it('produces a schema-valid canonical empty document (the anchor-draft content)', () => {
+    const doc = emptyEditorDocumentJson()
+    expect(DocumentJsonSchema.safeParse(doc).success).toBe(true)
+    expect(doc).toEqual({ version: '1.0', variables: [], content: [], library: [] })
   })
 })

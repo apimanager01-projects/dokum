@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 
 type AuditAction = 'create' | 'update' | 'delete' | 'grant' | 'revoke'
-type EntityType = 'kurs' | 'unit' | 'task' | 'document' | 'entitlement' | 'editor_document'
+type EntityType = 'kurs' | 'unit' | 'task' | 'document' | 'entitlement' | 'editor_document' | 'editor_image'
 
 type AuditParams = {
   actorId: string

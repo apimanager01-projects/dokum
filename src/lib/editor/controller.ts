@@ -41,7 +41,12 @@
  *     (`patch-output-as-input-latex-fix-v1`, L2698) via field-resolver.ts,
  *     which also subsumes the `*` → `\,\cdot\,` display patch (L2641); the
  *     DOM side here is only the `fieldGraph.setLatexValue` write-back
- *     adapter and the `resolveForDisplay` seam.
+ *     adapter and the `resolveForDisplay` seam;
+ *   - image insertion (slice 8, #36) — file picker `handleImageSelect`
+ *     (L1170) and the Strg+V paste handler (L1429), base script, never
+ *     patched. Approved deviation: images upload to private storage via the
+ *     `uploadImage` hook and render through the signed-URL proxy route —
+ *     never as base64 (PRD hard constraint; details at insertImageFromFile).
  *
  * React renders the mount container childless and never reconciles inside it;
  * this controller owns the entire subtree (export area, contenteditable
@@ -51,6 +56,7 @@
  * Browser-only module — must never import the DAL or other server-only code.
  */
 
+import { ALLOWED_IMAGE_MIMES, MAX_FILE_SIZE_BYTES, editorImageUrl } from '@/lib/constants'
 import {
   classifyTypedPlaceholder,
   fieldDisplay,
@@ -76,6 +82,19 @@ export interface StyleObject {
   backgroundColor?: string
   fontSize?: string
   fontWeight?: string
+}
+
+/**
+ * Server seams of the controller (slice 8, #36). The React shell wires them
+ * to server actions; the controller itself must stay free of server imports.
+ */
+export interface EditorControllerHooks {
+  /**
+   * Uploads an image file to private storage (creating the implicit
+   * „Unbenannt" anchor draft server-side when needed) and resolves with the
+   * `editor_images` id the document JSON will reference.
+   */
+  uploadImage(file: File): Promise<{ ok: true; imageId: string } | { ok: false; error: string }>
 }
 
 export interface EditorController {
@@ -113,6 +132,14 @@ export interface EditorController {
   /** „Editor zurücksetzen" — clears all content after a confirm dialog. */
   resetEditor(): void
   /**
+   * „Bild einfügen"-Toolbar-Button / Strg+V (slice 8, #36): inserts a visible
+   * `.image-block` immediately (blob: preview — no base64 ever enters the
+   * DOM) and uploads the file through the `uploadImage` hook; on success the
+   * block points at the signed-URL proxy route, on failure it is removed
+   * again. Invalid type/size → German alert, nothing inserted.
+   */
+  insertImageFromFile(file: File, alt?: string): void
+  /**
    * Serialises the live document (blocks, field state, formula library) to
    * versioned JSON — the draft-save payload (slice 7, #35).
    */
@@ -149,7 +176,10 @@ function errorMessage(err: unknown): string {
   return String(err)
 }
 
-export function createEditorController(container: HTMLElement): EditorController {
+export function createEditorController(
+  container: HTMLElement,
+  hooks: EditorControllerHooks
+): EditorController {
   // --- Static skeleton (imperative DOM; the React reconciler never sees it) ---
   // The LaTeX modal is part of the skeleton (PRD: modals stay DOM-driven).
   // It must live inside the container so the `.latex-editor #latexOverlay`
@@ -1397,6 +1427,7 @@ export function createEditorController(container: HTMLElement): EditorController
     const result = importEditorJson(doc, editor, {
       nextFieldId,
       resolvePlaceholders: resolveForDisplay,
+      imageUrl: editorImageUrl,
     })
 
     // Library restore — the document's list is authoritative (slice-7 schema
@@ -1487,15 +1518,100 @@ export function createEditorController(container: HTMLElement): EditorController
     }
   }
 
-  // Guard until slice 8: swallow pasted image items so no base64 <img> can
-  // enter the document (the PRD forbids base64 image payloads; slice 8
-  // replaces this with the upload-to-storage flow).
+  // --- Bilder: Datei-Picker + Strg+V (slice 8, #36; reference L1170–1191,
+  // L1429–1454). Deviation from the reference's FileReader flow (approved in
+  // #36 planning): the immediate preview is a blob: object URL instead of a
+  // base64 data URL — no base64 string ever exists in the DOM — and the src
+  // is swapped to the signed-URL proxy route once the upload returns. The
+  // serializer only ever reads data-image-id, never src.
+
+  const pendingObjectUrls = new Set<string>()
+
+  function releaseObjectUrl(url: string) {
+    if (pendingObjectUrls.delete(url)) URL.revokeObjectURL(url)
+  }
+
+  function createImageBlockElement(previewSrc: string, alt: string): HTMLElement {
+    const block = document.createElement('div')
+    block.className = 'image-block is-uploading'
+    block.setAttribute('draggable', 'true')
+    const handle = document.createElement('span')
+    handle.className = 'drag-handle'
+    handle.setAttribute('contenteditable', 'false')
+    handle.textContent = '❚❚'
+    const img = document.createElement('img')
+    img.src = previewSrc
+    img.alt = alt
+    img.setAttribute('contenteditable', 'false')
+    block.appendChild(handle)
+    block.appendChild(img)
+    return block
+  }
+
+  async function insertImageFromFile(file: File, alt?: string): Promise<void> {
+    // Client-side pre-check (German messages, #36 acceptance criterion) —
+    // also protects the 4-MB server-action body limit. Wording matches the
+    // server action's own validation.
+    if (!(ALLOWED_IMAGE_MIMES as readonly string[]).includes(file.type)) {
+      window.alert(`"${file.name}" ist kein unterstütztes Bildformat (JPEG, PNG, GIF, WebP).`)
+      return
+    }
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      window.alert(
+        `"${file.name}" ist zu groß (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximal 4 MB pro Bild.`
+      )
+      return
+    }
+
+    // Sofort sichtbar einfügen (reference parity), Upload läuft im Hintergrund.
+    const objectUrl = URL.createObjectURL(file)
+    pendingObjectUrls.add(objectUrl)
+    const block = createImageBlockElement(objectUrl, alt ?? file.name ?? 'Bild')
+    const trailing = document.createElement('p')
+    trailing.innerHTML = '<br>'
+    insertBlockAtCursor(block, trailing)
+
+    const result = await hooks.uploadImage(file)
+    if (!result.ok) {
+      block.remove()
+      releaseObjectUrl(objectUrl)
+      window.alert(`Bild-Upload fehlgeschlagen: ${result.error}`)
+      return
+    }
+    const img = block.querySelector<HTMLImageElement>('img')
+    if (!img) {
+      // Block wurde während des Uploads gelöscht — die verwaiste Zeile räumt
+      // die Save-Reconciliation beim nächsten Speichern ab.
+      releaseObjectUrl(objectUrl)
+      return
+    }
+    // Vorschau → Storage-Referenz. Das blob: wird erst nach dem Laden der
+    // Proxy-Antwort freigegeben, damit der Block nie leer aufblitzt.
+    img.dataset['imageId'] = result.imageId
+    const finish = () => {
+      img.removeEventListener('load', finish)
+      img.removeEventListener('error', finish)
+      releaseObjectUrl(objectUrl)
+      block.classList.remove('is-uploading')
+    }
+    img.addEventListener('load', finish)
+    img.addEventListener('error', finish)
+    img.src = editorImageUrl(result.imageId)
+  }
+
+  // Strg+V für Bilder (reference L1429): das erste image/*-Item wird als
+  // Datei eingefügt; preventDefault verhindert, dass der Browser ein
+  // base64-<img> in den Text schreibt (PRD-Verbot).
   const onPaste = (e: ClipboardEvent) => {
     const items = e.clipboardData?.items
     if (!items) return
     for (const item of Array.from(items)) {
       if (item.type && item.type.startsWith('image/')) {
         e.preventDefault()
+        const file = item.getAsFile()
+        if (!file) continue
+        saveSelection()
+        void insertImageFromFile(file, 'pasted')
         return
       }
     }
@@ -1773,6 +1889,8 @@ export function createEditorController(container: HTMLElement): EditorController
       el.removeEventListener('dragover', onFieldDragOverCapture, true)
       el.removeEventListener('drop', onFieldDropCapture, true)
     }
+    for (const url of pendingObjectUrls) URL.revokeObjectURL(url)
+    pendingObjectUrls.clear()
     dragEl = null
     dropIndicator = null
     inlineDropCaret = null
@@ -1790,6 +1908,9 @@ export function createEditorController(container: HTMLElement): EditorController
     insertInputField: () => insertField('input'),
     insertOutputField: () => insertField('output'),
     resetEditor,
+    insertImageFromFile: (file: File, alt?: string) => {
+      void insertImageFromFile(file, alt)
+    },
     exportDocument,
     loadDocument,
     destroy,

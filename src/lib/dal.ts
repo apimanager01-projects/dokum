@@ -247,6 +247,20 @@ export async function getEditorDocumentById(draftId: string): Promise<EditorDocu
   return data ?? null
 }
 
+// Used by /api/editor-image/[imageId] route (slice 8). RLS is admin-only, so
+// non-admins get no row here regardless of the route's own role check.
+export async function getEditorImageFilePath(
+  imageId: string
+): Promise<{ file_path: string } | null> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('editor_images')
+    .select('file_path')
+    .eq('id', imageId)
+    .single()
+  return data ?? null
+}
+
 // ── Entitlement queries ─────────────────────────────────────────────────────
 
 // Returns the set of unit IDs the current user has access to via a paid

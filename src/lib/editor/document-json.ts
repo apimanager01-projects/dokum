@@ -18,12 +18,15 @@
  *        (stored `[output:x]` results and drag-created output-reference
  *        pills);
  *      - block type `code` (the reference importer had no `pre` mapping, but
- *        the editor creates `<pre>` blocks via „Als Codeblock" / formatBlock).
- *    Deliberately NOT in v1.0: `image` blocks. The reference importer
- *    accepted `{ type:'image', src }`, but accepting arbitrary `src` would
- *    let base64 payloads into drafts (PRD forbids that); slice 8 (#36)
- *    extends the schema to storage references. The schema is strict at the
- *    boundary (unknown block types are rejected).
+ *        the editor creates `<pre>` blocks via „Als Codeblock" / formatBlock);
+ *      - block type `image` (slice 8, #36) as a STORAGE REFERENCE: the
+ *        reference importer accepted `{ type:'image', src }`, but accepting
+ *        arbitrary `src` would let base64 payloads into drafts (PRD forbids
+ *        that). v1.0 image blocks carry only `imageId` — the `editor_images`
+ *        row id served by the signed-URL proxy route — so base64 is
+ *        structurally impossible; reference exports with embedded `src`
+ *        images are rejected at the boundary by design. The schema stays
+ *        strict (unknown keys and block types are rejected).
  *
  * 2. `importEditorJson` — ported from the reference importer (L2388–2608).
  *    Consolidation deviations (approved in #35 planning):
@@ -172,12 +175,26 @@ const CodeBlockSchema = z.strictObject({
   style: StyleSchema.optional(),
 })
 
+/**
+ * Slice-8 storage-reference image block (#36). Deliberately NO `src` field —
+ * `strictObject` rejects it, which is what makes base64 image payloads
+ * structurally impossible in drafts (PRD hard constraint). `imageId` is the
+ * `editor_images` row id; the browser URL is derived via the import adapter.
+ */
+const ImageBlockSchema = z.strictObject({
+  type: z.literal('image'),
+  imageId: z.string().uuid('Ungültige Bildreferenz.'),
+  alt: z.string().optional(),
+  style: StyleSchema.optional(),
+})
+
 const BlockSchema = z.discriminatedUnion('type', [
   ParagraphBlockSchema,
   HeadingBlockSchema,
   ListBlockSchema,
   FormulaBlockSchema,
   CodeBlockSchema,
+  ImageBlockSchema,
 ])
 
 const VariableSchema = z.strictObject({
@@ -261,6 +278,12 @@ export interface ImportAdapters {
    * serializer never reads the resolved value).
    */
   resolvePlaceholders(raw: string): string
+  /**
+   * Browser URL for a stored editor image (slice 8): the controller passes
+   * `editorImageUrl` (the signed-URL proxy route); tests pass a stub. The
+   * serializer never reads the URL back — only `data-image-id`.
+   */
+  imageUrl(imageId: string): string
 }
 
 export interface ImportResult {
@@ -469,7 +492,7 @@ function createInlineNodes(children: InlineNode[] | undefined, ctx: InlineContex
 function createBlock(
   block: EditorDocumentBlock,
   ctx: InlineContext,
-  resolvePlaceholders: (raw: string) => string,
+  adapters: ImportAdapters,
   renderTargets: HTMLElement[]
 ): HTMLElement {
   const docEl = ctx.docEl
@@ -495,7 +518,7 @@ function createBlock(
     el.className = 'formula-block'
     el.setAttribute('draggable', 'true')
     const rawLatex = strictText(block.latex || block.rawLatex)
-    const resolved = resolvePlaceholders(rawLatex)
+    const resolved = adapters.resolvePlaceholders(rawLatex)
     const handle = docEl.createElement('span')
     handle.className = 'drag-handle'
     handle.setAttribute('contenteditable', 'false')
@@ -521,6 +544,23 @@ function createBlock(
       cap.appendChild(createInlineNodes(capChildren, ctx))
       el.appendChild(cap)
     }
+  } else if (block.type === 'image') {
+    // Slice-8 storage-reference image block (reference image branch, L2555 —
+    // with the base64/arbitrary `src` replaced by the proxy URL of `imageId`).
+    el = docEl.createElement('div')
+    el.className = 'image-block'
+    el.setAttribute('draggable', 'true')
+    const handle = docEl.createElement('span')
+    handle.className = 'drag-handle'
+    handle.setAttribute('contenteditable', 'false')
+    handle.textContent = '❚❚'
+    const img = docEl.createElement('img')
+    img.src = adapters.imageUrl(block.imageId)
+    img.alt = strictText(block.alt)
+    img.setAttribute('contenteditable', 'false')
+    img.dataset['imageId'] = block.imageId
+    el.appendChild(handle)
+    el.appendChild(img)
   } else if (block.type === 'code') {
     // Slice-7 extension: the editor's <pre> blocks (codeblock insert / formatBlock).
     el = docEl.createElement('pre')
@@ -578,7 +618,7 @@ export function importEditorJson(
   const ctx: InlineContext = { docEl: editor.ownerDocument, fieldByName, fieldById }
   const renderTargets: HTMLElement[] = []
   for (const block of blocks) {
-    const node = createBlock(block, ctx, adapters.resolvePlaceholders, renderTargets)
+    const node = createBlock(block, ctx, adapters, renderTargets)
     editor.insertBefore(node, store)
   }
 
@@ -743,6 +783,19 @@ function serializeBlockElement(el: HTMLElement): EditorDocumentBlock {
     if (cap) block.caption = { children: serializeInlineChildren(cap) }
     return withBlockStyle(block, el)
   }
+  if (el.classList.contains('image-block')) {
+    // Only data-image-id is read — the src (proxy URL or transient blob:
+    // preview) never enters the JSON. Blocks without an id are skipped by
+    // serializeEditorState before this runs.
+    const img = el.querySelector<HTMLElement>('img[data-image-id]')
+    const block: Extract<EditorDocumentBlock, { type: 'image' }> = {
+      type: 'image',
+      imageId: img?.dataset['imageId'] ?? '',
+    }
+    const alt = img?.getAttribute('alt') ?? ''
+    if (alt) block.alt = alt
+    return withBlockStyle(block, el)
+  }
   // <p>, generic <div> lines and anything unknown → paragraph.
   return withBlockStyle({ type: 'paragraph', children: serializeInlineChildren(el) }, el)
 }
@@ -822,6 +875,14 @@ export function serializeEditorState(editor: HTMLElement, library: string[]): Ed
     if (el.classList.contains('drop-indicator') || el.classList.contains('inline-drop-caret')) {
       continue
     }
+    // Image block still uploading (blob: preview, no data-image-id yet) — it
+    // has no storage reference to persist. Saves are blocked while uploads
+    // are in flight (slice-8 decision), so this guard only covers the
+    // failed-upload window before the block is removed. Must run before the
+    // BLOCK_TAGS branch: the block is a DIV.
+    if (el.classList.contains('image-block') && !el.querySelector('img[data-image-id]')) {
+      continue
+    }
     if (BLOCK_TAGS.has(el.tagName) || el.classList.contains('formula-block')) {
       flushInline()
       content.push(serializeBlockElement(el))
@@ -838,4 +899,32 @@ export function serializeEditorState(editor: HTMLElement, library: string[]): Ed
     content,
     library: [...library],
   }
+}
+
+// ── Image-reference helpers (slice 8, #36) ──────────────────────────────────
+
+/**
+ * The `editor_images` ids referenced by a document's image blocks, deduped,
+ * in content order. `updateEditorDraft` uses this for save-time
+ * reconciliation: rows of the draft that are no longer referenced are deleted
+ * together with their storage objects.
+ */
+export function collectReferencedImageIds(doc: EditorDocumentJson): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const block of doc.content) {
+    if (block.type !== 'image' || seen.has(block.imageId)) continue
+    seen.add(block.imageId)
+    out.push(block.imageId)
+  }
+  return out
+}
+
+/**
+ * Canonical empty document — the content of the implicit „Unbenannt" anchor
+ * draft that `uploadEditorImage` creates when an image is inserted before the
+ * first save (an anchor row only, never content autosave).
+ */
+export function emptyEditorDocumentJson(): EditorDocumentJson {
+  return { version: '1.0', variables: [], content: [], library: [] }
 }

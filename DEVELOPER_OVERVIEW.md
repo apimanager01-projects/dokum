@@ -184,7 +184,7 @@ src/
 │   │   ├── number-format.ts       # German display formatting (formatValue)
 │   │   ├── export-filename.ts     # PNG filename builder (Term + 1-based tree ordinals) + Document-title seed — pure
 │   │   ├── png-export.ts          # PNG export pipeline → Blob (SVG raster at 2×, html2canvas; browser-only)
-│   │   ├── mathjax-loader.ts      # Bundled MathJax loader — config set BEFORE the dynamic tex-svg import (browser-only)
+│   │   ├── mathjax-loader.ts      # Bundled MathJax loader — config set BEFORE the dynamic tex-svg-full import (full build: color macros need it; browser-only)
 │   │   ├── mathjax.d.ts           # Minimal type declarations for the bundled MathJax component
 │   │   └── *.test.ts              # Colocated Vitest golden tests (parity contract with the standalone editor)
 │   ├── supabase/
@@ -441,6 +441,8 @@ Set `published = true/false` in the `kurse` table. All child items inherit visib
 | Editor field or formula shows `Err` | Circular reference or invalid expression | By design: the evaluator returns NaN on any parse/eval error and the resolver breaks cycles — fix the expression or reference in the field modal |
 | PNG export fails / editor images missing in the PNG | Image not served same-origin | Editor images must load via `/api/editor-image/[imageId]` (streaming route) — any cross-origin URL taints the html2canvas canvas |
 | „Als Dokument speichern" disabled | Draft never saved, or image upload in flight | Publishing requires a saved draft; saves (and thus publish) are blocked while uploads are pending |
+| Draft content older than the published PNG | Pre-#40 behavior | No longer possible: publish persists the draft first (publish implies save, ExportBar → saveDraft) |
+| Color in LaTeX shows an error box | Formula uses the legacy `\textcolor[HTML]{…}` syntax | MathJax v3 has no HTML color model — re-apply color via the toolbar (emits `\textcolor{#HEX}{…}` / `\colorbox{#HEX}{$…$}`) |
 | Publish rejected: PNG too large | 2×-rendered PNG exceeds the 4 MB limit | The size guard offers a reduced 1× export; beyond that the document must be shortened or split (Vercel body ceiling — the limit cannot be raised) |
 | Typed `[input:x]` stays plain text | Conversion is a 1-second interval sweep | Wait a second; if it still doesn't convert, check the placeholder syntax for typos |
 

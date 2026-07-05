@@ -6,7 +6,7 @@
 
 ## Quick Facts
 
-- **Status**: v4.0 (foundation refactor complete, production-ready)
+- **Status**: v4.3 (LaTeX editor integrated into the admin panel — PRD #28)
 - **Repository**: git (`master` branch is stable; feature work on separate branches)
 - **Tech Stack**: Next.js 16 + React 19 + TypeScript 5 + Tailwind CSS 4
 - **Backend/Database**: Supabase (PostgreSQL + Auth + Storage)
@@ -178,9 +178,14 @@ src/
 │   │   ├── document-json.ts       # Versioned Zod schema (v1.0) + ported importer + serializer (draft JSON)
 │   │   ├── expression-evaluator.ts # CSP-safe math tokenizer/parser — replaces new Function; errors → NaN
 │   │   ├── latex-normalise.ts     # LaTeX→expression translation + auto-expression extraction
+│   │   ├── field-resolver.ts      # Input/Output field graph: value resolution, cycle → Err, output-as-input rule — pure
+│   │   ├── latex-display.ts       # LaTeX display cleanup (cleanupLatex, `*` → `\,\cdot\,`) — pure
+│   │   ├── library-sync.ts        # Formula-library entry sync after formula edits — pure
 │   │   ├── number-format.ts       # German display formatting (formatValue)
 │   │   ├── export-filename.ts     # PNG filename builder (Term + 1-based tree ordinals) + Document-title seed — pure
 │   │   ├── png-export.ts          # PNG export pipeline → Blob (SVG raster at 2×, html2canvas; browser-only)
+│   │   ├── mathjax-loader.ts      # Bundled MathJax loader — config set BEFORE the dynamic tex-svg import (browser-only)
+│   │   ├── mathjax.d.ts           # Minimal type declarations for the bundled MathJax component
 │   │   └── *.test.ts              # Colocated Vitest golden tests (parity contract with the standalone editor)
 │   ├── supabase/
 │   │   ├── server.ts              # Supabase SSR client (server/proxy)
@@ -190,6 +195,8 @@ src/
 └── types/
     └── index.ts                   # TypeScript interfaces + ActionResult<T> union
 ```
+
+Outside `src/`: `supabase/` holds the SQL migrations (see [Database Migrations](#database-migrations)), and `latexEditor/` holds the committed standalone reference editor (PRD #28) — the port's behavioral ground truth, still runnable in a plain browser.
 
 ## Key Patterns
 
@@ -265,7 +272,7 @@ The document routes verify:
 1. User is authenticated
 2. If not admin: the document's parent course is published (join query up to `kurse.published`)
 
-Short-lived signed URLs (60s) are generated server-side. The document routes redirect to the signed URL; the editor-image route instead fetches it server-side and **streams** the body, so the browser only ever sees a same-origin response — that is what lets the PNG export (html2canvas) rasterise editor images without CORS handling or canvas tainting. Supabase URLs are never exposed to the browser.
+Short-lived signed URLs (60s) are generated server-side. The document routes respond with a single 302 redirect to the signed URL (the link dies after 60 s); the editor-image route instead fetches it server-side and **streams** the body, so the browser only ever sees a same-origin response — that is what lets the PNG export (html2canvas) rasterise editor images without CORS handling or canvas tainting. Signed Supabase URLs are never stored, embedded in content, or exposed beyond that one redirect.
 
 ### Error & Loading Boundaries
 
@@ -313,6 +320,7 @@ All magic values live in `src/lib/constants.ts`:
 | `ALLOWED_IMAGE_MIMES` | `['image/jpeg', ...]` | Accepted image types |
 | `ALLOWED_FILE_MIMES` | `['application/pdf', ...]` | Accepted file types |
 | `MIME_TO_EXT` | `Record<string, string>` | MIME → file extension map |
+| `editorImageUrl(imageId)` | `` `/api/editor-image/${imageId}` `` | Single source for editor-image browser URLs (controller, JSON importer, proxy route) |
 
 ## Dependencies
 
@@ -360,7 +368,7 @@ npm test             # run all unit tests once
 npm run test:watch   # watch mode
 ```
 
-Conventions: tests are colocated `*.test.ts` files next to their modules and assert **external behavior only** (inputs → outputs, no internal call structure). They run in a plain Node environment; DOM-dependent suites (later PRD #28 slices) opt into a DOM environment per file via a `@vitest-environment` docblock. The editor-module tests under `src/lib/editor/` are golden cases generated from the standalone reference editor (`latexEditor/*.html`) and double as the React port's parity contract — expected values must not be changed without checking the reference behavior first.
+Conventions: tests are colocated `*.test.ts` files next to their modules and assert **external behavior only** (inputs → outputs, no internal call structure). The default environment is plain Node; DOM-dependent suites opt into jsdom per file via a `@vitest-environment jsdom` docblock — currently `document-json.test.ts`, whose importer builds real DOM. The editor-module tests under `src/lib/editor/` are golden cases generated from the standalone reference editor (`latexEditor/*.html`) and double as the React port's parity contract — expected values must not be changed without checking the reference behavior first.
 
 ### Two Supabase Projects
 
@@ -429,6 +437,12 @@ Set `published = true/false` in the `kurse` table. All child items inherit visib
 | PDF won't open in iPhone Safari | Content-Disposition | Route sets `{ download: false }` in signed URL — ensure it stays |
 | Admin role not working after grant | JWT not refreshed | User must sign out and back in |
 | TypeScript error on DAL import in client | `server-only` guard | Move the import to a server component or action |
+| Editor formulas don't render | MathJax chunk failed or config set too late | `mathjax-loader.ts` must set `window.MathJax` config **before** the dynamic import — check the console for chunk 404s / CSP violations |
+| Editor field or formula shows `Err` | Circular reference or invalid expression | By design: the evaluator returns NaN on any parse/eval error and the resolver breaks cycles — fix the expression or reference in the field modal |
+| PNG export fails / editor images missing in the PNG | Image not served same-origin | Editor images must load via `/api/editor-image/[imageId]` (streaming route) — any cross-origin URL taints the html2canvas canvas |
+| „Als Dokument speichern" disabled | Draft never saved, or image upload in flight | Publishing requires a saved draft; saves (and thus publish) are blocked while uploads are pending |
+| Publish rejected: PNG too large | 2×-rendered PNG exceeds the 4 MB limit | The size guard offers a reduced 1× export; beyond that the document must be shortened or split (Vercel body ceiling — the limit cannot be raised) |
+| Typed `[input:x]` stays plain text | Conversion is a 1-second interval sweep | Wait a second; if it still doesn't convert, check the placeholder syntax for typos |
 
 ## File Reference Guide
 
@@ -444,8 +458,11 @@ Set `published = true/false` in the `kurse` table. All child items inherit visib
 | Admin form components | `src/components/admin/{Kurs,Unit,Task,Document}Form.tsx` |
 | Admin tree visualizer | `src/components/admin/AdminTree.tsx` |
 | File proxy routes | `src/app/api/file/[docId]/route.ts`, `src/app/api/image/[imageId]/route.ts`, `src/app/api/editor-image/[imageId]/route.ts` |
+| LaTeX editor core (controller + pure modules) | `src/lib/editor/*` |
+| LaTeX editor UI (page, shell, toolbar, export, drafts) | `src/app/admin/editor/*`, `src/components/admin/editor/*` |
+| Standalone reference editor (parity ground truth) | `latexEditor/*.html` |
 | Error/loading boundaries | `src/app/**/error.tsx`, `src/app/**/loading.tsx` |
 
 ---
 
-**Last Updated**: 2026-07-05 | **Version**: 4.2
+**Last Updated**: 2026-07-05 | **Version**: 4.3

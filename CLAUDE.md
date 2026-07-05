@@ -16,7 +16,7 @@ npm run lint     # ESLint (eslint-config-next 16)
 npm test         # Vitest (dev-only) — colocated *.test.ts unit tests
 ```
 
-Tests run via Vitest ([vitest.config.ts](vitest.config.ts)) in a plain Node environment: colocated `*.test.ts` files next to their modules, currently the pure DOM-free editor modules in [src/lib/editor/](src/lib/editor/). The editor-module tests are golden cases derived from the standalone reference editor and act as the port's parity contract — don't "fix" expected values without checking the reference behavior.
+Tests run via Vitest ([vitest.config.ts](vitest.config.ts)): colocated `*.test.ts` files next to their modules, currently the editor modules in [src/lib/editor/](src/lib/editor/). Default environment is plain Node; DOM-dependent suites opt into jsdom per file via a `@vitest-environment jsdom` docblock (currently `document-json.test.ts`). The editor-module tests are golden cases derived from the standalone reference editor ([latexEditor/](latexEditor/)) and act as the port's parity contract — don't "fix" expected values without checking the reference behavior.
 
 ## Stack
 
@@ -33,15 +33,16 @@ These are load-bearing and easy to violate accidentally:
 - **Server actions return `ActionResult<T>`** — the discriminated union `{ ok: true; data: T } | { ok: false; error: string }` from [src/types/index.ts](src/types/index.ts). Don't introduce ad-hoc `{ error?, success? }` shapes.
 - **All server-action input flows through Zod** ([src/lib/schemas.ts](src/lib/schemas.ts)) before touching the DB. Form field `name` attributes must match schema keys exactly.
 - **Audit log every admin mutation.** After the primary DB op succeeds, call `logAdminAction()` from [src/lib/audit.ts](src/lib/audit.ts). Failures are logged but never block. The `audit_logs` table is admin-readable and immutable (no UPDATE/DELETE policy).
-- **Files are never served directly from Supabase.** Storage bucket `pdfs` is private; access goes through [src/app/api/file/[docId]/route.ts](src/app/api/file/[docId]/route.ts) and [src/app/api/image/[imageId]/route.ts](src/app/api/image/[imageId]/route.ts), which generate 60-second signed URLs server-side and stream the response. Don't expose Supabase URLs to the browser.
+- **Files are never served directly from Supabase.** Storage bucket `pdfs` is private; access goes through [src/app/api/file/[docId]/route.ts](src/app/api/file/[docId]/route.ts) and [src/app/api/image/[imageId]/route.ts](src/app/api/image/[imageId]/route.ts) (60-second signed URLs generated server-side, exposed only as a single 302 redirect) and [src/app/api/editor-image/[imageId]/route.ts](src/app/api/editor-image/[imageId]/route.ts), which instead **streams** the body so editor images stay same-origin (html2canvas export must not taint the canvas). Never store Supabase URLs in content or hand them to the browser beyond that one redirect.
 - **Revalidate after every admin mutation.** Use `revalidateAdminPages()` from `_shared.ts` — it busts all four admin pages plus the root layout. Skipping this leaves stale tree views.
 - **Body size limit is duplicated and must stay in sync.** `MAX_FILE_SIZE_BYTES` in [src/lib/constants.ts](src/lib/constants.ts) and `experimental.serverActions.bodySizeLimit` in [next.config.ts](next.config.ts) both say 4 MB. Change both together.
 - **CSP is set in [next.config.ts](next.config.ts).** Adding external scripts/styles/fonts/images requires updating `connect-src`/`script-src`/etc. there.
+- **The LaTeX editor's surface is imperative.** `/admin/editor` mounts [src/lib/editor/controller.ts](src/lib/editor/controller.ts) once into a contenteditable container; React must never reconcile inside it (it would destroy the cursor and user-typed DOM). Editor drafts (`editor_documents`/`editor_images`) live outside the Kurs hierarchy until published; draft JSON stores image **ids**, never base64. Expressions run through the pure evaluator — no `eval`/`new Function` — and MathJax/html2canvas are bundled exact-pinned (the CSP forbids CDNs and eval).
 
 ## Adding an admin action
 
 1. Add the Zod schema to [src/lib/schemas.ts](src/lib/schemas.ts).
-2. Implement the action in the matching `src/actions/admin/{kurse,units,tasks,documents}.ts` file. Start with `const { supabase, user } = await getAdminUser()`.
+2. Implement the action in the matching `src/actions/admin/{kurse,units,tasks,documents,editor-documents,editor-images,editor-publish}.ts` file. Start with `const { supabase, user } = await getAdminUser()`.
 3. Validate FormData via `parseForm(schema, formData, [...fields])`.
 4. Call `logAdminAction(...)` after the primary op succeeds.
 5. Call `revalidateAdminPages()` (or a narrower `revalidatePath`) before returning.
@@ -60,7 +61,7 @@ The dev project is a free playground — break it freely. The prod project has r
 
 ## Database changes
 
-Migrations are plain SQL in [supabase/](supabase/) — apply via the Supabase SQL editor or CLI. Order matters: `migration.sql`, then `add_audit_log.sql`, then `add_entitlements.sql`, then `add_editor_documents.sql`. There is no migration runner; new migrations must be applied manually.
+Migrations are plain SQL in [supabase/](supabase/) — apply via the Supabase SQL editor or CLI. Order matters: `migration.sql`, then `add_audit_log.sql`, then `add_entitlements.sql`, then `add_editor_documents.sql`, then `add_editor_images.sql`. There is no migration runner; new migrations must be applied manually.
 
 **Workflow for a new migration:** apply to **dev first** via `mcp__supabase__apply_migration`, verify with `get_advisors` and a quick read, then have the user apply the same migration to prod manually (MCP cannot reach prod — see below).
 

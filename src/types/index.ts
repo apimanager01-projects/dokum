@@ -67,6 +67,27 @@ export interface KursWithUnits extends Kurs {
   units: UnitWithTasks[]
 }
 
+// ── Editor drafts (PRD #28) ─────────────────────────────────────────────────
+
+// Draft documents of the LaTeX editor. Live outside the Kurs → Unit → Task →
+// Document hierarchy until published (published_document_id links the
+// resulting Document; SET NULL when that Document is deleted).
+export interface EditorDocument {
+  id: string
+  title: string
+  /** Versioned document JSON — validated against DocumentJsonSchema at both boundaries. */
+  content: unknown
+  published_document_id: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type EditorDocumentListItem = Pick<
+  EditorDocument,
+  'id' | 'title' | 'created_at' | 'updated_at' | 'published_document_id'
+>
+
 // ── Server action result types ──────────────────────────────────────────────
 
 export type ActionSuccess<T = void> = { ok: true; data: T }
@@ -79,7 +100,7 @@ export interface AuditLog {
   id: string
   actor_id: string
   action: 'create' | 'update' | 'delete' | 'grant' | 'revoke'
-  entity_type: 'kurs' | 'unit' | 'task' | 'document' | 'entitlement'
+  entity_type: 'kurs' | 'unit' | 'task' | 'document' | 'entitlement' | 'editor_document'
   entity_id: string
   entity_title: string | null
   metadata: Record<string, unknown> | null

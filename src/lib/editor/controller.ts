@@ -61,6 +61,11 @@ import {
   type FieldGraph,
   type LineToken,
 } from './field-resolver'
+import {
+  importEditorJson,
+  serializeEditorState,
+  type EditorDocumentJson,
+} from './document-json'
 import { cleanupLatex } from './latex-display'
 import { librarySyncAction, shouldAddToLibrary } from './library-sync'
 import { loadMathJax } from './mathjax-loader'
@@ -107,6 +112,17 @@ export interface EditorController {
   insertOutputField(): void
   /** „Editor zurücksetzen" — clears all content after a confirm dialog. */
   resetEditor(): void
+  /**
+   * Serialises the live document (blocks, field state, formula library) to
+   * versioned JSON — the draft-save payload (slice 7, #35).
+   */
+  exportDocument(): EditorDocumentJson
+  /**
+   * Replaces the editor content and the formula library with a saved
+   * document (draft load, slice 7). Resolves once every formula is
+   * MathJax-rendered and the field state is refreshed.
+   */
+  loadDocument(doc: EditorDocumentJson): Promise<void>
   /** Removes document-level listeners and empties the mount container. */
   destroy(): void
 }
@@ -1368,6 +1384,45 @@ export function createEditorController(container: HTMLElement): EditorController
     }
   }
 
+  // --- Draft persistence (slice 7, #35) ---
+
+  function exportDocument(): EditorDocumentJson {
+    return serializeEditorState(
+      editor,
+      libraryItems().map((it) => it.dataset['latex'] ?? '')
+    )
+  }
+
+  async function loadDocument(doc: EditorDocumentJson): Promise<void> {
+    const result = importEditorJson(doc, editor, {
+      nextFieldId,
+      resolvePlaceholders: resolveForDisplay,
+    })
+
+    // Library restore — the document's list is authoritative (slice-7 schema
+    // extension); addToLibrary dedups. Empty text ← reference L2581.
+    libraryList.innerHTML =
+      '<div class="library-empty">Noch keine Formeln in der Bibliothek.</div>'
+    for (const latex of result.libraryLatex) {
+      await addToLibrary(latex)
+    }
+
+    // Post-import render pass — the reference's per-block setTimeout renders
+    // (L2550) and its reRenderAllLatexFormulasOutputInputAware hook (L2731)
+    // consolidated into one loop: every formula renders once, and the
+    // [output:x] write-backs run in document order so formula n+1 sees
+    // formula n's fresh values.
+    const targets = editor.querySelectorAll<HTMLElement>('.render-target[data-raw-latex]')
+    for (const target of Array.from(targets)) {
+      const raw = target.dataset['rawLatex'] ?? ''
+      if (!raw) continue
+      const resolved = resolveForDisplay(raw)
+      target.dataset['latex'] = resolved
+      await renderLatexInElement(target, resolved)
+    }
+    updateAllFields()
+  }
+
   // --- Tab zum Einrücken ---
   function insertTabAtCursor() {
     const sel = window.getSelection()
@@ -1735,6 +1790,8 @@ export function createEditorController(container: HTMLElement): EditorController
     insertInputField: () => insertField('input'),
     insertOutputField: () => insertField('output'),
     resetEditor,
+    exportDocument,
+    loadDocument,
     destroy,
   }
 }

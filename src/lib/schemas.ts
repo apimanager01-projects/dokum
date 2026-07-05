@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { DocumentJsonSchema } from '@/lib/editor/document-json'
 
 // ── Shared field definitions ────────────────────────────────────────────────
 
@@ -45,6 +46,30 @@ export const DocumentUpdateMetaSchema = z.object({
   position: positionField,
 })
 
+// Editor drafts (PRD #28, slice 7). German messages — the editor UI is
+// German end to end. `content` arrives as a JSON string in FormData and is
+// validated against the versioned document schema before touching the DB
+// (operator story 34).
+export const EditorDraftFormSchema = z.object({
+  title: z
+    .string()
+    .trim()
+    .min(1, 'Titel ist erforderlich.')
+    .max(200, 'Titel darf höchstens 200 Zeichen lang sein.'),
+  content: z
+    .string()
+    .max(3_000_000, 'Der Entwurf ist zu groß.')
+    .transform((raw, ctx) => {
+      try {
+        return JSON.parse(raw) as unknown
+      } catch {
+        ctx.addIssue({ code: 'custom', message: 'Ungültiges Dokument-JSON.' })
+        return z.NEVER
+      }
+    })
+    .pipe(DocumentJsonSchema),
+})
+
 // ── Auth schemas ────────────────────────────────────────────────────────────
 
 export const SignInSchema = z.object({
@@ -65,3 +90,4 @@ export type UnitFormData = z.infer<typeof UnitFormSchema>
 export type TaskFormData = z.infer<typeof TaskFormSchema>
 export type DocumentMetaData = z.infer<typeof DocumentMetaSchema>
 export type DocumentUpdateMetaData = z.infer<typeof DocumentUpdateMetaSchema>
+export type EditorDraftFormData = z.infer<typeof EditorDraftFormSchema>

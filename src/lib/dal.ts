@@ -1,6 +1,6 @@
 import 'server-only'
 import { createClient } from '@/lib/supabase/server'
-import type { Kurs, KursWithUnits, UnitWithTasks } from '@/types'
+import type { EditorDocument, EditorDocumentListItem, Kurs, KursWithUnits, UnitWithTasks } from '@/types'
 
 // ── Shared sort utility ─────────────────────────────────────────────────────
 function sortByPosition<T extends { position: number; created_at: string }>(items: T[]): T[] {
@@ -219,6 +219,30 @@ export async function getImageFilePath(
     .from('document_images')
     .select('file_path')
     .eq('id', imageId)
+    .single()
+  return data ?? null
+}
+
+// ── Editor draft queries (PRD #28, slice 7) ─────────────────────────────────
+
+// Draft list for /admin/editor — RLS is admin-only and deliberately not
+// filtered by created_by, so both admins see all drafts. Drafts have no
+// `position`; the list sorts by last modification (here, in the DAL).
+export async function getEditorDocuments(): Promise<EditorDocumentListItem[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('editor_documents')
+    .select('id, title, created_at, updated_at, published_document_id')
+    .order('updated_at', { ascending: false })
+  return data ?? []
+}
+
+export async function getEditorDocumentById(draftId: string): Promise<EditorDocument | null> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('editor_documents')
+    .select('*')
+    .eq('id', draftId)
     .single()
   return data ?? null
 }

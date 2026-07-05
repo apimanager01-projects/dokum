@@ -40,6 +40,7 @@ export function revalidateAdminPages() {
   revalidatePath('/admin/units/new')
   revalidatePath('/admin/tasks/new')
   revalidatePath('/admin/documents/new')
+  revalidatePath('/admin/editor')
   revalidatePath('/', 'layout')
 }
 

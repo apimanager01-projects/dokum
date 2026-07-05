@@ -65,8 +65,9 @@ Kurs (Course)
 | `tasks` | Unit assignments | `id`, `unit_id` (FK), `title`, `description`, `position`, `created_at` |
 | `documents` | PDFs/images | `id`, `task_id` (FK), `title`, `description`, `file_path`, `file_type` (`pdf`\|`image`\|`image_collection`), `position`, `created_at` |
 | `document_images` | Image collection items | `id`, `document_id` (FK CASCADE), `file_path`, `position`, `created_at` |
-| `audit_logs` | Admin + purchase action log | `id`, `actor_id` (FK auth.users), `action` (`create`\|`update`\|`delete`\|`grant`\|`revoke`), `entity_type` (incl. `entitlement`), `entity_id`, `entity_title`, `metadata` (JSONB), `created_at` |
+| `audit_logs` | Admin + purchase action log | `id`, `actor_id` (FK auth.users), `action` (`create`\|`update`\|`delete`\|`grant`\|`revoke`), `entity_type` (incl. `entitlement`, `editor_document`), `entity_id`, `entity_title`, `metadata` (JSONB), `created_at` |
 | `entitlements` | Per-(user, unit) paid access | `id`, `user_id` (FK auth.users), `unit_id` (FK units), `granted_at`, `source` (`purchase`\|`admin`), `stripe_session_id` |
+| `editor_documents` | LaTeX-editor drafts (PRD #28; outside the Kurs hierarchy until published) | `id`, `title`, `content` (JSONB, versioned document JSON), `published_document_id` (FK documents, SET NULL), `created_by` (FK auth.users, SET NULL), `created_at`, `updated_at` (trigger-maintained) |
 
 ### Row-Level Security (RLS)
 
@@ -80,6 +81,7 @@ Kurs (Course)
 | `entitlements` | SELECT own rows or admin; INSERT/DELETE where role = admin (webhook inserts via service-role) | Users see their grants; admins manage |
 | `storage.objects` (`pdfs` bucket) | INSERT/DELETE where bucket = `pdfs` and role = admin; SELECT requires entitlement for the unit owning the path | File access matches in-DB access |
 | `audit_logs` | SELECT/INSERT where role = admin; no UPDATE/DELETE | Immutable audit trail; admin-readable only |
+| `editor_documents` | SELECT/INSERT/UPDATE/DELETE where role = admin (not filtered by `created_by`) | Drafts are admin-only; both admins see and edit all drafts |
 
 ## Project Structure
 
@@ -92,6 +94,7 @@ src/
 │   │   ├── units.ts               # createUnit, updateUnit, deleteUnit
 │   │   ├── tasks.ts               # createTask, updateTask, deleteTask
 │   │   ├── documents.ts           # createDocument, updateDocument, deleteDocument
+│   │   ├── editor-documents.ts    # createEditorDraft, updateEditorDraft, deleteEditorDraft
 │   │   └── index.ts               # Re-exports all actions
 │   └── auth.ts                    # signIn, signUp, signOut
 ├── app/
@@ -159,6 +162,7 @@ src/
 │   ├── audit.ts                   # logAdminAction() — fire-and-forget audit log writer
 │   ├── editor/                    # LaTeX editor (PRD #28): imperative core + pure modules
 │   │   ├── controller.ts          # Imperative contenteditable controller (browser-only)
+│   │   ├── document-json.ts       # Versioned Zod schema (v1.0) + ported importer + serializer (draft JSON)
 │   │   ├── expression-evaluator.ts # CSP-safe math tokenizer/parser — replaces new Function; errors → NaN
 │   │   ├── latex-normalise.ts     # LaTeX→expression translation + auto-expression extraction
 │   │   ├── number-format.ts       # German display formatting (formatValue)
@@ -269,6 +273,9 @@ Every major route segment has scoped `error.tsx` and `loading.tsx` files. A fail
 | `createDocument` | `documents.ts` | Upload file + insert Document record |
 | `updateDocument` | `documents.ts` | Update metadata, optionally replace file |
 | `deleteDocument` | `documents.ts` | Delete Document record + storage file(s) |
+| `createEditorDraft` | `editor-documents.ts` | Insert editor draft (validated document JSON); returns the new id |
+| `updateEditorDraft` | `editor-documents.ts` | Update draft title + content (`updated_at` via trigger) |
+| `deleteEditorDraft` | `editor-documents.ts` | Delete editor draft (image cleanup arrives with slice 8) |
 
 All actions: validate input via Zod → auth check via `getAdminUser()` → database operation → audit log → revalidate cache.
 
@@ -355,6 +362,7 @@ Migrations live in `supabase/`. Apply them in order — first to dev (Supabase S
 | `migration.sql` | Initial schema (all tables, RLS, storage policies) |
 | `add_audit_log.sql` | Audit log table and policies |
 | `add_entitlements.sql` | `entitlements` table + RLS rewire so tasks/documents/storage require a purchase |
+| `add_editor_documents.sql` | `editor_documents` drafts table (admin-only RLS, `updated_at` trigger) + audit `entity_type` extension |
 
 ## Common Tasks
 
@@ -419,4 +427,4 @@ Set `published = true/false` in the `kurse` table. All child items inherit visib
 
 ---
 
-**Last Updated**: 2026-05-03 | **Version**: 4.0
+**Last Updated**: 2026-07-05 | **Version**: 4.1

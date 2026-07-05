@@ -172,6 +172,18 @@ export function EditorToolbar({
           Editor zurücksetzen
         </button>
       </div>
+      <div className="sep" />
+      <div className="group">
+        {/* Reference L2369–2386: the JSON-import patch appends its own toolbar
+            group with an "Add JSON" button (label parity, German tooltip). */}
+        <button
+          type="button"
+          title="JSON-Dokument importieren"
+          onClick={() => ctrl()?.openJsonImportModal()}
+        >
+          Add JSON
+        </button>
+      </div>
     </div>
   )
 }

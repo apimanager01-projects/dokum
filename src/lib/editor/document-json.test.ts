@@ -19,7 +19,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   DocumentJsonSchema,
+  JSON_IMPORT_EXAMPLE,
   collectReferencedImageIds,
+  describeDocumentJsonError,
   emptyEditorDocumentJson,
   importEditorJson,
   serializeEditorState,
@@ -211,6 +213,104 @@ describe('DocumentJsonSchema', () => {
       library: ['a+b'],
     }
     expect(DocumentJsonSchema.safeParse(doc).success).toBe(true)
+  })
+})
+
+// ── JSON import modal boundary helpers (slice 9, #37) ───────────────────────
+
+describe('JSON_IMPORT_EXAMPLE', () => {
+  it('matches the reference JSON_IMPORT_EXAMPLE verbatim (drift guard, L2310–2328)', () => {
+    expect(JSON_IMPORT_EXAMPLE).toEqual(REFERENCE_EXAMPLE)
+  })
+
+  it('validates against the schema and imports (the modal „Beispiel laden" path)', () => {
+    const parsed = parse(JSON.parse(JSON.stringify(JSON_IMPORT_EXAMPLE, null, 2)))
+    const editor = makeEditor()
+    const result = importEditorJson(parsed, editor, makeAdapters())
+    // Per-formula library flag (no top-level list in the example): the EBIT
+    // formula lands in the library exactly once.
+    expect(result.libraryLatex).toEqual([
+      '\\begin{aligned}EBIT &= [input:Revenue] * [input:Margin] = [output:EBIT]\\end{aligned}',
+    ])
+    expect(editor.querySelectorAll('.input-field, .output-field').length).toBeGreaterThan(0)
+    editor.remove()
+  })
+})
+
+describe('describeDocumentJsonError', () => {
+  function describeFor(doc: unknown): string {
+    const result = DocumentJsonSchema.safeParse(doc)
+    if (result.success) throw new Error('expected a schema failure')
+    return describeDocumentJsonError(result.error, doc)
+  }
+
+  it('non-object roots get the German root-shape message', () => {
+    const expected = 'Das JSON muss ein Objekt mit { version, variables, content } sein.'
+    expect(describeFor('kein objekt')).toBe(expected)
+    expect(describeFor([1, 2])).toBe(expected)
+    expect(describeFor(null)).toBe(expected)
+    expect(describeFor(42)).toBe(expected)
+  })
+
+  it('wrong or missing version → German version message', () => {
+    const expected = 'Nicht unterstützte Schema-Version — erwartet wird "1.0".'
+    expect(describeFor({ ...REFERENCE_EXAMPLE, version: '2.0' })).toBe(expected)
+    const withoutVersion: Record<string, unknown> = { ...REFERENCE_EXAMPLE }
+    delete withoutVersion['version']
+    expect(describeFor(withoutVersion)).toBe(expected)
+  })
+
+  it('reference-style image blocks with embedded src → German imageId hint', () => {
+    const srcOnly = {
+      version: '1.0',
+      variables: [],
+      content: [{ type: 'image', src: 'data:image/png;base64,AAAA' }],
+    }
+    const msg = describeFor(srcOnly)
+    expect(msg).toContain('"imageId"')
+    expect(msg).toContain('"src"')
+    // Also when imageId is present but src sneaks in alongside it.
+    const both = {
+      version: '1.0',
+      variables: [],
+      content: [{ type: 'image', imageId: IMG_ID, src: 'data:x' }],
+    }
+    expect(describeFor(both)).toBe(msg)
+  })
+
+  it('passes through the schema’s own German messages (custom issues)', () => {
+    const dupes = {
+      version: '1.0',
+      variables: [
+        { id: 'a', type: 'input', name: 'X', value: 1 },
+        { id: 'b', type: 'input', name: 'x', value: 2 },
+      ],
+      content: [],
+    }
+    expect(describeFor(dupes)).toBe(
+      'Doppelter Variablenname im JSON: "x". Variablennamen müssen eindeutig sein.'
+    )
+  })
+
+  it('other violations get the German lead-in plus the issue path', () => {
+    const unknownBlock = { version: '1.0', variables: [], content: [{ type: 'video' }] }
+    const msg = describeFor(unknownBlock)
+    expect(msg).toContain('Das JSON entspricht nicht dem Dokumentformat (Version 1.0)')
+    expect(msg).toContain('content[0]')
+
+    const missingVariables = { version: '1.0', content: [] }
+    expect(describeFor(missingVariables)).toContain('variables')
+  })
+
+  it('translates unrecognized-keys violations', () => {
+    const extraKey = {
+      version: '1.0',
+      variables: [],
+      content: [{ type: 'code', text: 'x', bogus: true }],
+    }
+    const msg = describeFor(extraKey)
+    expect(msg).toContain('content[0]')
+    expect(msg).toContain('Unbekannte Eigenschaft(en): "bogus"')
   })
 })
 

@@ -46,7 +46,16 @@
  *     (L1170) and the Strg+V paste handler (L1429), base script, never
  *     patched. Approved deviation: images upload to private storage via the
  *     `uploadImage` hook and render through the signed-URL proxy route —
- *     never as base64 (PRD hard constraint; details at insertImageFromFile).
+ *     never as base64 (PRD hard constraint; details at insertImageFromFile);
+ *   - JSON import modal (slice 9, #37) — the "BIG FEATURE: JSON import"
+ *     script (L2306–2623) with its `importEditorJson` wrapper patch
+ *     (L2745–2752) inlined: `importDocument` runs the ported importer
+ *     (document-json.ts) and then `reRenderAllLatexFormulas` — the port of
+ *     `reRenderAllLatexFormulasOutputInputAware` (L2731–2743), deferred from
+ *     slice 6. Deviation (approved in #37 planning): the modal validates
+ *     pasted JSON against the strict DocumentJsonSchema at the boundary
+ *     (operator story 34) instead of the reference's lenient any-object
+ *     import; errors surface via window.alert as in the reference.
  *
  * React renders the mount container childless and never reconciles inside it;
  * this controller owns the entire subtree (export area, contenteditable
@@ -68,6 +77,9 @@ import {
   type LineToken,
 } from './field-resolver'
 import {
+  DocumentJsonSchema,
+  JSON_IMPORT_EXAMPLE,
+  describeDocumentJsonError,
   importEditorJson,
   serializeEditorState,
   type EditorDocumentJson,
@@ -150,6 +162,12 @@ export interface EditorController {
    * MathJax-rendered and the field state is refreshed.
    */
   loadDocument(doc: EditorDocumentJson): Promise<void>
+  /**
+   * „Add JSON"-Toolbar-Button (slice 9, #37): öffnet das JSON-Import-Modal
+   * (Textarea, „Beispiel laden", Ersetzen/Anhängen-Checkbox). Import läuft
+   * über die strikte DocumentJsonSchema-Validierung und `importDocument`.
+   */
+  openJsonImportModal(): void
   /** Removes document-level listeners and empties the mount container. */
   destroy(): void
 }
@@ -267,6 +285,24 @@ export function createEditorController(
     '<button type="button" class="primary" id="fieldSaveBtn">Übernehmen</button>' +
     '</div>' +
     '</div>' +
+    '</div>' +
+    // JSON-Import-Modal (slice 9, #37) ← reference L2336–2347. Like the field
+    // overlay it is a regular BLOCKING overlay, so background click-to-close
+    // (reference L2349) is live. The reference built it lazily on first open
+    // (ensureJsonModal); the port keeps it in the static skeleton like the
+    // other modals — behavior-identical, destroy() covers it for free.
+    '<div class="modal-overlay" id="jsonOverlay">' +
+    '<div class="modal">' +
+    '<h2>JSON importieren</h2>' +
+    '<textarea id="jsonInput" spellcheck="false" placeholder="JSON hier einfügen ..."></textarea>' +
+    '<div class="json-row"><label><input type="checkbox" id="jsonReplaceExisting" checked> Bestehenden Editor-Inhalt ersetzen</label></div>' +
+    '<div id="jsonImportHelp">Erwartete Struktur: <code>{ version, variables, content }</code>. Unterstützt u.a. <code>paragraph</code>, <code>heading</code>, <code>list</code>, <code>formula</code>, <code>image</code>, Inline-Text mit <code>style</code> und Feldreferenzen über <code>{ field: "Name" }</code>.</div>' +
+    '<div class="modal-actions">' +
+    '<button class="ghost" type="button" id="jsonCancelBtn">Abbrechen</button>' +
+    '<button type="button" id="jsonExampleBtn">Beispiel laden</button>' +
+    '<button class="primary" type="button" id="jsonImportBtn">Importieren</button>' +
+    '</div>' +
+    '</div>' +
     '</div>'
 
   const editor = container.querySelector<HTMLElement>('#editor')!
@@ -301,6 +337,12 @@ export function createEditorController(
   const fieldDeleteBtn = container.querySelector<HTMLButtonElement>('#fieldDeleteBtn')!
   const fieldCancelBtn = container.querySelector<HTMLButtonElement>('#fieldCancelBtn')!
   const fieldSaveBtn = container.querySelector<HTMLButtonElement>('#fieldSaveBtn')!
+  const jsonOverlay = container.querySelector<HTMLElement>('#jsonOverlay')!
+  const jsonInput = container.querySelector<HTMLTextAreaElement>('#jsonInput')!
+  const jsonReplaceExisting = container.querySelector<HTMLInputElement>('#jsonReplaceExisting')!
+  const jsonCancelBtn = container.querySelector<HTMLButtonElement>('#jsonCancelBtn')!
+  const jsonExampleBtn = container.querySelector<HTMLButtonElement>('#jsonExampleBtn')!
+  const jsonImportBtn = container.querySelector<HTMLButtonElement>('#jsonImportBtn')!
 
   // Mutable controller state. Kept as an object so drag & drop and later
   // slices (image insertion) share the same saved selection.
@@ -1414,7 +1456,7 @@ export function createEditorController(
     }
   }
 
-  // --- Draft persistence (slice 7, #35) ---
+  // --- Draft persistence (slice 7, #35) + JSON import (slice 9, #37) ---
 
   function exportDocument(): EditorDocumentJson {
     return serializeEditorState(
@@ -1423,26 +1465,15 @@ export function createEditorController(
     )
   }
 
-  async function loadDocument(doc: EditorDocumentJson): Promise<void> {
-    const result = importEditorJson(doc, editor, {
-      nextFieldId,
-      resolvePlaceholders: resolveForDisplay,
-      imageUrl: editorImageUrl,
-    })
-
-    // Library restore — the document's list is authoritative (slice-7 schema
-    // extension); addToLibrary dedups. Empty text ← reference L2581.
-    libraryList.innerHTML =
-      '<div class="library-empty">Noch keine Formeln in der Bibliothek.</div>'
-    for (const latex of result.libraryLatex) {
-      await addToLibrary(latex)
-    }
-
-    // Post-import render pass — the reference's per-block setTimeout renders
-    // (L2550) and its reRenderAllLatexFormulasOutputInputAware hook (L2731)
-    // consolidated into one loop: every formula renders once, and the
-    // [output:x] write-backs run in document order so formula n+1 sees
-    // formula n's fresh values.
+  // Port of reRenderAllLatexFormulasOutputInputAware (reference L2731–2743,
+  // deferred from slice 6), consolidated with the reference's per-block
+  // setTimeout renders (L2550): EVERY formula in the editor renders once —
+  // in merge mode that includes pre-existing formulas, exactly what the
+  // reference wrapper did — and the [output:x] write-backs run in document
+  // order so formula n+1 sees formula n's fresh values. The reference's
+  // trailing updateAllFields() + renderVariableList() collapse into
+  // updateAllFields(), which calls renderVariableList itself.
+  async function reRenderAllLatexFormulas(): Promise<void> {
     const targets = editor.querySelectorAll<HTMLElement>('.render-target[data-raw-latex]')
     for (const target of Array.from(targets)) {
       const raw = target.dataset['rawLatex'] ?? ''
@@ -1452,6 +1483,92 @@ export function createEditorController(
       await renderLatexInElement(target, resolved)
     }
     updateAllFields()
+  }
+
+  // Shared import path (ported importEditorJson L2569 + its wrapper patch
+  // L2745–2752): draft load (replace) and the JSON modal (replace or merge).
+  // The importer validates variable names BEFORE any DOM mutation, so a
+  // throw here leaves the editor untouched.
+  async function importDocument(
+    doc: EditorDocumentJson,
+    options: { replaceExisting: boolean }
+  ): Promise<void> {
+    const result = importEditorJson(
+      doc,
+      editor,
+      { nextFieldId, resolvePlaceholders: resolveForDisplay, imageUrl: editorImageUrl },
+      options
+    )
+
+    // Library restore — replace clears first (reference L2578–2582, empty
+    // text ← L2581); merge keeps existing entries. The document's own list
+    // is authoritative when present (slice-7 extension); addToLibrary dedups.
+    if (options.replaceExisting) {
+      libraryList.innerHTML =
+        '<div class="library-empty">Noch keine Formeln in der Bibliothek.</div>'
+    }
+    for (const latex of result.libraryLatex) {
+      await addToLibrary(latex)
+    }
+
+    await reRenderAllLatexFormulas()
+  }
+
+  async function loadDocument(doc: EditorDocumentJson): Promise<void> {
+    return importDocument(doc, { replaceExisting: true })
+  }
+
+  // --- JSON-Import-Modal (slice 9, #37; reference L2306–2623) ---
+
+  function openJsonImportModal() {
+    jsonOverlay.classList.add('open')
+    // Fokus nach dem Öffnen (reference L2356). Der Textarea-Inhalt bleibt
+    // über Öffnen/Schließen erhalten (reference parity).
+    setTimeout(() => jsonInput.focus(), 0)
+  }
+
+  function closeJsonImportModal() {
+    jsonOverlay.classList.remove('open')
+  }
+
+  function fillJsonExample() {
+    jsonInput.value = JSON.stringify(JSON_IMPORT_EXAMPLE, null, 2)
+  }
+
+  // Reference importJsonFromModal (L2610–2622). Boundary validation
+  // (operator story 34): pasted JSON goes through the STRICT versioned
+  // schema — the importer itself only ever sees valid documents. Every
+  // failure path alerts in German and leaves the editor untouched; the
+  // modal stays open so the admin can fix the JSON.
+  async function importJsonFromModal(): Promise<void> {
+    const raw = jsonInput.value.trim()
+    if (!raw) {
+      window.alert('Bitte JSON einfügen.')
+      return
+    }
+    let parsedJson: unknown
+    try {
+      parsedJson = JSON.parse(raw)
+    } catch (err) {
+      window.alert('JSON Import fehlgeschlagen:\nUngültiges JSON: ' + errorMessage(err))
+      return
+    }
+    const parsed = DocumentJsonSchema.safeParse(parsedJson)
+    if (!parsed.success) {
+      window.alert(
+        'JSON Import fehlgeschlagen:\n' + describeDocumentJsonError(parsed.error, parsedJson)
+      )
+      return
+    }
+    try {
+      await importDocument(parsed.data, { replaceExisting: jsonReplaceExisting.checked })
+    } catch (err) {
+      // Duplicate/colliding variable names — thrown before any DOM mutation
+      // (German messages from the importer).
+      window.alert('JSON Import fehlgeschlagen:\n' + errorMessage(err))
+      return
+    }
+    closeJsonImportModal()
   }
 
   // --- Tab zum Einrücken ---
@@ -1858,6 +1975,16 @@ export function createEditorController(
     if (e.target instanceof HTMLElement && e.target.id === 'fieldOverlay') closeFieldModal()
   })
 
+  jsonCancelBtn.addEventListener('click', closeJsonImportModal)
+  jsonExampleBtn.addEventListener('click', fillJsonExample)
+  jsonImportBtn.addEventListener('click', () => {
+    void importJsonFromModal()
+  })
+  // Hintergrund-Klick schließt das JSON-Modal (reference L2349).
+  jsonOverlay.addEventListener('click', (e) => {
+    if (e.target instanceof HTMLElement && e.target.id === 'jsonOverlay') closeJsonImportModal()
+  })
+
   // 1-Sekunden-Sweep (FINAL PATCH L2297): getippte Platzhalter umwandeln,
   // dann alle Felder aktualisieren; der Guard verhindert Überlappung.
   let sweepRunning = false
@@ -1913,6 +2040,7 @@ export function createEditorController(
     },
     exportDocument,
     loadDocument,
+    openJsonImportModal,
     destroy,
   }
 }

@@ -41,7 +41,14 @@
  *      - DOM is built via `createElement`/`dataset` on `editor.ownerDocument`
  *        instead of escaped `innerHTML` strings (equivalent output).
  *
- * 3. `serializeEditorState` — NEWLY WRITTEN (no reference counterpart; the
+ * 3. Boundary helpers for the JSON import modal (slice 9, #37):
+ *    `JSON_IMPORT_EXAMPLE` — the reference file's example document
+ *    (L2310–2328), verbatim — and `describeDocumentJsonError` — German
+ *    messages for failed schema parses. The modal validates pasted JSON
+ *    against the STRICT schema (operator story 34); the importer itself
+ *    stays reference-lenient for anything the schema admits.
+ *
+ * 4. `serializeEditorState` — NEWLY WRITTEN (no reference counterpart; the
  *    standalone editor could import JSON but never export it). Contract:
  *    export → import → export is byte-stable — for any serializer-produced
  *    J1, `JSON.stringify(J1) === JSON.stringify(serialize(import(J1)))`.
@@ -252,6 +259,120 @@ export const DocumentJsonSchema = z.strictObject({
 export type EditorDocumentJson = z.infer<typeof DocumentJsonSchema>
 export type EditorDocumentVariable = z.infer<typeof VariableSchema>
 export type EditorDocumentBlock = z.infer<typeof BlockSchema>
+
+// ── JSON import modal boundary helpers (slice 9, #37) ───────────────────────
+
+/**
+ * The reference file's `JSON_IMPORT_EXAMPLE` (L2310–2328), verbatim — the
+ * modal's „Beispiel laden" fills the textarea with this document. The test
+ * suite guards it against drift from the reference golden copy.
+ */
+export const JSON_IMPORT_EXAMPLE = {
+  version: '1.0',
+  meta: { title: 'Example JSON import' },
+  variables: [
+    { id: 'v_revenue', type: 'input', name: 'Revenue', value: 1200 },
+    { id: 'v_margin', type: 'input', name: 'Margin', value: 0.2534 },
+    { id: 'v_ebit', type: 'output', name: 'EBIT', expr: '' },
+  ],
+  content: [
+    {
+      type: 'heading',
+      level: 1,
+      children: [{ text: 'Imported valuation note', style: { color: '#00338D', bold: true } }],
+    },
+    {
+      type: 'paragraph',
+      children: [
+        { text: 'Revenue: ' },
+        { field: 'Revenue' },
+        { text: ' | Margin: ' },
+        { field: 'Margin' },
+      ],
+    },
+    {
+      type: 'formula',
+      latex: '\\begin{aligned}EBIT &= [input:Revenue] * [input:Margin] = [output:EBIT]\\end{aligned}',
+      library: true,
+    },
+    {
+      type: 'paragraph',
+      children: [{ text: 'Result: ', style: { bold: true } }, { field: 'EBIT' }],
+    },
+  ],
+} satisfies EditorDocumentJson
+
+/** `content[2].children[0]`-style dot/bracket path of a Zod issue. */
+function formatIssuePath(path: ReadonlyArray<PropertyKey>): string {
+  let out = ''
+  for (const seg of path) {
+    out += typeof seg === 'number' ? `[${seg}]` : out ? `.${String(seg)}` : String(seg)
+  }
+  return out
+}
+
+/** The issue with the longest path — the most specific location Zod reports. */
+function mostSpecificIssue(issues: z.ZodIssue[]): z.ZodIssue | undefined {
+  let best: z.ZodIssue | undefined
+  for (const issue of issues) {
+    if (!best || issue.path.length > best.path.length) best = issue
+  }
+  return best
+}
+
+/**
+ * German error message for a failed `DocumentJsonSchema` parse — shown by the
+ * JSON import modal. Pragmatic per the slice-9 decisions: German lead-in plus
+ * special-cased common failures (root shape, schema version, reference-style
+ * image blocks with embedded `src` — the whole import fails for those by
+ * design, base64 must stay structurally impossible). Other Zod detail
+ * messages may remain technical/English after the lead-in — matching the
+ * server boundary, which returns raw first-issue messages (parseForm).
+ *
+ * `raw` is the already-JSON.parsed input, used to detect the image-`src`
+ * case; it is never mutated.
+ */
+export function describeDocumentJsonError(error: z.ZodError, raw: unknown): string {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    return 'Das JSON muss ein Objekt mit { version, variables, content } sein.'
+  }
+
+  const issue = mostSpecificIssue(error.issues)
+  if (!issue) return 'Das JSON entspricht nicht dem Dokumentformat (Version 1.0).'
+
+  const path = issue.path
+  if (path[0] === 'version') {
+    return 'Nicht unterstützte Schema-Version — erwartet wird "1.0".'
+  }
+  if (path[0] === 'content' && typeof path[1] === 'number') {
+    const content = (raw as Record<string, unknown>)['content']
+    const block: unknown = Array.isArray(content) ? content[path[1]] : undefined
+    if (
+      block !== null &&
+      typeof block === 'object' &&
+      (block as Record<string, unknown>)['type'] === 'image' &&
+      'src' in (block as object)
+    ) {
+      return (
+        'Bild-Blöcke referenzieren gespeicherte Bilder über "imageId" — ' +
+        'eingebettete "src"-Bilder werden nicht unterstützt. ' +
+        'Bitte Bilder über „Bild einfügen" hochladen.'
+      )
+    }
+  }
+  // Own refine/superRefine messages are complete German sentences already
+  // (duplicate variable names, field-reference shape).
+  if (issue.code === 'custom' && issue.message) return issue.message
+
+  const detail =
+    issue.code === 'unrecognized_keys'
+      ? 'Unbekannte Eigenschaft(en): ' + issue.keys.map((k) => `"${k}"`).join(', ')
+      : issue.code === 'invalid_union'
+        ? 'Kein gültiger Block-/Inline-Knoten an dieser Stelle.'
+        : issue.message
+  const where = path.length ? formatIssuePath(path) : 'Dokument'
+  return `Das JSON entspricht nicht dem Dokumentformat (Version 1.0) — ${where}: ${detail}`
+}
 
 // ── Shared helpers (reference L2388–2390) ───────────────────────────────────
 

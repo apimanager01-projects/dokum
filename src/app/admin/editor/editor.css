@@ -655,6 +655,55 @@
   overflow-y: auto;
 }
 
+/* ----------------------------------------- JSON-Import-Modal (slice 9) */
+/* Port of the reference's #json-import-style-v1 block (L2303–2305). The
+   reference's `!important` on the modal width only fought its own base
+   rule — the scoped id selector wins here without it. */
+
+.latex-editor #jsonOverlay .modal {
+  width: min(860px, 94vw);
+  max-height: 88vh;
+  overflow: auto;
+}
+
+.latex-editor #jsonInput {
+  width: 100%;
+  min-height: 330px;
+  font-family: Consolas, monospace;
+  /* !important: beats the base modal-textarea rule (14px !important, the
+     iOS-zoom guard above) — the reference styles this textarea at 12px. */
+  font-size: 12px !important;
+  line-height: 1.4;
+  border: 1px solid #d7dce2;
+  border-radius: 10px;
+  padding: 10px;
+  resize: vertical;
+  background: #fbfdff;
+}
+
+.latex-editor #jsonImportHelp {
+  font-size: 11px;
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px solid #e8edf4;
+  border-radius: 10px;
+  padding: 10px;
+  margin-top: 8px;
+}
+
+.latex-editor .json-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #374151;
+}
+
+.latex-editor .json-row input {
+  margin: 0;
+}
+
 /* ------------------------------------------------------------- responsive */
 
 @media (max-width: 1120px) {

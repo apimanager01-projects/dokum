@@ -118,7 +118,7 @@ export interface EditorController {
   /**
    * Wraps the selection in a styled span (or an empty caret span). While the
    * LaTeX modal's textarea is focused, colour/highlight wrap the textarea
-   * selection in `\textcolor[HTML]{…}` / `\colorbox[HTML]{…}` instead.
+   * selection in `\textcolor{#…}{…}` / `\colorbox{#…}{…}` instead.
    */
   applyStyles(styles: StyleObject): void
   /** Font size in px (string from the toolbar select); no-op on ''. */
@@ -557,7 +557,15 @@ export function createEditorController(
     editingFormulaBlock = null
   }
 
-  // Wrappt LaTeX-Textarea-Auswahl mit \textcolor[HTML]{HEX} (kein "#", da das in math-mode bricht)
+  // Wrappt die LaTeX-Textarea-Auswahl in einen Farb-Befehl. Deviation vom
+  // Reference-Format `\textcolor[HTML]{HEX}` (#40): MathJax v3 kennt kein
+  // HTML-Farbmodell (nur rgb/RGB/gray → "Color model 'HTML' not defined"),
+  // und \colorbox akzeptiert gar kein Modell-Argument — die Referenz-Wraps
+  // haben also NIE gerendert. Stattdessen CSS-Durchreichung `{#HEX}`: nicht
+  // definierte Farbnamen nutzt das color-Package direkt als CSS-Wert
+  // (empirisch gegen das gepinnte 3.2.2 verifiziert, inkl. \colorbox und
+  // Verschachtelung; der Referenz-Kommentar „kein #, da das in math-mode
+  // bricht" trifft im Farb-Argument nicht zu).
   function wrapTextareaSelectionWithLatex(commandStart: string, commandEnd: string) {
     const start = latexInput.selectionStart
     const end = latexInput.selectionEnd
@@ -581,12 +589,12 @@ export function createEditorController(
 
   function applyLatexColor(hex: string) {
     const clean = (hex || '').replace('#', '').toUpperCase()
-    wrapTextareaSelectionWithLatex('\\textcolor[HTML]{' + clean + '}{', '}')
+    wrapTextareaSelectionWithLatex('\\textcolor{#' + clean + '}{', '}')
   }
 
   function applyLatexHighlight(hex: string) {
     const clean = (hex || '').replace('#', '').toUpperCase()
-    wrapTextareaSelectionWithLatex('\\colorbox[HTML]{' + clean + '}{', '}')
+    wrapTextareaSelectionWithLatex('\\colorbox{#' + clean + '}{', '}')
   }
 
   function updateLatexPreview() {

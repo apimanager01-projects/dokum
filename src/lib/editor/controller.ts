@@ -565,7 +565,10 @@ export function createEditorController(
   // definierte Farbnamen nutzt das color-Package direkt als CSS-Wert
   // (empirisch gegen das gepinnte 3.2.2 verifiziert, inkl. \colorbox und
   // Verschachtelung; der Referenz-Kommentar „kein #, da das in math-mode
-  // bricht" trifft im Farb-Argument nicht zu).
+  // bricht" trifft im Farb-Argument nicht zu). Der \colorbox-INHALT ist
+  // TeX-Text-Modus — das Highlight-Wrap steigt darum mit `$…$` wieder in
+  // den Math-Modus ein (Auswahl in der Formel ist praktisch immer Mathe;
+  // ohne $ hieße es „\frac is only supported in math mode").
   function wrapTextareaSelectionWithLatex(commandStart: string, commandEnd: string) {
     const start = latexInput.selectionStart
     const end = latexInput.selectionEnd
@@ -594,7 +597,7 @@ export function createEditorController(
 
   function applyLatexHighlight(hex: string) {
     const clean = (hex || '').replace('#', '').toUpperCase()
-    wrapTextareaSelectionWithLatex('\\colorbox{#' + clean + '}{', '}')
+    wrapTextareaSelectionWithLatex('\\colorbox{#' + clean + '}{$', '$}')
   }
 
   function updateLatexPreview() {

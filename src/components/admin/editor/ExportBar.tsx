@@ -49,8 +49,10 @@ import type { EditorTargetKurs } from '@/types'
  * 2× export exceeds it, a confirm offers the reduced 1× export — an
  * oversized request is NEVER sent (Vercel body ceiling, PRD decision).
  * Publishing requires a saved draft (`draftId` = mount identity; hint text
- * otherwise). Download and publish share ONE busy flag: both run the
- * DOM-swapping export pipeline and must never overlap.
+ * otherwise) and starts by persisting the live state through `saveDraft`
+ * (publish implies save, #40) so draft JSON and published PNG stay in sync.
+ * Download and publish share ONE busy flag: both run the DOM-swapping export
+ * pipeline and must never overlap.
  *
  * The Term value is lifted to EditorShell: it persists in the draft JSON as
  * `meta.term` on save (decision D11 reserved it for this slice) and reloads
@@ -73,6 +75,7 @@ export function ExportBar({
   draftId,
   publishedDocumentId,
   uploadsPending,
+  saveDraft,
 }: {
   controllerRef: RefObject<EditorController | null>
   targetTree: EditorTargetKurs[]
@@ -82,6 +85,8 @@ export function ExportBar({
   draftId: string | null
   publishedDocumentId: string | null
   uploadsPending: boolean
+  /** Persists the live editor state to the draft — publish implies save (#40). */
+  saveDraft: () => Promise<{ ok: true } | { ok: false; error: string }>
 }) {
   const router = useRouter()
   // Reference parity: preselect the first Kurs → Unit → Task; the initial
@@ -170,6 +175,17 @@ export function ExportBar({
     setBusy('publish')
     setPublishStatus({ kind: 'idle' })
     try {
+      // Publish implies save (#40 parity finding): persist the draft BEFORE
+      // exporting, so the stored JSON always matches the published PNG.
+      const saved = await saveDraft()
+      if (!saved.ok) {
+        setPublishStatus({
+          kind: 'error',
+          text: `Veröffentlichen fehlgeschlagen: Entwurf konnte nicht gespeichert werden: ${saved.error}`,
+        })
+        return
+      }
+
       // Render at the default 2× scale, then the size guard (slice 11): an
       // oversized request must never leave the browser — the Vercel body
       // ceiling makes raising the 4-MB limit impossible (PRD decision).

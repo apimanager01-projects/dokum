@@ -52,9 +52,12 @@ import { ExportBar } from './ExportBar'
  * draftIdRef: an anchor draft created mid-session by an image upload is not
  * an explicit save, and after the first real save the D6 navigation remounts
  * the shell with an initialDraft anyway. `uploadsPending` mirrors the save
- * button's guard. Publish does not join the op chain — it never touches
- * editor_images reconciliation (only the draft's published_document_id link,
- * server-side).
+ * button's guard.
+ *
+ * Publish implies save (#40 parity finding): the ExportBar calls `saveDraft`
+ * before exporting, so the published PNG and the stored draft JSON can never
+ * drift apart. That save joins the op chain like any other draft mutation;
+ * only the PNG export/publish itself stays outside it.
  */
 
 type SaveStatus = { kind: 'idle' | 'saved' | 'error'; text: string }
@@ -162,6 +165,33 @@ export function EditorShell({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [parsedDraft])
 
+  // Persists the live editor state into the existing draft row. Used by the
+  // publish flow (publish implies save); requires the draft to exist already
+  // — publish is only enabled once it does.
+  async function saveDraftForPublish(): Promise<{ ok: true } | { ok: false; error: string }> {
+    const controller = controllerRef.current
+    const draftId = draftIdRef.current
+    if (!controller || !draftId) return { ok: false, error: 'Kein gespeicherter Entwurf.' }
+
+    let contentJson: string
+    try {
+      contentJson = JSON.stringify(withDocumentMeta(controller.exportDocument(), term))
+    } catch {
+      return { ok: false, error: 'Inhalt konnte nicht serialisiert werden.' }
+    }
+    const formData = new FormData()
+    formData.set('title', title.trim() || 'Unbenannt')
+    formData.set('content', contentJson)
+
+    return enqueueOp(async () => {
+      const result = await updateEditorDraft(draftId, formData)
+      if (!result.ok) return { ok: false as const, error: result.error }
+      const time = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+      setStatus({ kind: 'saved', text: `Gespeichert (${time} Uhr)` })
+      return { ok: true as const }
+    })
+  }
+
   function handleSave() {
     const controller = controllerRef.current
     if (!controller || isPending || pendingUploads > 0) return
@@ -257,6 +287,7 @@ export function EditorShell({
         draftId={initialDraft?.id ?? null}
         publishedDocumentId={initialDraft?.publishedDocumentId ?? null}
         uploadsPending={pendingUploads > 0}
+        saveDraft={saveDraftForPublish}
       />
       {/* Imperative mount point — must stay childless in JSX (see PRD #28). */}
       <div ref={mountRef} />

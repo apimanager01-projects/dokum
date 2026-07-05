@@ -8,4 +8,4 @@
  * There are no module exports, hence the shorthand declaration; the typed
  * access happens in mathjax-loader.ts.
  */
-declare module 'mathjax/es5/tex-svg.js'
+declare module 'mathjax/es5/tex-svg-full.js'

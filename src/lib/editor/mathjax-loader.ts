@@ -3,10 +3,17 @@
  *
  * Replaces the standalone editor's CDN <script> + `waitForMathJax` polling
  * (reference file latexEditor/…, lines 6–12 and 987–995) with a bundled
- * dynamic import: `mathjax@3.2.2` is pinned exactly so the imported
- * es5/tex-svg.js is byte-identical to the file the CDN served — same
- * rendering, zero CDN request, CSP-clean (the chunk is served from 'self'
- * and the SVG output with fontCache 'none' makes no follow-up requests).
+ * dynamic import of `mathjax@3.2.2` (pinned exactly): zero CDN request,
+ * CSP-clean (the chunk is served from 'self' and the SVG output with
+ * fontCache 'none' makes no follow-up requests).
+ *
+ * The imported component is tex-svg-FULL, not the reference's tex-svg (#40
+ * parity fix): tex-svg contains only the autoload *mapping* for the color
+ * macros — the CDN setup lazily fetched [tex]/color when \textcolor/\colorbox
+ * was first used. Bundled + CSP-locked, that runtime fetch is impossible, so
+ * with tex-svg the color macros stayed undefined and `noundefined` rendered
+ * them as literal red text. tex-svg-full ships every TeX extension in the
+ * chunk; the `packages` config below activates color at startup, no network.
  *
  * The config MUST be assigned to `window.MathJax` before the component
  * script evaluates — the dynamic import is that ordering guarantee. The
@@ -81,7 +88,7 @@ export function loadMathJax(): Promise<MathJaxApi> {
       }
 
       try {
-        await import('mathjax/es5/tex-svg.js')
+        await import('mathjax/es5/tex-svg-full.js')
       } catch {
         throw new Error(LOAD_ERROR_MESSAGE)
       }

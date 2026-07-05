@@ -88,6 +88,7 @@ import { cleanupLatex } from './latex-display'
 import { librarySyncAction, shouldAddToLibrary } from './library-sync'
 import { loadMathJax } from './mathjax-loader'
 import { formatValue } from './number-format'
+import { exportAreaToPngBlob, type PngExportOptions } from './png-export'
 
 export interface StyleObject {
   color?: string
@@ -168,6 +169,15 @@ export interface EditorController {
    * über die strikte DocumentJsonSchema-Validierung und `importDocument`.
    */
   openJsonImportModal(): void
+  /**
+   * PNG-Export (slice 10, #38): rasterises every MathJax SVG at 2×, renders
+   * the export area with html2canvas (loaded as a code-split chunk on first
+   * use) and resolves with the PNG Blob — consumed by „Als PNG
+   * herunterladen" and (slice 11) by publishing. The editor DOM is fully
+   * restored on success and failure. `scale` (default 2) is the html2canvas
+   * render scale; slice 11's reduced-resolution fallback passes 1.
+   */
+  exportToPng(options?: PngExportOptions): Promise<Blob>
   /** Removes document-level listeners and empties the mount container. */
   destroy(): void
 }
@@ -2041,6 +2051,10 @@ export function createEditorController(
     exportDocument,
     loadDocument,
     openJsonImportModal,
+    // The pipeline lives in png-export.ts; the controller only supplies its
+    // own DOM (export area + scroll box stay encapsulated here).
+    exportToPng: (options?: PngExportOptions) =>
+      exportAreaToPngBlob(exportArea, editorScroll, options),
     destroy,
   }
 }

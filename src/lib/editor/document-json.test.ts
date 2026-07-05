@@ -25,6 +25,7 @@ import {
   emptyEditorDocumentJson,
   importEditorJson,
   serializeEditorState,
+  withDocumentMeta,
   type EditorDocumentJson,
   type ImportAdapters,
 } from './document-json'
@@ -1029,5 +1030,38 @@ describe('emptyEditorDocumentJson', () => {
     const doc = emptyEditorDocumentJson()
     expect(DocumentJsonSchema.safeParse(doc).success).toBe(true)
     expect(doc).toEqual({ version: '1.0', variables: [], content: [], library: [] })
+  })
+})
+
+// ── Save-time metadata (slice 10, #38) ──────────────────────────────────────
+
+describe('withDocumentMeta', () => {
+  it('attaches the trimmed term as meta.term and stays schema-valid', () => {
+    const doc = withDocumentMeta(emptyEditorDocumentJson(), '  SS26  ')
+    expect(doc.meta).toEqual({ term: 'SS26' })
+    expect(DocumentJsonSchema.safeParse(doc).success).toBe(true)
+  })
+
+  it('returns the document unchanged for a blank term (no empty meta emitted)', () => {
+    const base = emptyEditorDocumentJson()
+    expect(withDocumentMeta(base, '')).toBe(base)
+    expect(withDocumentMeta(base, '   ')).toBe(base)
+  })
+
+  it('does not mutate the input document', () => {
+    const base = emptyEditorDocumentJson()
+    const withMeta = withDocumentMeta(base, 'WS26')
+    expect(withMeta).not.toBe(base)
+    expect(base.meta).toBeUndefined()
+  })
+
+  it('meta is dropped by import → export (term is React-owned, re-injected each save)', () => {
+    // Documents the intended asymmetry: the importer ignores meta and the
+    // serializer never emits it, so serializeEditorState's byte-stability
+    // contract holds for the meta-free core of a meta-carrying document.
+    const doc = withDocumentMeta(emptyEditorDocumentJson(), 'SS26')
+    const roundTripped = roundTrip(doc)
+    expect(roundTripped.meta).toBeUndefined()
+    expect(JSON.stringify(roundTripped)).toBe(JSON.stringify(emptyEditorDocumentJson()))
   })
 })

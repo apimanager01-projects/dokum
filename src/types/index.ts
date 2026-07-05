@@ -97,6 +97,19 @@ export interface EditorImage {
   created_at: string
 }
 
+// Lean Kurs → Unit → Task tree for the editor's export/publish target
+// selection (slice 10 — filename ordinals; slice 11 — publish target).
+// Fetched by getEditorTargetTree() (DAL-sorted: position ASC, created_at
+// ASC); serializable, crosses the server→client boundary as a page prop.
+// The 1-based array index is the filename ordinal — NOT the raw `position`.
+export type EditorTargetTask = Pick<Task, 'id' | 'title' | 'position' | 'created_at'>
+export type EditorTargetUnit = Pick<Unit, 'id' | 'title' | 'position' | 'created_at'> & {
+  tasks: EditorTargetTask[]
+}
+export type EditorTargetKurs = Pick<Kurs, 'id' | 'title' | 'position' | 'created_at'> & {
+  units: EditorTargetUnit[]
+}
+
 // ── Server action result types ──────────────────────────────────────────────
 
 export type ActionSuccess<T = void> = { ok: true; data: T }

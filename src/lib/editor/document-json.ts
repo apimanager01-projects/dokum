@@ -225,7 +225,16 @@ const VariableSchema = z.strictObject({
 
 export const DocumentJsonSchema = z.strictObject({
   version: z.literal('1.0'),
-  /** Reserved (reference-compat + slice 10's Term field). The serializer never emits it — the draft title lives in the DB column. */
+  /**
+   * Save-time metadata. `term` is the ExportBar's free Term field (slice 10,
+   * #38): the React shell injects it via `withDocumentMeta` right before the
+   * save — `serializeEditorState` itself stays meta-free (its export→import→
+   * export byte-stability contract must keep holding), and the importer
+   * deliberately ignores meta, so a JSON-modal import never changes the Term
+   * field (accepted limitation; the Term reloads only with the draft).
+   * `title` is reference-compat only — the draft title lives in the DB
+   * column (single source of truth, decision D11).
+   */
   meta: z
     .strictObject({
       title: z.string().optional(),
@@ -1048,4 +1057,19 @@ export function collectReferencedImageIds(doc: EditorDocumentJson): string[] {
  */
 export function emptyEditorDocumentJson(): EditorDocumentJson {
   return { version: '1.0', variables: [], content: [], library: [] }
+}
+
+/**
+ * Attaches save-time metadata to a serialized document (slice 10, #38).
+ *
+ * `serializeEditorState` stays meta-free — its export→import→export
+ * byte-stability contract must keep holding, and the importer ignores meta —
+ * so the React shell injects the ExportBar's Term field here right before
+ * stringifying the save payload. A blank term returns the document unchanged
+ * (no empty `meta` object is ever emitted).
+ */
+export function withDocumentMeta(doc: EditorDocumentJson, term: string): EditorDocumentJson {
+  const trimmed = term.trim()
+  if (!trimmed) return doc
+  return { ...doc, meta: { term: trimmed } }
 }

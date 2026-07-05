@@ -4,8 +4,14 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { createEditorDraft, updateEditorDraft, uploadEditorImage } from '@/actions/admin'
 import { createEditorController, type EditorController } from '@/lib/editor/controller'
-import { DocumentJsonSchema, type EditorDocumentJson } from '@/lib/editor/document-json'
+import {
+  DocumentJsonSchema,
+  withDocumentMeta,
+  type EditorDocumentJson,
+} from '@/lib/editor/document-json'
+import type { EditorTargetKurs } from '@/types'
 import { EditorToolbar } from './EditorToolbar'
+import { ExportBar } from './ExportBar'
 
 /**
  * React shell of the LaTeX editor (PRD #28, Approach C).
@@ -31,6 +37,14 @@ import { EditorToolbar } from './EditorToolbar'
  * image reconciliation could delete the row the upload just inserted.
  * „Speichern" is additionally disabled while uploads are pending (#36
  * decision D3).
+ *
+ * PNG export (slice 10, #38): the ExportBar between toolbar and editor
+ * surface owns the target selection (real Kurs → Unit → Task tree, DAL-fed
+ * through the page) and the filename. Only the free Term field is
+ * draft-persisted — the shell owns its state, seeds it from the draft's
+ * `meta.term` at mount (frozen like parsedDraft; the key-remount reloads it),
+ * and injects it into the save payload via `withDocumentMeta`. The
+ * Kurs/Unit/Task selection is ephemeral per session (PRD decision).
  */
 
 type SaveStatus = { kind: 'idle' | 'saved' | 'error'; text: string }
@@ -41,7 +55,13 @@ export interface EditorShellDraft {
   content: unknown
 }
 
-export function EditorShell({ initialDraft }: { initialDraft?: EditorShellDraft }) {
+export function EditorShell({
+  initialDraft,
+  targetTree,
+}: {
+  initialDraft?: EditorShellDraft
+  targetTree: EditorTargetKurs[]
+}) {
   const mountRef = useRef<HTMLDivElement>(null)
   const controllerRef = useRef<EditorController | null>(null)
   const draftIdRef = useRef<string | null>(initialDraft?.id ?? null)
@@ -58,6 +78,13 @@ export function EditorShell({ initialDraft }: { initialDraft?: EditorShellDraft 
   })
 
   const [title, setTitle] = useState(initialDraft?.title ?? 'Unbenannt')
+  // ExportBar Term field (slice 10) — the only draft-persisted export state
+  // (meta.term). Seeded from the loaded draft; a JSON-modal import cannot
+  // reach this state, so an imported meta.term is ignored until the draft is
+  // saved and reopened (documented limitation).
+  const [term, setTerm] = useState(() =>
+    parsedDraft && parsedDraft !== 'invalid' ? (parsedDraft.meta?.term ?? '') : ''
+  )
   const [status, setStatus] = useState<SaveStatus>(() =>
     parsedDraft === 'invalid'
       ? { kind: 'error', text: 'Entwurf konnte nicht geladen werden: ungültiges Dokumentformat.' }
@@ -130,7 +157,9 @@ export function EditorShell({ initialDraft }: { initialDraft?: EditorShellDraft 
 
     let contentJson: string
     try {
-      contentJson = JSON.stringify(controller.exportDocument())
+      // Save payload = serialized editor state + save-time meta (the Term
+      // field, slice 10). The serializer itself stays meta-free.
+      contentJson = JSON.stringify(withDocumentMeta(controller.exportDocument(), term))
     } catch {
       setStatus({
         kind: 'error',
@@ -209,6 +238,12 @@ export function EditorShell({ initialDraft }: { initialDraft?: EditorShellDraft 
         </span>
       </div>
       <EditorToolbar controllerRef={controllerRef} />
+      <ExportBar
+        controllerRef={controllerRef}
+        targetTree={targetTree}
+        term={term}
+        onTermChange={setTerm}
+      />
       {/* Imperative mount point — must stay childless in JSX (see PRD #28). */}
       <div ref={mountRef} />
     </div>

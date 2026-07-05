@@ -1,6 +1,13 @@
 import 'server-only'
 import { createClient } from '@/lib/supabase/server'
-import type { EditorDocument, EditorDocumentListItem, Kurs, KursWithUnits, UnitWithTasks } from '@/types'
+import type {
+  EditorDocument,
+  EditorDocumentListItem,
+  EditorTargetKurs,
+  Kurs,
+  KursWithUnits,
+  UnitWithTasks,
+} from '@/types'
 
 // ── Shared sort utility ─────────────────────────────────────────────────────
 function sortByPosition<T extends { position: number; created_at: string }>(items: T[]): T[] {
@@ -245,6 +252,30 @@ export async function getEditorDocumentById(draftId: string): Promise<EditorDocu
     .eq('id', draftId)
     .single()
   return data ?? null
+}
+
+// Target tree for the editor's ExportBar (slice 10): Kurs → Unit → Task only
+// — deliberately not getAllKurseDeep(), which would drag every document +
+// image id into the client bundle for nothing. Sorted here in the DAL at
+// every level (invariant); the 1-based index in these arrays is the export
+// filename's ordinal.
+export async function getEditorTargetTree(): Promise<EditorTargetKurs[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('kurse')
+    .select(
+      'id, title, position, created_at, units(id, title, position, created_at, tasks(id, title, position, created_at))'
+    )
+    .order('position', { ascending: true })
+    .order('created_at', { ascending: true })
+  const kurse = (data ?? []) as EditorTargetKurs[]
+  kurse.forEach((k) => {
+    k.units = sortByPosition(k.units ?? [])
+    k.units.forEach((u) => {
+      u.tasks = sortByPosition(u.tasks ?? [])
+    })
+  })
+  return kurse
 }
 
 // Used by /api/editor-image/[imageId] route (slice 8). RLS is admin-only, so

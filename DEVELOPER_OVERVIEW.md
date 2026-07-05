@@ -128,7 +128,10 @@ src/
 │   │   ├── kurse/new/page.tsx     # Create/edit Kurs
 │   │   ├── units/new/page.tsx     # Create/edit Unit
 │   │   ├── tasks/new/page.tsx     # Create/edit Task
-│   │   └── documents/new/page.tsx # Create/edit Document
+│   │   ├── documents/new/page.tsx # Create/edit Document
+│   │   └── editor/                # LaTeX editor (PRD #28): draft list, editor shell, PNG export
+│   │       ├── page.tsx           #   loads draft + target tree via DAL, remounts shell per draftId
+│   │       └── editor.css         #   consolidated editor styles (Dokum-red rebrand)
 │   └── api/
 │       ├── file/[docId]/route.ts          # Auth-gated file proxy (PDFs/images)
 │       ├── image/[imageId]/route.ts       # Auth-gated image collection proxy
@@ -143,7 +146,12 @@ src/
 │   │   ├── TaskPageClient.tsx     # Client wrapper for Task admin page
 │   │   ├── DocumentPageClient.tsx # Client wrapper for Document admin page
 │   │   ├── AdminTree.tsx          # Generic nested tree visualizer
-│   │   └── AdminSubpageNav.tsx    # Tab navigation for admin subpages
+│   │   ├── AdminSubpageNav.tsx    # Tab navigation for admin subpages
+│   │   └── editor/                # LaTeX editor React shell (PRD #28)
+│   │       ├── EditorShell.tsx    #   save bar + Term state + imperative mount (controller)
+│   │       ├── EditorToolbar.tsx  #   rich-text toolbar (uncontrolled → controller)
+│   │       ├── ExportBar.tsx      #   Kurs/Unit/Task targets, Term, filename, „Als PNG herunterladen"
+│   │       └── DraftList.tsx      #   draft list with open/delete
 │   ├── auth/
 │   │   ├── LoginForm.tsx
 │   │   └── RegisterForm.tsx
@@ -170,6 +178,8 @@ src/
 │   │   ├── expression-evaluator.ts # CSP-safe math tokenizer/parser — replaces new Function; errors → NaN
 │   │   ├── latex-normalise.ts     # LaTeX→expression translation + auto-expression extraction
 │   │   ├── number-format.ts       # German display formatting (formatValue)
+│   │   ├── export-filename.ts     # PNG filename builder (Term + 1-based tree ordinals) — pure
+│   │   ├── png-export.ts          # PNG export pipeline → Blob (SVG raster at 2×, html2canvas; browser-only)
 │   │   └── *.test.ts              # Colocated Vitest golden tests (parity contract with the standalone editor)
 │   ├── supabase/
 │   │   ├── server.ts              # Supabase SSR client (server/proxy)
@@ -315,6 +325,8 @@ All magic values live in `src/lib/constants.ts`:
 | `server-only` | Build-time guard for server-only modules |
 | `yet-another-react-lightbox` | Image gallery/lightbox |
 | `clsx` + `tailwind-merge` | Conditional className helpers |
+| `mathjax` (exact `3.2.2`) | LaTeX → SVG rendering, bundled + code-split to the editor page (no CDN — CSP) |
+| `html2canvas` (exact `1.4.1`) | Editor PNG export rasterizer, bundled + code-split, loaded on first export (no CDN — CSP) |
 
 ## Running Locally
 
@@ -434,4 +446,4 @@ Set `published = true/false` in the `kurse` table. All child items inherit visib
 
 ---
 
-**Last Updated**: 2026-07-05 | **Version**: 4.1
+**Last Updated**: 2026-07-05 | **Version**: 4.2

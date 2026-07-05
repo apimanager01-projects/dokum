@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation'
 import { AdminSubpageNav } from '@/components/admin/AdminSubpageNav'
 import { DraftList } from '@/components/admin/editor/DraftList'
 import { EditorShell, type EditorShellDraft } from '@/components/admin/editor/EditorShell'
-import { getEditorDocumentById, getEditorDocuments } from '@/lib/dal'
+import { getEditorDocumentById, getEditorDocuments, getEditorTargetTree } from '@/lib/dal'
 import './editor.css'
 
 // Auth is enforced by the proxy (src/proxy.ts) — the single enforcement
@@ -22,6 +22,9 @@ export default async function AdminEditorPage({
   }
 
   const drafts = await getEditorDocuments()
+  // Kurs → Unit → Task targets for the ExportBar (slice 10; slice 11 reuses
+  // the selection for publishing). DAL-sorted — the client never re-sorts.
+  const targetTree = await getEditorTargetTree()
 
   return (
     <main className="mx-auto max-w-[1560px] px-4 py-10">
@@ -33,7 +36,7 @@ export default async function AdminEditorPage({
       <DraftList drafts={drafts} activeId={draftId} />
       {/* key: switching drafts (or leaving one) rebuilds the imperative
           editor — the established edit-page remount pattern. */}
-      <EditorShell key={draftId ?? 'new'} initialDraft={initialDraft} />
+      <EditorShell key={draftId ?? 'new'} initialDraft={initialDraft} targetTree={targetTree} />
     </main>
   )
 }

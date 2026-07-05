@@ -18,7 +18,12 @@ export default async function AdminEditorPage({
   if (draftId) {
     const draft = await getEditorDocumentById(draftId)
     if (!draft) notFound()
-    initialDraft = { id: draft.id, title: draft.title, content: draft.content }
+    initialDraft = {
+      id: draft.id,
+      title: draft.title,
+      content: draft.content,
+      publishedDocumentId: draft.published_document_id,
+    }
   }
 
   const drafts = await getEditorDocuments()

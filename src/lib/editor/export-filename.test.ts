@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { buildPngFilename, ensurePngFilename } from './export-filename'
+import { buildPngFilename, documentTitleFromFilename, ensurePngFilename } from './export-filename'
 
 describe('buildPngFilename', () => {
   it('builds the reference template term_C{k}_Unit{u}_MC{t}.png', () => {
@@ -68,5 +68,40 @@ describe('ensurePngFilename', () => {
   it('does not double the extension', () => {
     expect(ensurePngFilename('foo.png.png')).toBe('foo.png.png')
     expect(ensurePngFilename('foo.jpg')).toBe('foo.jpg.png')
+  })
+})
+
+describe('documentTitleFromFilename (slice 11 — publish title seed)', () => {
+  it('strips the .png extension from the built filename', () => {
+    expect(documentTitleFromFilename('SS26_C1_Unit2_MC3.png')).toBe('SS26_C1_Unit2_MC3')
+  })
+
+  it('strips the extension case-insensitively', () => {
+    expect(documentTitleFromFilename('EXPORT.PNG')).toBe('EXPORT')
+    expect(documentTitleFromFilename('Export.Png')).toBe('Export')
+  })
+
+  it('keeps names without a .png extension unchanged', () => {
+    expect(documentTitleFromFilename('meine-datei')).toBe('meine-datei')
+    expect(documentTitleFromFilename('foo.jpg')).toBe('foo.jpg')
+  })
+
+  it('strips only ONE trailing extension', () => {
+    expect(documentTitleFromFilename('foo.png.png')).toBe('foo.png')
+  })
+
+  it('keeps interior dots', () => {
+    expect(documentTitleFromFilename('a.b.png')).toBe('a.b')
+  })
+
+  it('trims surrounding whitespace', () => {
+    expect(documentTitleFromFilename('  datei.png  ')).toBe('datei')
+    expect(documentTitleFromFilename('  datei  ')).toBe('datei')
+  })
+
+  it('falls back to export for empty or bare-extension input', () => {
+    expect(documentTitleFromFilename('')).toBe('export')
+    expect(documentTitleFromFilename('   ')).toBe('export')
+    expect(documentTitleFromFilename('.png')).toBe('export')
   })
 })

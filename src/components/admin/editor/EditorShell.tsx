@@ -45,6 +45,16 @@ import { ExportBar } from './ExportBar'
  * `meta.term` at mount (frozen like parsedDraft; the key-remount reloads it),
  * and injects it into the save payload via `withDocumentMeta`. The
  * Kurs/Unit/Task selection is ephemeral per session (PRD decision).
+ *
+ * Publish (slice 11, #39): lives entirely in the ExportBar; the shell only
+ * threads the SAVED draft identity down. Publishing requires a saved draft —
+ * `draftId` is `initialDraft?.id` (mount identity), deliberately NOT the live
+ * draftIdRef: an anchor draft created mid-session by an image upload is not
+ * an explicit save, and after the first real save the D6 navigation remounts
+ * the shell with an initialDraft anyway. `uploadsPending` mirrors the save
+ * button's guard. Publish does not join the op chain — it never touches
+ * editor_images reconciliation (only the draft's published_document_id link,
+ * server-side).
  */
 
 type SaveStatus = { kind: 'idle' | 'saved' | 'error'; text: string }
@@ -53,6 +63,7 @@ export interface EditorShellDraft {
   id: string
   title: string
   content: unknown
+  publishedDocumentId: string | null
 }
 
 export function EditorShell({
@@ -243,6 +254,9 @@ export function EditorShell({
         targetTree={targetTree}
         term={term}
         onTermChange={setTerm}
+        draftId={initialDraft?.id ?? null}
+        publishedDocumentId={initialDraft?.publishedDocumentId ?? null}
+        uploadsPending={pendingUploads > 0}
       />
       {/* Imperative mount point — must stay childless in JSX (see PRD #28). */}
       <div ref={mountRef} />

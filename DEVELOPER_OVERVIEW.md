@@ -98,6 +98,7 @@ src/
 │   │   ├── documents.ts           # createDocument, updateDocument, deleteDocument
 │   │   ├── editor-documents.ts    # createEditorDraft, updateEditorDraft, deleteEditorDraft
 │   │   ├── editor-images.ts       # uploadEditorImage (implicit anchor draft, storage upload)
+│   │   ├── editor-publish.ts      # publishEditorDraft (PNG → Document; create / update-in-place)
 │   │   └── index.ts               # Re-exports all actions
 │   └── auth.ts                    # signIn, signUp, signOut
 ├── app/
@@ -129,7 +130,7 @@ src/
 │   │   ├── units/new/page.tsx     # Create/edit Unit
 │   │   ├── tasks/new/page.tsx     # Create/edit Task
 │   │   ├── documents/new/page.tsx # Create/edit Document
-│   │   └── editor/                # LaTeX editor (PRD #28): draft list, editor shell, PNG export
+│   │   └── editor/                # LaTeX editor (PRD #28): draft list, editor shell, PNG export, publish
 │   │       ├── page.tsx           #   loads draft + target tree via DAL, remounts shell per draftId
 │   │       └── editor.css         #   consolidated editor styles (Dokum-red rebrand)
 │   └── api/
@@ -150,7 +151,7 @@ src/
 │   │   └── editor/                # LaTeX editor React shell (PRD #28)
 │   │       ├── EditorShell.tsx    #   save bar + Term state + imperative mount (controller)
 │   │       ├── EditorToolbar.tsx  #   rich-text toolbar (uncontrolled → controller)
-│   │       ├── ExportBar.tsx      #   Kurs/Unit/Task targets, Term, filename, „Als PNG herunterladen"
+│   │       ├── ExportBar.tsx      #   Kurs/Unit/Task targets, Term, filename, PNG download + publish (size guard)
 │   │       └── DraftList.tsx      #   draft list with open/delete
 │   ├── auth/
 │   │   ├── LoginForm.tsx
@@ -178,7 +179,7 @@ src/
 │   │   ├── expression-evaluator.ts # CSP-safe math tokenizer/parser — replaces new Function; errors → NaN
 │   │   ├── latex-normalise.ts     # LaTeX→expression translation + auto-expression extraction
 │   │   ├── number-format.ts       # German display formatting (formatValue)
-│   │   ├── export-filename.ts     # PNG filename builder (Term + 1-based tree ordinals) — pure
+│   │   ├── export-filename.ts     # PNG filename builder (Term + 1-based tree ordinals) + Document-title seed — pure
 │   │   ├── png-export.ts          # PNG export pipeline → Blob (SVG raster at 2×, html2canvas; browser-only)
 │   │   └── *.test.ts              # Colocated Vitest golden tests (parity contract with the standalone editor)
 │   ├── supabase/
@@ -292,6 +293,7 @@ Every major route segment has scoped `error.tsx` and `loading.tsx` files. A fail
 | `updateEditorDraft` | `editor-documents.ts` | Update draft title + content; reconciles images (rows/objects the content no longer references are deleted) |
 | `deleteEditorDraft` | `editor-documents.ts` | Delete editor draft + its `editor_images` rows (cascade) + storage objects |
 | `uploadEditorImage` | `editor-images.ts` | Upload an editor image to storage + insert `editor_images` row; creates the implicit „Unbenannt" anchor draft when no draft exists yet |
+| `publishEditorDraft` | `editor-publish.ts` | Publish a draft's rendered PNG as a Document: updates the linked Document's file + title in place by default (same entry for students), or creates + links a new Document (first publish, „Als neues Dokument", dead-link fallback); mirrors the documents.ts upload/rollback pattern and maintains `published_document_id` |
 
 All actions: validate input via Zod → auth check via `getAdminUser()` → database operation → audit log → revalidate cache.
 

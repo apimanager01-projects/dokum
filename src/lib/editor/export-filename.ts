@@ -17,6 +17,9 @@
  *     `.png` unless already present (case-insensitive). Whitespace-only
  *     input also falls back to `export.png` (the reference would have
  *     produced a bare `.png` — approved sanity deviation).
+ *   • `documentTitleFromFilename` — new for slice 11 (#39, no reference
+ *     counterpart): the publish path's Document-title seed (PRD story 27:
+ *     the editable filename seeds the title; there is no separate input).
  */
 
 /** `SS26_C1_Unit2_MC3.png` — or `C1_Unit2_MC3.png` when the Term is blank. */
@@ -37,4 +40,16 @@ export function ensurePngFilename(raw: string): string {
   if (!filename) filename = 'export.png'
   if (!filename.toLowerCase().endsWith('.png')) filename += '.png'
   return filename
+}
+
+/**
+ * `'SS26_C1_Unit2_MC3.png'` → `'SS26_C1_Unit2_MC3'` — strips ONE trailing
+ * `.png` case-insensitively, trims, falls back to `'export'` (belt-and-braces:
+ * the publish path always feeds this `ensurePngFilename` output, which is
+ * never empty).
+ */
+export function documentTitleFromFilename(filename: string): string {
+  let title = filename.trim()
+  if (title.toLowerCase().endsWith('.png')) title = title.slice(0, -4).trim()
+  return title || 'export'
 }

@@ -78,6 +78,20 @@ export const EditorImageUploadSchema = z.object({
   draft_id: uuidField.optional(),
 })
 
+// Publish an editor draft as a Document (slice 11, #39). `mode: 'update'`
+// updates the linked Document's file in place IF a live link exists, else it
+// creates a new Document under `task_id` — that single rule doubles as the
+// deleted-link fallback. `mode: 'new'` always creates („Als neues Dokument").
+// `title` is seeded client-side from the export filename (PRD story 27). The
+// PNG File itself is validated manually in the action (documents.ts
+// precedent: MIME + size limit with German messages).
+export const EditorPublishSchema = z.object({
+  draft_id: uuidField,
+  task_id: uuidField,
+  title: titleField,
+  mode: z.enum(['update', 'new']).default('update'),
+})
+
 // ── Auth schemas ────────────────────────────────────────────────────────────
 
 export const SignInSchema = z.object({
@@ -100,3 +114,4 @@ export type DocumentMetaData = z.infer<typeof DocumentMetaSchema>
 export type DocumentUpdateMetaData = z.infer<typeof DocumentUpdateMetaSchema>
 export type EditorDraftFormData = z.infer<typeof EditorDraftFormSchema>
 export type EditorImageUploadData = z.infer<typeof EditorImageUploadSchema>
+export type EditorPublishData = z.infer<typeof EditorPublishSchema>

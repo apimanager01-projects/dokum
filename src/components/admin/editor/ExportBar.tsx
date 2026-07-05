@@ -1,8 +1,16 @@
 'use client'
 
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useState, type RefObject } from 'react'
+import { publishEditorDraft } from '@/actions/admin'
+import { MAX_FILE_SIZE_BYTES } from '@/lib/constants'
 import type { EditorController } from '@/lib/editor/controller'
-import { buildPngFilename, ensurePngFilename } from '@/lib/editor/export-filename'
+import {
+  buildPngFilename,
+  documentTitleFromFilename,
+  ensurePngFilename,
+} from '@/lib/editor/export-filename'
 import type { EditorTargetKurs } from '@/types'
 
 /**
@@ -27,29 +35,55 @@ import type { EditorTargetKurs } from '@/types'
  *    download still works with the manually editable filename.
  *  • Download: controller.exportToPng() → Blob → temporary object URL →
  *    <a download> (the reference used a data URL; the Blob is the PRD's
- *    shared pipeline for slice 11's publish path). Failures alert in German
- *    (reference L1351). The button is disabled while an export runs —
- *    approved deviation: a re-entrant run would corrupt the DOM swap/restore.
+ *    shared pipeline for the publish path). Failures alert in German
+ *    (reference L1351).
+ *
+ * Publish (slice 11, #39 — no reference counterpart): „Als Dokument
+ * speichern" sends the same 2×-rendered PNG to publishEditorDraft, targeting
+ * the LIVE Kurs → Unit → Task selection. The filename (minus `.png`) seeds
+ * the Document title (PRD story 27 — no separate title input). When the
+ * draft is linked, the primary button relabels to „Dokument aktualisieren"
+ * (update-in-place default; same Document entry for students, story 32) and
+ * a secondary „Als neues Dokument" creates + re-links instead. Size guard:
+ * the Blob is pre-checked against MAX_FILE_SIZE_BYTES client-side; when the
+ * 2× export exceeds it, a confirm offers the reduced 1× export — an
+ * oversized request is NEVER sent (Vercel body ceiling, PRD decision).
+ * Publishing requires a saved draft (`draftId` = mount identity; hint text
+ * otherwise). Download and publish share ONE busy flag: both run the
+ * DOM-swapping export pipeline and must never overlap.
  *
  * The Term value is lifted to EditorShell: it persists in the draft JSON as
  * `meta.term` on save (decision D11 reserved it for this slice) and reloads
  * with the draft. The Kurs/Unit/Task selection is deliberately ephemeral per
- * session — only slice 11's publish consumes it live.
+ * session — only the publish path consumes it live.
  */
 
 const LABEL_STYLE = { fontSize: 13, color: '#374151' } as const
+
+type PublishStatus =
+  | { kind: 'idle' }
+  | { kind: 'error'; text: string }
+  | { kind: 'success'; text: string; documentId: string }
 
 export function ExportBar({
   controllerRef,
   targetTree,
   term,
   onTermChange,
+  draftId,
+  publishedDocumentId,
+  uploadsPending,
 }: {
   controllerRef: RefObject<EditorController | null>
   targetTree: EditorTargetKurs[]
   term: string
   onTermChange: (term: string) => void
+  /** Saved-draft id (mount identity) — publish is disabled without one. */
+  draftId: string | null
+  publishedDocumentId: string | null
+  uploadsPending: boolean
 }) {
+  const router = useRouter()
   // Reference parity: preselect the first Kurs → Unit → Task; the initial
   // filename is built from that selection (ordinals 1/1/1) when it is
   // complete, else the reference input default `export.png`.
@@ -59,12 +93,20 @@ export function ExportBar({
   const [filename, setFilename] = useState(() =>
     targetTree[0]?.units[0]?.tasks[0] ? buildPngFilename(term, 1, 1, 1) : 'export.png'
   )
-  const [exporting, setExporting] = useState(false)
+  // ONE guard for download AND publish — both swap the editor DOM during
+  // export; a concurrent run would corrupt the swap/restore.
+  const [busy, setBusy] = useState<false | 'download' | 'publish'>(false)
+  // Link state seeded from the DB prop, overwritten from publish results so
+  // the „Als neues Dokument" option appears without waiting for the refresh.
+  const [publishedDocId, setPublishedDocId] = useState(publishedDocumentId)
+  const [publishStatus, setPublishStatus] = useState<PublishStatus>({ kind: 'idle' })
 
   const kurs = targetTree.find((k) => k.id === kursId)
   const units = kurs?.units ?? []
   const unit = units.find((u) => u.id === unitId)
   const tasks = unit?.tasks ?? []
+
+  const canPublish = !busy && !uploadsPending && draftId !== null && taskId !== ''
 
   /** Overwrites the filename when the new selection is complete (reference `updateFilename()`). */
   function rebuildFilename(nextKursId: string, nextUnitId: string, nextTaskId: string, nextTerm: string) {
@@ -102,8 +144,8 @@ export function ExportBar({
 
   async function handleDownload() {
     const controller = controllerRef.current
-    if (!controller || exporting) return
-    setExporting(true)
+    if (!controller || busy) return
+    setBusy('download')
     try {
       const blob = await controller.exportToPng()
       const url = URL.createObjectURL(blob)
@@ -118,7 +160,75 @@ export function ExportBar({
         'PNG-Export fehlgeschlagen: ' + (err instanceof Error ? err.message : String(err))
       )
     } finally {
-      setExporting(false)
+      setBusy(false)
+    }
+  }
+
+  async function handlePublish(mode: 'update' | 'new') {
+    const controller = controllerRef.current
+    if (!controller || !canPublish || draftId === null) return
+    setBusy('publish')
+    setPublishStatus({ kind: 'idle' })
+    try {
+      // Render at the default 2× scale, then the size guard (slice 11): an
+      // oversized request must never leave the browser — the Vercel body
+      // ceiling makes raising the 4-MB limit impossible (PRD decision).
+      let blob: Blob
+      try {
+        blob = await controller.exportToPng()
+        if (blob.size > MAX_FILE_SIZE_BYTES) {
+          const proceed = window.confirm(
+            `Das PNG ist zu groß (${formatMb(blob.size)} MB, maximal 4 MB). ` +
+              'In reduzierter Auflösung (1×) exportieren und veröffentlichen?'
+          )
+          if (!proceed) return
+          blob = await controller.exportToPng({ scale: 1 })
+          if (blob.size > MAX_FILE_SIZE_BYTES) {
+            setPublishStatus({
+              kind: 'error',
+              text:
+                `Auch in reduzierter Auflösung ist das PNG zu groß (${formatMb(blob.size)} MB, ` +
+                'maximal 4 MB). Bitte das Dokument kürzen oder aufteilen.',
+            })
+            return
+          }
+        }
+      } catch (err) {
+        setPublishStatus({
+          kind: 'error',
+          text: 'PNG-Export fehlgeschlagen: ' + (err instanceof Error ? err.message : String(err)),
+        })
+        return
+      }
+
+      const pngName = ensurePngFilename(filename)
+      const formData = new FormData()
+      formData.set('draft_id', draftId)
+      formData.set('task_id', taskId)
+      formData.set('title', documentTitleFromFilename(pngName))
+      formData.set('mode', mode)
+      formData.set('file', new File([blob], pngName, { type: 'image/png' }))
+
+      let result: Awaited<ReturnType<typeof publishEditorDraft>>
+      try {
+        result = await publishEditorDraft(formData)
+      } catch {
+        setPublishStatus({ kind: 'error', text: 'Netzwerkfehler beim Veröffentlichen.' })
+        return
+      }
+      if (!result.ok) {
+        setPublishStatus({ kind: 'error', text: `Veröffentlichen fehlgeschlagen: ${result.error}` })
+        return
+      }
+      setPublishedDocId(result.data.documentId)
+      setPublishStatus({
+        kind: 'success',
+        text: result.data.mode === 'created' ? 'Dokument erstellt.' : 'Dokument aktualisiert.',
+        documentId: result.data.documentId,
+      })
+      router.refresh() // page props + draft list pick up the fresh link
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -193,9 +303,48 @@ export function ExportBar({
           value={filename}
           onChange={(e) => setFilename(e.target.value)}
         />
-        <button type="button" className="primary" disabled={exporting} onClick={handleDownload}>
-          {exporting ? 'PNG wird erstellt …' : 'Als PNG herunterladen'}
+        <button type="button" className="primary" disabled={!!busy} onClick={handleDownload}>
+          {busy === 'download' ? 'PNG wird erstellt …' : 'Als PNG herunterladen'}
         </button>
+        <button
+          type="button"
+          className="primary"
+          disabled={!canPublish}
+          onClick={() => handlePublish('update')}
+        >
+          {busy === 'publish'
+            ? 'Wird veröffentlicht …'
+            : publishedDocId
+              ? 'Dokument aktualisieren'
+              : 'Als Dokument speichern'}
+        </button>
+        {publishedDocId && (
+          <button type="button" disabled={!canPublish} onClick={() => handlePublish('new')}>
+            Als neues Dokument
+          </button>
+        )}
+        {draftId === null && (
+          <span style={LABEL_STYLE}>Zum Veröffentlichen zuerst speichern.</span>
+        )}
+        <span
+          role="status"
+          style={
+            publishStatus.kind === 'error' ? { fontSize: 13, color: '#b91c1c' } : LABEL_STYLE
+          }
+        >
+          {publishStatus.kind === 'success' && (
+            <>
+              {publishStatus.text}{' '}
+              <Link
+                href={`/admin/documents/new?editId=${publishStatus.documentId}`}
+                className="text-brand underline"
+              >
+                Zum Dokument
+              </Link>
+            </>
+          )}
+          {publishStatus.kind === 'error' && publishStatus.text}
+        </span>
       </div>
     </>
   )
@@ -221,4 +370,9 @@ function builtFilename(
   const taskIndex = tree[kursIndex].units[unitIndex].tasks.findIndex((t) => t.id === taskId)
   if (taskIndex < 0) return null
   return buildPngFilename(term, kursIndex + 1, unitIndex + 1, taskIndex + 1)
+}
+
+/** MB display for the size-guard messages (documents.ts precedent: toFixed(1)). */
+function formatMb(bytes: number): string {
+  return (bytes / 1024 / 1024).toFixed(1)
 }

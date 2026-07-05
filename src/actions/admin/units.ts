@@ -51,7 +51,8 @@ export async function deleteUnit(unitId: string): Promise<ActionResult> {
   const { error } = await supabase.from('units').delete().eq('id', unitId)
   if (error) return { ok: false, error: error.message }
 
-  const allDocs = (unit?.tasks ?? []).flatMap((t) => (t as any).documents ?? []) as DocumentFileRef[]
+  type NestedTask = { id: string; documents: DocumentFileRef[] | null }
+  const allDocs = ((unit?.tasks ?? []) as NestedTask[]).flatMap((t) => t.documents ?? [])
   const paths = collectStoragePaths(allDocs)
   await removeStorageObjects(supabase, paths, 'deleteUnit')
 

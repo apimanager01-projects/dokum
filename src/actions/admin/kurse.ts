@@ -51,9 +51,11 @@ export async function deleteKurs(kursId: string): Promise<ActionResult> {
   const { error } = await supabase.from('kurse').delete().eq('id', kursId)
   if (error) return { ok: false, error: error.message }
 
-  const allDocs = (kurs?.units ?? [])
-    .flatMap((u) => (u as any).tasks ?? [])
-    .flatMap((t: any) => t.documents ?? []) as DocumentFileRef[]
+  type NestedTask = { id: string; documents: DocumentFileRef[] | null }
+  type NestedUnit = { id: string; tasks: NestedTask[] | null }
+  const allDocs = ((kurs?.units ?? []) as NestedUnit[])
+    .flatMap((u) => u.tasks ?? [])
+    .flatMap((t) => t.documents ?? [])
   const paths = collectStoragePaths(allDocs)
   await removeStorageObjects(supabase, paths, 'deleteKurs')
 

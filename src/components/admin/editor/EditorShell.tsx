@@ -165,85 +165,110 @@ export function EditorShell({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [parsedDraft])
 
-  // Persists the live editor state into the existing draft row. Used by the
-  // publish flow (publish implies save); requires the draft to exist already
-  // — publish is only enabled once it does.
-  async function saveDraftForPublish(): Promise<{ ok: true } | { ok: false; error: string }> {
-    const controller = controllerRef.current
-    const draftId = draftIdRef.current
-    if (!controller || !draftId) return { ok: false, error: 'Kein gespeicherter Entwurf.' }
+  // ── Shared save helpers (used by both handleSave and the publish flow) ──
+  function savedStatusText() {
+    const time = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+    return `Gespeichert (${time} Uhr)`
+  }
 
-    let contentJson: string
+  // Serializes the live editor state + save-time meta (the Term field). Returns
+  // null if there is no controller or the content can't be serialized.
+  function serializeDraftContent(): string | null {
+    const controller = controllerRef.current
+    if (!controller) return null
     try {
-      contentJson = JSON.stringify(withDocumentMeta(controller.exportDocument(), term))
+      return JSON.stringify(withDocumentMeta(controller.exportDocument(), term))
     } catch {
-      return { ok: false, error: 'Inhalt konnte nicht serialisiert werden.' }
+      return null
     }
+  }
+
+  function buildDraftFormData(contentJson: string): FormData {
     const formData = new FormData()
     formData.set('title', title.trim() || 'Unbenannt')
     formData.set('content', contentJson)
+    return formData
+  }
+
+  // Persists the live editor state into the existing draft row. Used by the
+  // publish flow (publish implies save); requires the draft to exist already
+  // — publish is only enabled once it does. Never rejects: a thrown action
+  // becomes an ok:false result so the publish flow can surface it (mirrors
+  // uploadImage) — otherwise the rejection would escape handlePublish's
+  // try/finally as an unhandled rejection with no error shown.
+  async function saveDraftForPublish(): Promise<{ ok: true } | { ok: false; error: string }> {
+    const draftId = draftIdRef.current
+    if (!controllerRef.current || !draftId) return { ok: false, error: 'Kein gespeicherter Entwurf.' }
+
+    const contentJson = serializeDraftContent()
+    if (contentJson === null) return { ok: false, error: 'Inhalt konnte nicht serialisiert werden.' }
+    const formData = buildDraftFormData(contentJson)
 
     return enqueueOp(async () => {
-      const result = await updateEditorDraft(draftId, formData)
-      if (!result.ok) return { ok: false as const, error: result.error }
-      const time = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
-      setStatus({ kind: 'saved', text: `Gespeichert (${time} Uhr)` })
-      return { ok: true as const }
+      try {
+        const result = await updateEditorDraft(draftId, formData)
+        if (!result.ok) return { ok: false as const, error: result.error }
+        setStatus({ kind: 'saved', text: savedStatusText() })
+        return { ok: true as const }
+      } catch {
+        return { ok: false as const, error: 'Netzwerkfehler beim Speichern.' }
+      }
     })
   }
 
   function handleSave() {
-    const controller = controllerRef.current
-    if (!controller || isPending || pendingUploads > 0) return
+    if (!controllerRef.current || isPending || pendingUploads > 0) return
 
-    let contentJson: string
-    try {
-      // Save payload = serialized editor state + save-time meta (the Term
-      // field, slice 10). The serializer itself stays meta-free.
-      contentJson = JSON.stringify(withDocumentMeta(controller.exportDocument(), term))
-    } catch {
+    // Save payload = serialized editor state + save-time meta (the Term field,
+    // slice 10). The serializer itself stays meta-free.
+    const contentJson = serializeDraftContent()
+    if (contentJson === null) {
       setStatus({
         kind: 'error',
         text: 'Speichern fehlgeschlagen: Inhalt konnte nicht serialisiert werden.',
       })
       return
     }
-    const formData = new FormData()
-    formData.set('title', title.trim() || 'Unbenannt')
-    formData.set('content', contentJson)
+    const formData = buildDraftFormData(contentJson)
 
     // Enqueued behind any in-flight upload (belt to the disabled button's
     // braces): the save's image reconciliation must never run while an
-    // upload is still inserting its editor_images row.
+    // upload is still inserting its editor_images row. The action calls are
+    // wrapped so a thrown (not returned-error) action — e.g. a network failure
+    // — surfaces as an error status instead of a silent no-op (mirrors
+    // uploadImage); otherwise the user would keep a stale „Gespeichert".
     startTransition(() =>
       enqueueOp(async () => {
         const draftId = draftIdRef.current
-        if (draftId) {
-          const result = await updateEditorDraft(draftId, formData)
-          if (!result.ok) {
-            setStatus({ kind: 'error', text: `Speichern fehlgeschlagen: ${result.error}` })
-            return
+        try {
+          if (draftId) {
+            const result = await updateEditorDraft(draftId, formData)
+            if (!result.ok) {
+              setStatus({ kind: 'error', text: `Speichern fehlgeschlagen: ${result.error}` })
+              return
+            }
+            if (!initialDraft) {
+              // The draft row was anchor-created by an image upload, so the URL
+              // has no draftId yet. Navigate on this first explicit save (D6):
+              // the key-driven remount reloads the just-saved content.
+              router.replace(`/admin/editor?draftId=${draftId}`)
+              return
+            }
+            setStatus({ kind: 'saved', text: savedStatusText() })
+            router.refresh() // draft list shows the fresh updated_at
+          } else {
+            const result = await createEditorDraft(formData)
+            if (!result.ok) {
+              setStatus({ kind: 'error', text: `Speichern fehlgeschlagen: ${result.error}` })
+              return
+            }
+            draftIdRef.current = result.data.id
+            // First save → draft URL (D6). The key-driven remount reloads the
+            // saved content from the DB and refreshes the draft list.
+            router.replace(`/admin/editor?draftId=${result.data.id}`)
           }
-          if (!initialDraft) {
-            // The draft row was anchor-created by an image upload, so the URL
-            // has no draftId yet. Navigate on this first explicit save (D6):
-            // the key-driven remount reloads the just-saved content.
-            router.replace(`/admin/editor?draftId=${draftId}`)
-            return
-          }
-          const time = new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
-          setStatus({ kind: 'saved', text: `Gespeichert (${time} Uhr)` })
-          router.refresh() // draft list shows the fresh updated_at
-        } else {
-          const result = await createEditorDraft(formData)
-          if (!result.ok) {
-            setStatus({ kind: 'error', text: `Speichern fehlgeschlagen: ${result.error}` })
-            return
-          }
-          draftIdRef.current = result.data.id
-          // First save → draft URL (D6). The key-driven remount reloads the
-          // saved content from the DB and refreshes the draft list.
-          router.replace(`/admin/editor?draftId=${result.data.id}`)
+        } catch {
+          setStatus({ kind: 'error', text: 'Speichern fehlgeschlagen: Netzwerkfehler.' })
         }
       })
     )

@@ -41,7 +41,7 @@ export function UnitForm({
 
   useEffect(() => {
     if (state?.ok === true) router.refresh()
-  }, [state?.ok])
+  }, [state?.ok, router])
 
   return (
     <form action={action} className="flex flex-col gap-5">

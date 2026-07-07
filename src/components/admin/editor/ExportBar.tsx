@@ -158,7 +158,10 @@ export function ExportBar({
       link.download = ensurePngFilename(filename)
       link.href = url
       link.click()
-      URL.revokeObjectURL(url)
+      // Defer the revoke: revoking the object URL in the same tick as the
+      // click can invalidate the blob before the browser has fetched it,
+      // aborting the download in Firefox (and occasionally other browsers).
+      setTimeout(() => URL.revokeObjectURL(url), 0)
     } catch (err) {
       // Reference L1351 — restore already ran inside the pipeline.
       window.alert(

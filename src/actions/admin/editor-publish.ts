@@ -61,11 +61,22 @@ export async function publishEditorDraft(
 
   // ── Update-in-place path (default when a LIVE link exists) ────────────────
   if (mode === 'update' && draft.published_document_id) {
-    const { data: linkedDoc } = await supabase
+    const { data: linkedDoc, error: linkedErr } = await supabase
       .from('documents')
       .select('id, file_path')
       .eq('id', draft.published_document_id)
       .single()
+
+    // Only a genuine "no rows" (PGRST116) means the link is dead and we may
+    // fall through to create. A transient read error must NOT be mistaken for
+    // a deleted link — falling through would create a duplicate Document and
+    // orphan the still-live original.
+    if (linkedErr && linkedErr.code !== 'PGRST116') {
+      return {
+        ok: false,
+        error: `Verknüpftes Dokument konnte nicht gelesen werden: ${linkedErr.message}`,
+      }
+    }
 
     if (linkedDoc) {
       const newPath = `documents/${user.id}/${Date.now()}-${sanitise(title)}.png`

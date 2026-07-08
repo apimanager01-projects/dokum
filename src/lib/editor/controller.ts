@@ -79,6 +79,7 @@ import {
 import {
   DocumentJsonSchema,
   JSON_IMPORT_EXAMPLE,
+  createImageRemoveButton,
   describeDocumentJsonError,
   importEditorJson,
   serializeEditorState,
@@ -1824,6 +1825,9 @@ export function createEditorController(
     img.setAttribute('contenteditable', 'false')
     block.appendChild(handle)
     block.appendChild(img)
+    // Lösch-✕ (#44) — identische Chrome wie im Import-Renderer; der Klick wird
+    // in onEditorClick delegiert.
+    block.appendChild(createImageRemoveButton(document))
     return block
   }
 
@@ -1896,7 +1900,6 @@ export function createEditorController(
     }
   }
 
-  // savedRange immer aktuell halten, solange im Editor getippt/geklickt wird
   // Effektive Schriftgröße am Auswahlanker als Ganzzahl-px-String (#43).
   // getComputedStyle löst die Kaskade auf, liefert also automatisch die Größe
   // des nächstgelegenen Style-Spans bzw. — bei kollabiertem Cursor hinter einem
@@ -1915,6 +1918,7 @@ export function createEditorController(
     return String(Math.round(parseFloat(match[1]!)))
   }
 
+  // savedRange immer aktuell halten, solange im Editor getippt/geklickt wird
   const onSelectionChange = () => {
     const sel = window.getSelection()
     if (sel && sel.rangeCount > 0 && editor.contains(sel.anchorNode)) {
@@ -1931,6 +1935,15 @@ export function createEditorController(
   // editing (copy/paste), which are click-dead in the reference.
   const onEditorClick = (e: MouseEvent) => {
     const clicked = e.target instanceof Element ? e.target : null
+    // Lösch-✕ eines Bildblocks (#44): ganzen .image-block entfernen. Delegiert
+    // wie die Pillen unten — greift auch für vom Browser geklonte Buttons.
+    const removeBtn = clicked?.closest<HTMLElement>('.img-remove')
+    if (removeBtn && editor.contains(removeBtn)) {
+      e.preventDefault()
+      e.stopPropagation()
+      removeBtn.closest<HTMLElement>('.image-block')?.remove()
+      return
+    }
     const pill = clicked?.closest<HTMLElement>('.input-field, .output-field')
     if (pill && editor.contains(pill)) {
       e.stopPropagation()
@@ -2109,6 +2122,30 @@ export function createEditorController(
     inlineDropCaret = null
   }
 
+  // #44: Löscht der Nutzer das <img> per Tastatur (Bild markieren + Entf),
+  // bleibt sonst der leere .image-block-Rahmen (Formel-Box + Drag-Handle)
+  // zurück. Wir beobachten das Entfernen von Bildknoten und räumen den dann
+  // bildlosen Block ab. Deckt jeden Löschweg ab (Entf, Backspace, Ausschneiden)
+  // — robuster als ein Entf-Keydown-Abfang. Blöcke entstehen nie ohne <img>
+  // (createImageBlockElement/Import bauen sie komplett vor dem Einfügen), daher
+  // ist „image-block ohne img" eindeutig ein gelöschtes Bild.
+  const imageCleanupObserver = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      if (m.type !== 'childList' || m.removedNodes.length === 0) continue
+      let removedImg = false
+      m.removedNodes.forEach((n) => {
+        if (n.nodeName === 'IMG' || (n instanceof Element && n.querySelector('img'))) {
+          removedImg = true
+        }
+      })
+      if (!removedImg) continue
+      const target = m.target instanceof Element ? m.target : null
+      const block = target?.closest<HTMLElement>('.image-block')
+      if (block && editor.contains(block) && !block.querySelector('img')) block.remove()
+    }
+  })
+  imageCleanupObserver.observe(editor, { childList: true, subtree: true })
+
   editor.addEventListener('keydown', onKeyDown)
   editor.addEventListener('paste', onPaste)
   editor.addEventListener('click', onEditorClick)
@@ -2183,6 +2220,7 @@ export function createEditorController(
   function destroy() {
     clearInterval(fieldSweepInterval)
     clearTimeout(latexPreviewTimer)
+    imageCleanupObserver.disconnect()
     document.removeEventListener('selectionchange', onSelectionChange)
     editor.removeEventListener('keydown', onKeyDown)
     editor.removeEventListener('paste', onPaste)

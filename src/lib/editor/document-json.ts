@@ -619,6 +619,24 @@ function createInlineNodes(children: InlineNode[] | undefined, ctx: InlineContex
   return frag
 }
 
+/**
+ * The image-block delete affordance (#44) — a hover-revealed ✕ that removes
+ * the whole `.image-block`. Editor chrome like the drag-handle: invisible to
+ * the serializer (which reads only `img[data-image-id]`) and hidden during PNG
+ * export. Shared by the import renderer and the controller's live insert path
+ * so both produce identical markup; the controller wires the click.
+ */
+export function createImageRemoveButton(docEl: Document): HTMLButtonElement {
+  const btn = docEl.createElement('button')
+  btn.setAttribute('type', 'button')
+  btn.className = 'img-remove'
+  btn.setAttribute('contenteditable', 'false')
+  btn.setAttribute('aria-label', 'Bild löschen')
+  btn.title = 'Bild löschen'
+  btn.textContent = '✕'
+  return btn
+}
+
 function createBlock(
   block: EditorDocumentBlock,
   ctx: InlineContext,
@@ -691,6 +709,10 @@ function createBlock(
     img.dataset['imageId'] = block.imageId
     el.appendChild(handle)
     el.appendChild(img)
+    // Editor-Chrome wie der drag-handle (#44): Lösch-✕, das den ganzen Block
+    // entfernt. Für den Serializer unsichtbar (der liest nur img[data-image-id])
+    // und beim PNG-Export ausgeblendet (png-export.ts).
+    el.appendChild(createImageRemoveButton(docEl))
   } else if (block.type === 'code') {
     // Slice-7 extension: the editor's <pre> blocks (codeblock insert / formatBlock).
     el = docEl.createElement('pre')

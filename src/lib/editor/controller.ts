@@ -110,6 +110,20 @@ export interface EditorControllerHooks {
   uploadImage(file: File): Promise<{ ok: true; imageId: string } | { ok: false; error: string }>
 }
 
+/**
+ * Optional callbacks the React shell wires to component state. Unlike the
+ * server `hooks`, these carry no side effects into the controller — they let
+ * React mirror editor state that lives outside the contenteditable surface.
+ */
+export interface EditorControllerCallbacks {
+  /**
+   * Fired on every editor selectionchange with the effective font size at the
+   * selection anchor as an integer px string (e.g. `"18"`), or `""` when it
+   * can't be determined. Drives the toolbar size dropdown (#43).
+   */
+  onSelectionFontSize?: (px: string) => void
+}
+
 export interface EditorController {
   /** `document.execCommand` wrapper (bold, italic, lists, alignment, …). */
   exec(cmd: string, value?: string): void
@@ -213,7 +227,8 @@ function errorMessage(err: unknown): string {
 
 export function createEditorController(
   container: HTMLElement,
-  hooks: EditorControllerHooks
+  hooks: EditorControllerHooks,
+  callbacks: EditorControllerCallbacks = {}
 ): EditorController {
   // --- Static skeleton (imperative DOM; the React reconciler never sees it) ---
   // The LaTeX modal is part of the skeleton (PRD: modals stay DOM-driven).
@@ -1882,10 +1897,29 @@ export function createEditorController(
   }
 
   // savedRange immer aktuell halten, solange im Editor getippt/geklickt wird
+  // Effektive Schriftgröße am Auswahlanker als Ganzzahl-px-String (#43).
+  // getComputedStyle löst die Kaskade auf, liefert also automatisch die Größe
+  // des nächstgelegenen Style-Spans bzw. — bei kollabiertem Cursor hinter einem
+  // Span oder in Normaltext — die des Blocks. '' wenn nicht ermittelbar.
+  function currentSelectionFontSize(): string {
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0 || !editor.contains(sel.anchorNode)) return ''
+    const node = sel.anchorNode
+    const el =
+      node && node.nodeType === Node.ELEMENT_NODE
+        ? (node as Element)
+        : (node?.parentElement ?? null)
+    if (!el || !editor.contains(el)) return ''
+    const match = /^(\d+(?:\.\d+)?)px$/.exec(window.getComputedStyle(el).fontSize)
+    if (!match) return ''
+    return String(Math.round(parseFloat(match[1]!)))
+  }
+
   const onSelectionChange = () => {
     const sel = window.getSelection()
     if (sel && sel.rangeCount > 0 && editor.contains(sel.anchorNode)) {
       state.savedRange = sel.getRangeAt(0).cloneRange()
+      callbacks.onSelectionFontSize?.(currentSelectionFontSize())
     }
   }
 

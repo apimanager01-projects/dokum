@@ -106,6 +106,10 @@ export function EditorShell({
   )
   const [isPending, startTransition] = useTransition()
   const [pendingUploads, setPendingUploads] = useState(0)
+  // Effektive Schriftgröße der aktuellen Editor-Auswahl (#43). Die imperative
+  // Steuerung meldet sie bei jedem selectionchange; React spiegelt sie in die
+  // Größen-Dropdown der Toolbar. Setzen mit gleichem Wert ist ein No-op-Render.
+  const [selectionFontSize, setSelectionFontSize] = useState('')
 
   // Serializes every draft-mutating server call (image uploads and saves).
   // Kept never-rejecting so one failed operation cannot wedge the chain.
@@ -151,7 +155,11 @@ export function EditorShell({
 
   useEffect(() => {
     if (!mountRef.current) return
-    const controller = createEditorController(mountRef.current, { uploadImage })
+    const controller = createEditorController(
+      mountRef.current,
+      { uploadImage },
+      { onSelectionFontSize: setSelectionFontSize }
+    )
     controllerRef.current = controller
     if (parsedDraft && parsedDraft !== 'invalid') {
       void controller.loadDocument(parsedDraft)
@@ -303,7 +311,7 @@ export function EditorShell({
           {pendingUploads > 0 ? 'Bild wird hochgeladen …' : status.text}
         </span>
       </div>
-      <EditorToolbar controllerRef={controllerRef} />
+      <EditorToolbar controllerRef={controllerRef} sizeFromSelection={selectionFontSize} />
       <ExportBar
         controllerRef={controllerRef}
         targetTree={targetTree}

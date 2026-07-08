@@ -30,11 +30,19 @@ const LABEL_STYLE = { fontSize: 12, color: '#6b7280' } as const
 
 export function EditorToolbar({
   controllerRef,
+  sizeFromSelection = '',
 }: {
   controllerRef: RefObject<EditorController | null>
+  /**
+   * Effective font size of the current editor selection (#43), pushed from the
+   * controller via the shell. Reflected in the size dropdown when it matches a
+   * known option; otherwise the dropdown shows its „Größe" placeholder.
+   */
+  sizeFromSelection?: string
 }) {
   const ctrl = () => controllerRef.current
   const imageInputRef = useRef<HTMLInputElement>(null)
+  const sizeValue = FONT_SIZES.includes(sizeFromSelection) ? sizeFromSelection : ''
 
   return (
     <div className="toolbar">
@@ -100,12 +108,11 @@ export function EditorToolbar({
         <label style={LABEL_STYLE}>Größe</label>
         <select
           aria-label="Schriftgröße"
-          defaultValue=""
-          onChange={(e) => {
-            ctrl()?.applyFontSize(e.target.value)
-            // Parity with the standalone editor: the select resets itself
-            e.target.value = ''
-          }}
+          // Controlled by the live selection (#43): after applying, the cursor
+          // collapses into the block and selectionchange reflects the block's
+          // size here — superseding the reference's manual reset-to-placeholder.
+          value={sizeValue}
+          onChange={(e) => ctrl()?.applyFontSize(e.target.value)}
         >
           <option value="">Größe</option>
           {FONT_SIZES.map((size) => (

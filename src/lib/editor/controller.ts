@@ -1986,6 +1986,41 @@ export function createEditorController(
   let dropIndicator: HTMLElement | null = null
   let inlineDropCaret: HTMLElement | null = null
 
+  // #45: Auto-Scroll beim Blockziehen. Der .editor-scroll-Container hat feste
+  // Höhe; bei Dokumenten, die höher sind als das Sichtfenster, ließen sich
+  // Drop-Ziele außerhalb des sichtbaren Bereichs nicht erreichen, weil ein
+  // aktiver Drag das normale Scrollen blockiert. Solange der Zeiger in der
+  // oberen/unteren Randzone hängt, scrollt ein Intervall in fester Schrittweite.
+  const AUTO_SCROLL_EDGE = 48 // px Randzone oben/unten
+  const AUTO_SCROLL_STEP = 12 // px pro Tick
+  let autoScrollDir = 0
+  let autoScrollTimer: ReturnType<typeof setInterval> | null = null
+
+  function stopAutoScroll() {
+    if (autoScrollTimer !== null) {
+      clearInterval(autoScrollTimer)
+      autoScrollTimer = null
+    }
+    autoScrollDir = 0
+  }
+
+  function updateAutoScroll(clientY: number) {
+    const rect = editorScroll.getBoundingClientRect()
+    if (clientY < rect.top + AUTO_SCROLL_EDGE) {
+      autoScrollDir = -1
+    } else if (clientY > rect.bottom - AUTO_SCROLL_EDGE) {
+      autoScrollDir = 1
+    } else {
+      stopAutoScroll()
+      return
+    }
+    if (autoScrollTimer === null) {
+      autoScrollTimer = setInterval(() => {
+        editorScroll.scrollTop += autoScrollDir * AUTO_SCROLL_STEP
+      }, 16)
+    }
+  }
+
   function ensureDropIndicator(): HTMLElement {
     if (!dropIndicator) {
       dropIndicator = document.createElement('div')
@@ -2039,12 +2074,14 @@ export function createEditorController(
   const onDragEnd = () => {
     if (dragEl) dragEl.classList.remove('dragging')
     removeDropIndicator()
+    stopAutoScroll()
     dragEl = null
   }
 
   const onDragOver = (e: DragEvent) => {
     if (dragEl) {
       e.preventDefault()
+      updateAutoScroll(e.clientY)
       const afterEl = getDragAfterElement(editor, e.clientY)
       const indicator = ensureDropIndicator()
       if (afterEl == null) {
@@ -2075,6 +2112,7 @@ export function createEditorController(
 
   const onDrop = (e: DragEvent) => {
     hideInlineDropCaret()
+    stopAutoScroll()
     if (dragEl) {
       e.preventDefault()
       const afterEl = getDragAfterElement(editor, e.clientY)
@@ -2220,6 +2258,7 @@ export function createEditorController(
   function destroy() {
     clearInterval(fieldSweepInterval)
     clearTimeout(latexPreviewTimer)
+    stopAutoScroll()
     imageCleanupObserver.disconnect()
     document.removeEventListener('selectionchange', onSelectionChange)
     editor.removeEventListener('keydown', onKeyDown)

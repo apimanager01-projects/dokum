@@ -88,6 +88,15 @@ export function EditorToolbar({
           defaultValue="#fff3b0"
           onInput={(e) => ctrl()?.applyStyles({ backgroundColor: e.currentTarget.value })}
         />
+        <button
+          type="button"
+          className="clear-highlight"
+          aria-label="Kein Highlight"
+          title="Highlight entfernen"
+          onClick={() => ctrl()?.clearHighlight()}
+        >
+          ✕
+        </button>
         <label style={LABEL_STYLE}>Größe</label>
         <select
           aria-label="Schriftgröße"

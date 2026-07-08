@@ -163,6 +163,18 @@
   cursor: pointer;
 }
 
+/* #42: „Kein Highlight" — kompakter ✕-Knopf neben dem Highlight-Picker. */
+.latex-editor .toolbar button.clear-highlight {
+  min-height: 30px;
+  padding: 7px 8px;
+  color: var(--muted);
+  font-size: 12px !important;
+}
+
+.latex-editor .toolbar button.clear-highlight:hover {
+  color: var(--editor-accent);
+}
+
 /* ------------------------------------------------- export row (slice 10) */
 
 .latex-editor .export-row {

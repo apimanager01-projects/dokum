@@ -126,6 +126,13 @@ export interface EditorController {
   /** Style template: color + size + optional bold. */
   applyTemplate(color: string, px: number, bold: boolean): void
   /**
+   * Removes the highlight (`background-color`) from the styled spans touched
+   * by the current selection (or, when collapsed, the highlighted span under
+   * the cursor) and unwraps any span left with no inline style. No-op while
+   * the LaTeX textarea is focused.
+   */
+  clearHighlight(): void
+  /**
    * Snapshots the current editor selection into internal state — the saved
    * range is what block insertion (LaTeX modal, later the image file
    * dialog) anchors to.
@@ -520,6 +527,59 @@ export function createEditorController(
 
   function applyTemplate(color: string, px: number, bold: boolean) {
     applyStyles({ color, fontSize: px + 'px', fontWeight: bold ? 'bold' : 'normal' })
+  }
+
+  // Ersetzt ein Element durch seine Kindknoten (für #42: Style-Span auflösen,
+  // wenn nach dem Entfernen des Highlights kein Inline-Stil mehr übrig ist).
+  function unwrapElement(el: HTMLElement) {
+    const parent = el.parentNode
+    if (!parent) return
+    while (el.firstChild) parent.insertBefore(el.firstChild, el)
+    parent.removeChild(el)
+  }
+
+  // #42: „Kein Highlight" — entfernt `background-color` aus den Style-Spans der
+  // Auswahl. Der Highlight-Picker kann nur setzen; ohne diese Umkehr stapelten
+  // sich verschachtelte gefärbte Spans. Ein Span, der danach keinen Inline-Stil
+  // mehr trägt, wird aufgelöst, damit keine leeren Wrapper zurückbleiben.
+  function clearHighlight() {
+    if (isLatexActive()) return
+    const sel = ensureEditorSelection()
+    if (!sel || sel.rangeCount === 0) return
+    const range = sel.getRangeAt(0)
+
+    const targets = new Set<HTMLElement>()
+    const addHighlightedAncestors = (start: Node | null) => {
+      let node: Node | null = start
+      while (node && node !== editor) {
+        if (node instanceof HTMLElement && node.style.backgroundColor) targets.add(node)
+        node = node.parentNode
+      }
+    }
+
+    if (range.collapsed) {
+      addHighlightedAncestors(range.startContainer)
+    } else {
+      // Nachkommen im gemeinsamen Vorfahren, die die Auswahl schneiden …
+      const root = range.commonAncestorContainer
+      const rootEl =
+        root.nodeType === Node.ELEMENT_NODE ? (root as Element) : root.parentElement
+      rootEl?.querySelectorAll<HTMLElement>('[style*="background"]').forEach((el) => {
+        if (el.style.backgroundColor && range.intersectsNode(el)) targets.add(el)
+      })
+      // … plus gehighlightete Vorfahren der Auswahlgrenzen (Span umschließt die
+      // Auswahl komplett und wird daher nicht von querySelectorAll erfasst).
+      addHighlightedAncestors(range.startContainer)
+      addHighlightedAncestors(range.endContainer)
+    }
+
+    for (const el of targets) {
+      el.style.removeProperty('background-color')
+      if (el.tagName === 'SPAN' && el.style.length === 0 && !el.className) {
+        unwrapElement(el)
+      }
+    }
+    editor.focus()
   }
 
   function formatBlock(tag: string) {
@@ -2117,6 +2177,7 @@ export function createEditorController(
     applyStyles,
     applyFontSize,
     applyTemplate,
+    clearHighlight,
     saveSelection,
     openLatexModal,
     insertInputField: () => insertField('input'),

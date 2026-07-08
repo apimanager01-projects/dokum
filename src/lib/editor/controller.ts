@@ -418,11 +418,33 @@ export function createEditorController(
     if (!sel || sel.rangeCount === 0) return
     const range = sel.getRangeAt(0)
 
-    const span = document.createElement('span')
-    Object.assign(span.style, styleObj)
+    if (range.collapsed) {
+      // Keine Auswahl: leerer Style-Span mit Zero-Width-Space, Cursor rein
+      const span = document.createElement('span')
+      Object.assign(span.style, styleObj)
+      const zwsp = document.createTextNode('\u200B')
+      span.appendChild(zwsp)
+      range.insertNode(span)
+      const inside = document.createRange()
+      inside.setStart(zwsp, 1)
+      inside.collapse(true)
+      sel.removeAllRanges()
+      sel.addRange(inside)
+      return
+    }
 
-    if (!range.collapsed) {
-      // Auswahl vorhanden: wrappen, Cursor ans Ende
+    // Auswahl vorhanden: pro Textknoten den ausgew\u00E4hlten Teil in einen eigenen
+    // Style-Span wrappen (#41). Der fr\u00FChere Ansatz (`range.extractContents()`
+    // in EINEN Span) zog bei mehrzeiligen Auswahlen ganze Block-Teilb\u00E4ume
+    // heraus \u2014 Listen wurden gespalten (doppelte Nummerierung), Normaltext gar
+    // nicht gef\u00E4rbt. Textknoten \u00FCberschreiten nie eine Blockgrenze, also l\u00E4sst
+    // das Wrappen je Knoten Listen-/Block-Struktur unangetastet.
+    const textNodes = collectSelectedTextNodes(range)
+    if (textNodes.length === 0) {
+      // Reine Nicht-Text-Auswahl (z. B. nur ein Bild): altes Verhalten als
+      // Fallback, damit sich hier nichts regressiert.
+      const span = document.createElement('span')
+      Object.assign(span.style, styleObj)
       try {
         span.appendChild(range.extractContents())
       } catch {
@@ -434,17 +456,61 @@ export function createEditorController(
       after.collapse(true)
       sel.removeAllRanges()
       sel.addRange(after)
-    } else {
-      // Keine Auswahl: leerer Style-Span mit Zero-Width-Space, Cursor rein
-      const zwsp = document.createTextNode('\u200B')
-      span.appendChild(zwsp)
-      range.insertNode(span)
-      const inside = document.createRange()
-      inside.setStart(zwsp, 1)
-      inside.collapse(true)
-      sel.removeAllRanges()
-      sel.addRange(inside)
+      return
     }
+
+    let lastSpan: HTMLElement | null = null
+    for (const node of textNodes) {
+      const startOffset = node === range.startContainer ? range.startOffset : 0
+      const endOffset = node === range.endContainer ? range.endOffset : node.length
+      if (startOffset >= endOffset) continue
+      // Den ausgew\u00E4hlten Bereich zu einem eigenen Textknoten aufspalten.
+      let target = node
+      if (endOffset < target.length) target.splitText(endOffset)
+      if (startOffset > 0) target = target.splitText(startOffset)
+      const span = document.createElement('span')
+      Object.assign(span.style, styleObj)
+      target.parentNode?.insertBefore(span, target)
+      span.appendChild(target)
+      lastSpan = span
+    }
+
+    // Cursor ans Ende der Auswahl (wie im Einzelspan-Verhalten der Referenz).
+    // Bewusst KEINE Auswahl \u00FCber die Spans halten: das Textfarb-/Highlight-
+    // <input> feuert `input` w\u00E4hrend des Ziehens laufend, ein erhaltenes
+    // Selektion-Rewrap w\u00FCrde die Spans bei jedem Tick verschachteln.
+    if (lastSpan) {
+      const after = document.createRange()
+      after.setStartAfter(lastSpan)
+      after.collapse(true)
+      sel.removeAllRanges()
+      sel.addRange(after)
+    }
+  }
+
+  // Sammelt alle Textknoten, die sich mit dem Range \u00FCberschneiden (f\u00FCr das
+  // per-Knoten-Styling in #41). Reine Whitespace-Knoten (Formatierungs-
+  // whitespace zwischen Bl\u00F6cken) werden \u00FCbersprungen, damit keine losen
+  // Style-Spans direkt im Editor entstehen.
+  function collectSelectedTextNodes(range: Range): Text[] {
+    const root = range.commonAncestorContainer
+    if (root.nodeType === Node.TEXT_NODE) {
+      return range.startOffset < range.endOffset ? [root as Text] : []
+    }
+    const nodes: Text[] = []
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        if (!range.intersectsNode(node)) return NodeFilter.FILTER_REJECT
+        if (!node.nodeValue || node.nodeValue.trim() === '') return NodeFilter.FILTER_REJECT
+        return NodeFilter.FILTER_ACCEPT
+      },
+    })
+    let n = walker.nextNode()
+    while (n) {
+      nodes.push(n as Text)
+      n = walker.nextNode()
+    }
+    return nodes
   }
 
   function applyFontSize(px: string) {

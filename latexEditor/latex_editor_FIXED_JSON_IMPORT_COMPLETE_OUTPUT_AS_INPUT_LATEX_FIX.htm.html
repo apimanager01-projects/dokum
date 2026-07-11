@@ -1,0 +1,2757 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<title>LaTeX Rich-Text Editor</title>
+<script>
+window.MathJax = {
+  tex: { displayMath: [['$$', '$$'], ['\\[', '\\]']], packages: { '[+]': ['color'] } },
+  svg: { fontCache: 'none' }
+};
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    background: #e9edf2;
+    color: #111827;
+    padding: 24px;
+  }
+  .app-wrap {
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  h1 {
+    font-size: 18px;
+    color: #00338D;
+    margin: 0 0 16px;
+    font-weight: 700;
+  }
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    background: #fff;
+    border: 1px solid #d7dce2;
+    border-radius: 10px;
+    padding: 10px;
+    margin-bottom: 16px;
+    align-items: center;
+  }
+  .toolbar button, .toolbar select {
+    background: #f1f4f8;
+    border: 1px solid #d7dce2;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+    cursor: pointer;
+    color: #111827;
+  }
+  .toolbar button:hover { background: #00338D; color: #fff; border-color: #00338D; }
+  .template-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .template-btn .swatch {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 1px solid rgba(0,0,0,0.15);
+    flex-shrink: 0;
+  }
+  .toolbar input[type="color"] {
+    width: 30px;
+    height: 30px;
+    border: 1px solid #d7dce2;
+    border-radius: 6px;
+    padding: 0;
+    cursor: pointer;
+  }
+  .sep { width: 1px; height: 24px; background: #d7dce2; margin: 0 4px; }
+  .toolbar .group { display: flex; gap: 6px; align-items: center; }
+
+  .export-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    background: #fff;
+    border: 1px solid #d7dce2;
+    border-radius: 10px;
+    padding: 10px;
+    margin-bottom: 16px;
+  }
+  .export-row input[type="text"] {
+    border: 1px solid #d7dce2;
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+    flex: 1;
+    max-width: 260px;
+  }
+  .export-row button.primary {
+    background: #00338D;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-size: 13px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .export-row button.primary:hover { background: #002266; }
+
+  #exportArea {
+    width: 1120px;
+    min-height: 630px;
+    background: #fff;
+    color: #111827;
+    position: relative;
+    overflow: visible;
+    margin: 0 auto;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.12);
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+  }
+  #exportArea .topbar {
+    height: 8px;
+    background: #00338D;
+    width: 100%;
+    flex-shrink: 0;
+  }
+  .editor-scroll {
+    flex: 1;
+    max-height: 65vh;
+    overflow-y: auto;
+  }
+  #editor {
+    min-height: 480px;
+    padding: 34px 42px 36px 42px;
+    outline: none;
+    font-size: 20px;
+    line-height: 1.45;
+    color: #111827;
+    background: #fff;
+  }
+  #editor h1 { font-size: 30px; color: #00338D; margin: 0 0 12px; }
+  #editor h2 { font-size: 24px; color: #00338D; margin: 0 0 10px; }
+  #editor pre {
+    background: #f1f4f8;
+    border: 1px solid #d7dce2;
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-family: Consolas, monospace;
+    font-size: 14px;
+    overflow-x: auto;
+  }
+  #editor:empty:before {
+    content: attr(data-placeholder);
+    color: #9aa3af;
+  }
+  .footer-bar {
+    flex-shrink: 0;
+    padding: 10px 42px;
+    font-size: 11px;
+    color: #8a93a0;
+    border-top: 1px solid #eef0f3;
+    background: #fff;
+  }
+
+  .formula-block,
+  .image-block {
+    margin: 18px 0;
+    padding: 18px 22px 18px 40px;
+    border-left: 5px solid #00338D;
+    background: #f8fafc;
+    border-radius: 14px;
+    color: #111827 !important;
+    font-size: 20px;
+    overflow-x: auto;
+    position: relative;
+    cursor: grab;
+  }
+  .image-block {
+    text-align: center;
+  }
+  .image-block img {
+    max-width: 100%;
+    border-radius: 8px;
+    display: block;
+    margin: 0 auto;
+  }
+  .formula-block.dragging,
+  .image-block.dragging {
+    opacity: 0.35;
+  }
+  .formula-block .drag-handle,
+  .image-block .drag-handle {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #94a3b8;
+    font-size: 18px;
+    line-height: 1;
+    cursor: grab;
+    user-select: none;
+  }
+  .formula-block .drag-handle:active,
+  .image-block .drag-handle:active {
+    cursor: grabbing;
+  }
+  .drop-indicator {
+    height: 3px;
+    background: #00338D;
+    border-radius: 2px;
+    margin: 6px 0;
+  }
+  .inline-drop-caret {
+    display: inline-block;
+    width: 2px;
+    height: 1.1em;
+    vertical-align: -0.2em;
+    background: #00338D;
+    animation: caret-blink 0.8s step-end infinite;
+    margin: 0 1px;
+    pointer-events: none;
+  }
+  @keyframes caret-blink {
+    50% { opacity: 0; }
+  }
+  .block-caption {
+    min-height: 1.4em;
+    margin-top: 12px;
+    padding: 4px 8px;
+    font-size: 16px;
+    color: #374151;
+    border-radius: 6px;
+    outline: none;
+    text-align: left;
+    line-height: 1.4;
+  }
+  .block-caption:empty::before {
+    content: attr(data-ph);
+    color: #9aa3af;
+    font-style: italic;
+    pointer-events: none;
+  }
+  .block-caption:focus {
+    background: #ffffff;
+    box-shadow: inset 0 0 0 1px #d7dce2;
+  }
+
+  .input-field,
+  .output-field {
+    display: inline-block;
+    padding: 1px 8px;
+    margin: 0 2px;
+    border-radius: 5px;
+    cursor: pointer;
+    user-select: none;
+    font-weight: 500;
+    transition: filter 0.1s;
+  }
+  .input-field:hover,
+  .output-field:hover { filter: brightness(0.95); }
+
+  .input-field {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fbbf24;
+  }
+  .input-field.is-ref {
+    background: #fef3c7;
+    border-style: dashed;
+  }
+  .output-field {
+    background: #dbeafe;
+    color: #1e40af;
+    border: 1px solid #60a5fa;
+  }
+  .output-field.is-error {
+    background: #fee2e2;
+    color: #991b1b;
+    border-color: #fca5a5;
+  }
+
+  /* Exportmodus: Felder als normaler Text rendern */
+  .exporting .formula-block {
+    padding-left: 22px !important;
+  }
+  .exporting .image-block {
+    padding-left: 22px !important;
+  }
+  .exporting .input-field,
+  .exporting .output-field {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    color: inherit !important;
+    font-weight: inherit !important;
+  }
+
+  /* --- Workspace + Sidebar --- */
+  .workspace {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  #formulaLibrary {
+    flex: 0 0 220px;
+    background: #fff;
+    border: 1px solid #d7dce2;
+    border-radius: 10px;
+    padding: 12px;
+    position: sticky;
+    top: 16px;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  #formulaLibrary h3 {
+    margin: 0 0 12px;
+    font-size: 12px;
+    color: #6b7280;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .library-item {
+    background: #f8fafc;
+    border: 1px solid #e0e6ee;
+    border-left: 3px solid #00338D;
+    border-radius: 8px;
+    padding: 6px 8px;
+    margin-bottom: 8px;
+    cursor: grab;
+    user-select: none;
+    overflow-x: auto;
+    font-size: 13px;
+    transition: filter 0.1s;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .library-item:hover { filter: brightness(0.97); }
+  .library-item:active { cursor: grabbing; }
+  .library-item .preview {
+    flex: 1;
+    pointer-events: none;
+    overflow-x: auto;
+  }
+  .library-item .lib-remove {
+    background: transparent;
+    border: none;
+    color: #9aa3af;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0 2px;
+    line-height: 1;
+  }
+  .library-item .lib-remove:hover { color: #991b1b; }
+  .library-empty {
+    color: #9aa3af;
+    font-size: 12px;
+    font-style: italic;
+    padding: 4px;
+  }
+  .var-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 6px 8px;
+    margin-bottom: 6px;
+    border-radius: 6px;
+    font-size: 13px;
+  }
+  .var-item.var-input { background: #fef3c7; border: 1px solid #fbbf24; }
+  .var-item.var-output { background: #dbeafe; border: 1px solid #60a5fa; }
+  .var-item .var-name {
+    font-weight: 600;
+    font-family: Consolas, monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .var-item .var-value {
+    font-family: Consolas, monospace;
+    flex-shrink: 0;
+  }
+  .var-item.var-noname .var-name { color: #9aa3af; font-style: italic; font-weight: 400; }
+  .formula-error {
+    color: #991b1b;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 10px;
+    padding: 10px;
+    font-family: Consolas, monospace;
+    font-size: 14px;
+    white-space: pre-wrap;
+  }
+  .render-target.is-loading { color: #6b7280; font-family: Consolas, monospace; font-size: 14px; }
+  .formula-block .render-target {
+    cursor: pointer;
+  }
+  .formula-block .render-target:hover {
+    outline: 2px dashed #00338D;
+    outline-offset: 4px;
+    border-radius: 6px;
+  }
+
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.45);
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: #fff;
+    border-radius: 12px;
+    width: 560px;
+    max-width: 90vw;
+    padding: 22px;
+  }
+  .modal h2 {
+    font-size: 16px;
+    color: #00338D;
+    margin: 0 0 12px;
+  }
+  .modal textarea {
+    width: 100%;
+    min-height: 160px;
+    font-family: Consolas, monospace;
+    font-size: 14px;
+    border: 1px solid #d7dce2;
+    border-radius: 8px;
+    padding: 10px;
+    resize: vertical;
+  }
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .modal-actions button {
+    border-radius: 6px;
+    padding: 8px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    border: 1px solid #d7dce2;
+    background: #f1f4f8;
+  }
+  .modal-actions button.primary {
+    background: #00338D;
+    color: #fff;
+    border-color: #00338D;
+  }
+  .modal-actions button.ghost { background: #fff; }
+
+  /* LaTeX-Editor: schwebendes Panel, NICHT blockierend, Rest der Seite bleibt sichtbar/nutzbar */
+  #latexOverlay {
+    background: transparent;
+    pointer-events: none;
+    align-items: flex-end;
+    justify-content: flex-end;
+    padding: 24px;
+  }
+  #latexOverlay .modal {
+    pointer-events: auto;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.25);
+    border: 1px solid #d7dce2;
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+</style>
+
+<style id="layout-refresh-v2-compact">
+/* Layout Refresh v2 compact – CSS-only */
+:root{--kpmg-blue:#00338D;--bg:#f3f6fa;--surface2:#f8fafc;--border:#d9e1ec;--soft:#e8edf4;--text:#111827;--muted:#64748b;--shadow:0 10px 30px rgba(15,23,42,.10)}html{background:var(--bg)}body{margin:0;padding:14px 18px 22px;min-height:100vh;font-family:Arial,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:radial-gradient(circle at top left,rgba(0,51,141,.08),transparent 28rem),linear-gradient(180deg,#f7f9fc 0%,#eef3f8 100%);color:var(--text)}.app-wrap{max-width:1560px;margin:0 auto}.app-wrap>h1{display:flex;align-items:center;gap:10px;min-height:38px;margin:0 0 10px;color:var(--kpmg-blue);font-size:16px;font-weight:700}.app-wrap>h1:before{content:"";width:10px;height:28px;border-radius:999px;background:linear-gradient(180deg,var(--kpmg-blue),#7c3aed);box-shadow:0 4px 14px rgba(0,51,141,.24)}.toolbar,.export-row{background:rgba(255,255,255,.94);border:1px solid var(--border);border-radius:14px;box-shadow:0 1px 3px rgba(15,23,42,.08);backdrop-filter:blur(10px)}.toolbar{position:sticky;top:10px;z-index:40;display:flex;align-items:center;gap:7px;padding:8px;margin-bottom:10px}.toolbar .group{display:inline-flex;align-items:center;gap:4px;padding:3px;border:1px solid var(--soft);border-radius:12px;background:var(--surface2)}.sep{width:0;height:0;margin:0}.toolbar button,.toolbar select,.export-row button,.export-row select,.export-row input[type="text"]{min-height:30px;border:1px solid transparent;border-radius:9px;background:transparent;color:var(--text);font-size:12px;line-height:1;padding:7px 9px}.toolbar button:hover,.toolbar select:hover,.export-row button:hover,.export-row select:hover{background:#eef4ff;border-color:#c8d9ff;color:var(--kpmg-blue)}.toolbar button[onclick*="openLatexModal"],.toolbar button[onclick*="insertInputField"],.toolbar button[onclick*="insertOutputField"],button.primary,.export-row button.primary{background:var(--kpmg-blue);border-color:var(--kpmg-blue);color:#fff;font-weight:700}.workspace{display:grid;grid-template-columns:minmax(720px,1fr) 284px;gap:14px;align-items:start}#exportArea{width:100%;min-height:calc(100vh - 205px);margin:0;border:1px solid var(--border);border-radius:18px;box-shadow:var(--shadow);overflow:hidden}#exportArea .topbar{height:6px;background:linear-gradient(90deg,var(--kpmg-blue),#7c3aed,#AB0D82)}.editor-scroll{max-height:calc(100vh - 230px);overflow-y:auto}#editor{min-height:calc(100vh - 250px);padding:34px 42px 44px;font-size:18px;line-height:1.48}#formulaLibrary{position:sticky;top:74px;max-height:calc(100vh - 92px);padding:12px;border:1px solid var(--border);border-radius:18px;background:rgba(255,255,255,.95);box-shadow:0 1px 3px rgba(15,23,42,.08)}#formulaLibrary h3{display:flex;align-items:center;gap:8px;margin:2px 0 10px;color:var(--kpmg-blue);font-size:11px;letter-spacing:.08em}#formulaLibrary h3:after{content:"";height:1px;flex:1;background:var(--soft)}.var-item,.library-item{border-radius:12px;margin-bottom:8px}.formula-block,.image-block{margin:16px 0;padding:16px 18px 16px 38px;border-left:5px solid var(--kpmg-blue);border-radius:16px;background:linear-gradient(180deg,#fbfdff,#f5f8fc);box-shadow:0 1px 0 rgba(15,23,42,.04),inset 0 0 0 1px var(--soft)}.input-field,.output-field{padding:2px 7px;border-radius:999px;font-size:.92em}.modal{border:1px solid var(--border);border-radius:18px;box-shadow:0 20px 60px rgba(15,23,42,.25)}#latexOverlay .modal{width:min(720px,92vw)!important}@media(max-width:1120px){body{padding:10px}.workspace{grid-template-columns:1fr}#formulaLibrary{position:static;max-height:none}.toolbar{position:static}}
+</style>
+
+</head>
+<body>
+<div class="app-wrap">
+  <h1>LaTeX Rich-Text Editor</h1>
+
+  <div class="toolbar">
+    <div class="group">
+      <button onclick="exec('bold')"><b>B</b></button>
+      <button onclick="exec('italic')"><i>I</i></button>
+      <button onclick="exec('underline')"><u>U</u></button>
+      <button onclick="exec('strikeThrough')"><s>S</s></button>
+    </div>
+    <div class="sep"></div>
+    <div class="group">
+      <select onchange="formatBlock(this.value)">
+        <option value="">Format</option>
+        <option value="H1">H1</option>
+        <option value="H2">H2</option>
+        <option value="P">Normal</option>
+        <option value="PRE">Codeblock</option>
+      </select>
+      <button onclick="exec('insertUnorderedList')">&bull; Liste</button>
+      <button onclick="exec('insertOrderedList')">1. Liste</button>
+    </div>
+    <div class="sep"></div>
+    <div class="group">
+      <label style="font-size:12px;color:#6b7280;">Text</label>
+      <input type="color" id="textColor" value="#111827" oninput="applyStyles({ color: this.value })">
+      <label style="font-size:12px;color:#6b7280;">Highlight</label>
+      <input type="color" id="hiColor" value="#fff3b0" oninput="applyStyles({ backgroundColor: this.value })">
+      <label style="font-size:12px;color:#6b7280;">Größe</label>
+      <select id="fontSizeSelect" onchange="applyFontSize(this.value)">
+        <option value="">Größe</option>
+        <option value="12">12</option>
+        <option value="14">14</option>
+        <option value="16">16</option>
+        <option value="18">18</option>
+        <option value="20">20</option>
+        <option value="24">24</option>
+        <option value="28">28</option>
+        <option value="32">32</option>
+      </select>
+    </div>
+    <div class="sep"></div>
+    <div class="group">
+      <button class="template-btn" onclick="applyTemplate('#111827', 18, false)"><span class="swatch" style="background:#111827;"></span>Schwarz 18</button>
+      <button class="template-btn" onclick="applyTemplate('#111827', 24, true)"><span class="swatch" style="background:#111827;"></span>Schwarz 24</button>
+      <button class="template-btn" onclick="applyTemplate('#e8722c', 18, false)"><span class="swatch" style="background:#e8722c;"></span>Orange 18</button>
+      <button class="template-btn" onclick="applyTemplate('#06b6d4', 18, false)"><span class="swatch" style="background:#06b6d4;"></span>Cyan 18</button>
+      <button class="template-btn" onclick="applyTemplate('#7c3aed', 18, false)"><span class="swatch" style="background:#7c3aed;"></span>Lila 18</button>
+    </div>
+    <div class="sep"></div>
+    <div class="group">
+      <button onclick="exec('justifyLeft')">&#8676;</button>
+      <button onclick="exec('justifyCenter')">&#8596;</button>
+      <button onclick="exec('justifyRight')">&#8677;</button>
+    </div>
+    <div class="sep"></div>
+    <div class="group">
+      <button onclick="openLatexModal()">&fnof;(x) LaTeX einfügen</button>
+      <button onclick="saveSelection(); document.getElementById('imageInput').click()">&#128247; Bild einfügen</button>
+      <input type="file" id="imageInput" accept="image/*" style="display:none" onchange="handleImageSelect(event)">
+      <button onclick="insertInputField()">&#9744; Input</button>
+      <button onclick="insertOutputField()">&#9745; Output</button>
+      <button onclick="insertSampleContent()">Beispielinhalt</button>
+      <button onclick="resetEditor()">Editor zurücksetzen</button>
+    </div>
+  </div>
+
+  <div class="export-row">
+    <label style="font-size:13px;color:#374151;">Kurs:</label>
+    <select id="selKurs" onchange="updateFilename()">
+      <option value="1">1</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+      <option value="4">4</option>
+    </select>
+    <label style="font-size:13px;color:#374151;">Term:</label>
+    <select id="selTerm" onchange="updateFilename()">
+      <option value="SS26">SS26</option>
+      <option value="WS26">WS26</option>
+    </select>
+    <label style="font-size:13px;color:#374151;">Unit:</label>
+    <select id="selUnit" onchange="updateFilename()">
+      <option value="1">1</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+      <option value="4">4</option>
+      <option value="5">5</option>
+    </select>
+    <label style="font-size:13px;color:#374151;">Mini Case:</label>
+    <select id="selMC" onchange="updateFilename()">
+      <option value="1">1</option>
+      <option value="2">2</option>
+      <option value="3">3</option>
+      <option value="4">4</option>
+      <option value="5">5</option>
+      <option value="6">6</option>
+    </select>
+  </div>
+
+  <div class="export-row">
+    <label style="font-size:13px;color:#374151;">Dateiname:</label>
+    <input type="text" id="pngFilename" value="export.png">
+    <button class="primary" onclick="exportPng()">Als PNG herunterladen</button>
+    <button onclick="downloadHtml()" style="background:#f1f4f8; color:#111827; border:1px solid #d7dce2; border-radius:6px; padding:8px 16px; font-size:13px; cursor:pointer; font-weight:600;">Als HTML speichern</button>
+  </div>
+
+  <div class="workspace">
+    <div id="exportArea">
+      <div class="topbar"></div>
+      <div class="editor-scroll" id="editorScroll">
+        <div id="editor" contenteditable="true" data-placeholder="Hier Text eingeben oder Beispielinhalt laden ..."></div>
+      </div>
+    </div>
+    <aside id="formulaLibrary">
+      <h3>Variablen</h3>
+      <div id="variableList">
+        <div class="library-empty">Noch keine Felder. Füge Input/Output über die Toolbar hinzu.</div>
+      </div>
+      <h3 style="margin-top:18px;">Formel-Bibliothek</h3>
+      <div id="libraryList">
+        <div class="library-empty">Noch keine Formeln. Füge welche über &laquo;LaTeX einfügen&raquo; hinzu — sie erscheinen hier und können per Drag&amp;Drop in den Editor gezogen werden.</div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="modal-overlay" id="latexOverlay">
+  <div class="modal" style="width:680px;">
+    <h2 id="latexModalTitle">LaTeX-Formel einfügen</h2>
+
+    <textarea id="latexInput" placeholder="z.B. \begin{aligned} ... \end{aligned}  oder  $$ a^2+b^2=c^2 $$&#10;Platzhalter für Felder: [input:name] oder [output:name]" oninput="updateLatexPreview()"></textarea>
+    <div style="font-size:11px; color:#6b7280; margin-top:4px;">
+      Tipp: Markiere Text und nutze die <b>Haupttoolbar</b> für Farbe (→ <code>\textcolor</code>), bzw. <b>Input/Output</b> direkt dort — wird an Cursor-Position eingefügt.
+    </div>
+    <div id="latexPreviewBox" style="margin-top:12px; min-height:70px; max-height:200px; overflow:auto; background:#f8fafc; border:1px solid #e0e6ee; border-radius:10px; padding:14px; display:flex; align-items:center; justify-content:center;">
+      <span style="color:#9aa3af; font-size:13px;">Vorschau erscheint hier ...</span>
+    </div>
+    <div class="modal-actions">
+      <button class="ghost" id="latexDeleteBtn" onclick="deleteCurrentFormula()" style="margin-right:auto; color:#991b1b; display:none;">Löschen</button>
+      <button class="ghost" onclick="closeLatexModal()">Abbrechen</button>
+      <button onclick="insertLatexCodeblock()">Als Codeblock</button>
+      <button class="primary" id="latexApplyBtn" onclick="insertLatexRendered()">Gerendert einfügen</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="fieldOverlay">
+  <div class="modal">
+    <h2 id="fieldModalTitle">Feld bearbeiten</h2>
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      <label style="font-size:13px;color:#374151;">Name <span id="nameRequiredHint" style="color:#991b1b;"></span>
+        <input type="text" id="fieldName" style="display:block; width:100%; margin-top:4px; padding:6px 8px; border:1px solid #d7dce2; border-radius:6px;" placeholder="z.B. x, preis, ergebnis">
+      </label>
+      <div id="fieldInputOptions">
+        <label style="font-size:13px;color:#374151;">Typ
+          <select id="fieldRefType" style="display:block; width:100%; margin-top:4px; padding:6px 8px; border:1px solid #d7dce2; border-radius:6px;" onchange="onFieldRefTypeChange()">
+            <option value="static">Statischer Wert</option>
+            <option value="ref">Referenz auf Output-Feld</option>
+          </select>
+        </label>
+        <label id="fieldValueLabel" style="font-size:13px;color:#374151; display:block; margin-top:8px;">Wert
+          <input type="text" id="fieldValue" style="display:block; width:100%; margin-top:4px; padding:6px 8px; border:1px solid #d7dce2; border-radius:6px;" placeholder="z.B. 2">
+        </label>
+        <label id="fieldRefLabel" style="font-size:13px;color:#374151; display:none; margin-top:8px;">Referenz auf
+          <select id="fieldRefTarget" style="display:block; width:100%; margin-top:4px; padding:6px 8px; border:1px solid #d7dce2; border-radius:6px;"></select>
+        </label>
+      </div>
+      <div id="fieldOutputOptions" style="display:none;">
+        <div id="outputAutoHint" style="font-size:12px; color:#374151; background:#f1f4f8; border-radius:6px; padding:8px;">
+          Die Formel wird automatisch aus dem Text davor erkannt: zwischen <code>:</code> und <code>=</code>, zwischen zwei <code>=</code>, oder zwischen Zeilenanfang und <code>=</code>.<br>
+          Beispiel: „Berechnung: 2+4*3 = <b>[Output]</b>“ → rechnet <code>2+4*3</code>.
+        </div>
+        <label id="fieldExprLabel" style="font-size:13px;color:#374151; display:block; margin-top:8px;">Expression manuell überschreiben (optional)
+          <input type="text" id="fieldExpr" style="display:block; width:100%; margin-top:4px; padding:6px 8px; border:1px solid #d7dce2; border-radius:6px; font-family:Consolas, monospace;" placeholder="leer lassen für Auto-Erkennung">
+        </label>
+        <div style="font-size:11px; color:#6b7280; margin-top:4px;">Verfügbare Variablen: <span id="fieldAvailVars">—</span></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="ghost" id="fieldDeleteBtn" onclick="deleteCurrentField()" style="margin-right:auto; color:#991b1b;">Löschen</button>
+      <button class="ghost" onclick="closeFieldModal()">Abbrechen</button>
+      <button class="primary" onclick="saveFieldFromModal()">Übernehmen</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const editor = document.getElementById('editor');
+
+function exec(cmd, value) {
+  editor.focus();
+  document.execCommand(cmd, false, value || null);
+}
+
+function ensureEditorSelection() {
+  editor.focus();
+  let sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || !editor.contains(sel.anchorNode)) {
+    const r = document.createRange();
+    r.selectNodeContents(editor);
+    r.collapse(false);
+    sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(r);
+  }
+  return sel;
+}
+
+function applyStyles(styleObj) {
+  if (isLatexActive()) {
+    if (styleObj.color) { applyLatexColor(styleObj.color); return; }
+    if (styleObj.backgroundColor) { applyLatexHighlight(styleObj.backgroundColor); return; }
+    // Größe/Bold im LaTeX-Modus: ignorieren (kein sinnvolles 1:1-Mapping)
+    return;
+  }
+  const sel = ensureEditorSelection();
+  const range = sel.getRangeAt(0);
+
+  const span = document.createElement('span');
+  Object.assign(span.style, styleObj);
+
+  if (!range.collapsed) {
+    // Auswahl vorhanden: wrappen, Cursor ans Ende
+    try {
+      span.appendChild(range.extractContents());
+    } catch (e) {
+      return;
+    }
+    range.insertNode(span);
+    const after = document.createRange();
+    after.setStartAfter(span);
+    after.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(after);
+  } else {
+    // Keine Auswahl: leerer Style-Span mit Zero-Width-Space, Cursor rein
+    const zwsp = document.createTextNode('\u200B');
+    span.appendChild(zwsp);
+    range.insertNode(span);
+    const inside = document.createRange();
+    inside.setStart(zwsp, 1);
+    inside.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(inside);
+  }
+}
+
+function applyFontSize(px) {
+  if (!px) return;
+  applyStyles({ fontSize: px + 'px' });
+  document.getElementById('fontSizeSelect').value = '';
+}
+
+function applyTemplate(color, px, bold) {
+  const styles = { color: color, fontSize: px + 'px', fontWeight: bold ? 'bold' : 'normal' };
+  applyStyles(styles);
+}
+
+function formatBlock(tag) {
+  if (!tag) return;
+  editor.focus();
+  document.execCommand('formatBlock', false, tag);
+}
+
+function escapeHtml(s) {
+  return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function cleanupLatex(s) {
+  let x = (s || '').trim();
+  x = x.replace(/^\s*\$\$\s*/, '').replace(/\s*\$\$\s*$/, '');
+  x = x.replace(/^\s*\\+\[\s*/, '').replace(/\s*\\+\]\s*$/, '');
+  return x.trim();
+}
+
+function appendHtml(html) {
+  editor.insertAdjacentHTML('beforeend', html);
+  editor.scrollTop = editor.scrollHeight;
+}
+
+// --- Cursor-Position merken (für LaTeX-Modal & File-Dialog) ---
+let savedRange = null;
+
+function saveSelection() {
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount > 0 && editor.contains(sel.anchorNode)) {
+    savedRange = sel.getRangeAt(0).cloneRange();
+  } else {
+    savedRange = null;
+  }
+}
+
+function getTopLevelBlock(node) {
+  while (node && node.parentNode && node.parentNode !== editor) {
+    node = node.parentNode;
+  }
+  return (node && node.parentNode === editor) ? node : null;
+}
+
+// Fügt einen Block-Knoten nach dem Top-Level-Block der aktuellen Cursor-Position ein
+function insertBlockAtCursor(blockNode, trailingP) {
+  editor.focus();
+  let topLevel = null;
+  if (savedRange) {
+    topLevel = getTopLevelBlock(savedRange.startContainer);
+  }
+  if (topLevel && topLevel.parentNode === editor) {
+    editor.insertBefore(blockNode, topLevel.nextSibling);
+    if (trailingP) editor.insertBefore(trailingP, blockNode.nextSibling);
+  } else {
+    // Kein Top-Level-Block (Editor leer oder Cursor direkt im editor) → ans Ende
+    editor.appendChild(blockNode);
+    if (trailingP) editor.appendChild(trailingP);
+  }
+  // Cursor in den trailing-Absatz oder hinter den Block
+  const sel = window.getSelection();
+  const r = document.createRange();
+  if (trailingP) {
+    r.setStart(trailingP, 0);
+  } else {
+    r.setStartAfter(blockNode);
+  }
+  r.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(r);
+  savedRange = r.cloneRange();
+}
+
+let editingFormulaBlock = null; // null = neue Formel, sonst: bestehender .formula-block zum Bearbeiten
+let latexPreviewTimer = null;
+
+function openLatexModal(existingBlock) {
+  saveSelection();
+  editingFormulaBlock = existingBlock || null;
+
+  const titleEl = document.getElementById('latexModalTitle');
+  const deleteBtn = document.getElementById('latexDeleteBtn');
+  const applyBtn = document.getElementById('latexApplyBtn');
+  const input = document.getElementById('latexInput');
+
+  if (editingFormulaBlock) {
+    titleEl.textContent = 'Formel bearbeiten';
+    deleteBtn.style.display = '';
+    applyBtn.textContent = 'Aktualisieren';
+    input.value = editingFormulaBlock.querySelector('.render-target')?.dataset.rawLatex
+      || editingFormulaBlock.querySelector('.render-target')?.dataset.latex || '';
+  } else {
+    titleEl.textContent = 'LaTeX-Formel einfügen';
+    deleteBtn.style.display = 'none';
+    applyBtn.textContent = 'Gerendert einfügen';
+    input.value = '';
+  }
+
+  populateFieldQuickInsert();
+  document.getElementById('latexOverlay').classList.add('open');
+  input.focus();
+  updateLatexPreview();
+}
+
+// Tracker: welcher Editor war zuletzt aktiv (Haupteditor oder LaTeX-Textarea)
+let lastFocused = 'editor';
+let pendingLatexFieldInsert = false;       // true → nach Field-Modal-Save Platzhalter einfügen
+let savedLatexTextareaPos = null;          // Cursor-Pos in Textarea vor Field-Modal-Öffnung
+let isFieldBeingCreated = false;           // true → Feld wurde gerade neu erstellt und ist noch unbestätigt
+
+function isLatexActive() {
+  return lastFocused === 'latex'
+      && document.getElementById('latexOverlay').classList.contains('open');
+}
+
+editor.addEventListener('focus', () => { lastFocused = 'editor'; });
+document.getElementById('latexInput').addEventListener('focus', () => { lastFocused = 'latex'; });
+
+function populateFieldQuickInsert() { /* kept as no-op for backward calls */ }
+
+function insertAtTextareaCursor(text) {
+  const textarea = document.getElementById('latexInput');
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  textarea.value = textarea.value.slice(0, start) + text + textarea.value.slice(end);
+  const newPos = start + text.length;
+  textarea.focus();
+  textarea.setSelectionRange(newPos, newPos);
+  lastFocused = 'latex';
+  updateLatexPreview();
+}
+
+// Wrappt LaTeX-Textarea-Auswahl mit \textcolor[HTML]{HEX} (kein "#", da das in math-mode bricht)
+function wrapTextareaSelectionWithLatex(commandStart, commandEnd) {
+  const textarea = document.getElementById('latexInput');
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  if (start === end) {
+    // Keine Auswahl: an Cursor einfügen, Cursor zwischen Wrapper setzen
+    const insert = commandStart + commandEnd;
+    textarea.value = textarea.value.slice(0, start) + insert + textarea.value.slice(end);
+    const innerPos = start + commandStart.length;
+    textarea.focus();
+    textarea.setSelectionRange(innerPos, innerPos);
+  } else {
+    const selected = textarea.value.slice(start, end);
+    const wrapped = commandStart + selected + commandEnd;
+    textarea.value = textarea.value.slice(0, start) + wrapped + textarea.value.slice(end);
+    const newPos = start + wrapped.length;
+    textarea.focus();
+    textarea.setSelectionRange(newPos, newPos);
+  }
+  updateLatexPreview();
+}
+
+function applyLatexColor(hex) {
+  const clean = (hex || '').replace('#', '').toUpperCase();
+  wrapTextareaSelectionWithLatex('\\textcolor[HTML]{' + clean + '}{', '}');
+}
+
+function applyLatexHighlight(hex) {
+  const clean = (hex || '').replace('#', '').toUpperCase();
+  wrapTextareaSelectionWithLatex('\\colorbox[HTML]{' + clean + '}{', '}');
+}
+
+function closeLatexModal() {
+  document.getElementById('latexOverlay').classList.remove('open');
+  editingFormulaBlock = null;
+}
+
+// Platzhalter [input:name] / [output:name] durch aktuellen Wert ersetzen.
+// Für Output-Felder ohne eigene Expression (z.B. aus dem LaTeX-Modus erstellt):
+// Formel automatisch aus dem LaTeX-Text selbst ableiten (gleiche Regel wie im Haupteditor:
+// zwischen ":" und "=", zwischen zwei "=", oder zwischen Textanfang und "=").
+function resolveFieldPlaceholders(rawLatex, visited = new Set()) {
+  return rawLatex.replace(/\[(input|output):([^\]]+)\]/g, (match, kind, name) => {
+    const trimmed = name.trim();
+    const el = getFieldByName(trimmed);
+    if (!el) return match; // unbekannter Name: unverändert lassen, sichtbar im Code
+    if (visited.has(el.dataset.fieldId)) return '\\text{Err}';
+
+    let v;
+    if (el.dataset.type === 'output' && (!el.dataset.expr || !el.dataset.expr.trim())) {
+      v = evalExpression(getAutoExpressionFromLatexText(rawLatex, match, visited), new Set(visited).add(el.dataset.fieldId));
+    } else {
+      v = getFieldValue(el.dataset.fieldId, new Set(visited));
+    }
+    return isFinite(v) ? formatValue(v) : '\\text{Err}';
+  });
+}
+
+// Sucht im rawLatex-Text rückwärts vom Platzhalter aus das schließende "=", davor die Startgrenze
+// (":" oder "=" oder Textanfang), löst darin enthaltene Platzhalter rekursiv auf und gibt die Expression zurück.
+function getAutoExpressionFromLatexText(rawLatex, placeholderMatch, visited) {
+  const idx = rawLatex.indexOf(placeholderMatch);
+  if (idx === -1) return '';
+
+  const eqIdx = rawLatex.lastIndexOf('=', idx - 1);
+  if (eqIdx === -1) return '';
+
+  let startIdx = 0;
+  for (let i = eqIdx - 1; i >= 0; i--) {
+    if (rawLatex[i] === ':' || rawLatex[i] === '=') { startIdx = i + 1; break; }
+  }
+
+  let exprText = rawLatex.substring(startIdx, eqIdx);
+  // Andere Platzhalter darin durch ihre Werte ersetzen (rekursiv, gleiche visited-Kette)
+  exprText = exprText.replace(/\[(input|output):([^\]]+)\]/g, (m2, kind2, name2) => {
+    const el2 = getFieldByName(name2.trim());
+    if (!el2) return '0';
+    if (visited.has(el2.dataset.fieldId)) return '0';
+    const v2 = getFieldValue(el2.dataset.fieldId, new Set(visited));
+    return isFinite(v2) ? '(' + v2 + ')' : '(0)';
+  });
+  return exprText.trim();
+}
+
+async function updateLatexPreview() {
+  clearTimeout(latexPreviewTimer);
+  latexPreviewTimer = setTimeout(async () => {
+    const raw = cleanupLatex(document.getElementById('latexInput').value);
+    const box = document.getElementById('latexPreviewBox');
+    if (!raw) {
+      box.innerHTML = '<span style="color:#9aa3af; font-size:13px;">Vorschau erscheint hier ...</span>';
+      return;
+    }
+    const resolved = resolveFieldPlaceholders(raw);
+    try {
+      await waitForMathJax();
+      const svg = await MathJax.tex2svgPromise(resolved, { display: true });
+      box.innerHTML = '';
+      box.appendChild(svg);
+    } catch (err) {
+      box.innerHTML = '<div class="formula-error">MathJax-Fehler:\n' + escapeHtml(err.message || String(err)) + '</div>';
+    }
+  }, 250);
+}
+
+function insertLatexCodeblock() {
+  const latex = cleanupLatex(document.getElementById('latexInput').value);
+  closeLatexModal();
+  if (!latex) return;
+  const pre = document.createElement('pre');
+  pre.textContent = latex;
+  const trailing = document.createElement('p');
+  trailing.innerHTML = '<br>';
+  insertBlockAtCursor(pre, trailing);
+}
+
+async function waitForMathJax(maxMs = 5000) {
+  const start = Date.now();
+  while (!(window.MathJax && window.MathJax.tex2svgPromise)) {
+    if (Date.now() - start > maxMs) {
+      throw new Error('MathJax wurde nicht geladen.');
+    }
+    await new Promise(r => setTimeout(r, 100));
+  }
+}
+
+async function renderLatexInElement(target, latex) {
+  await waitForMathJax();
+  target.classList.add('is-loading');
+  target.textContent = 'Rendering...';
+
+  try {
+    const svg = await MathJax.tex2svgPromise(latex, { display: true });
+    target.classList.remove('is-loading');
+    target.innerHTML = '';
+    target.appendChild(svg);
+    target.dataset.latex = latex;
+  } catch (err) {
+    target.classList.remove('is-loading');
+    target.innerHTML =
+      '<div class="formula-error">MathJax-Fehler:\n'
+      + escapeHtml(err.message || String(err))
+      + '\n\nLaTeX:\n'
+      + escapeHtml(latex)
+      + '</div>';
+  }
+}
+
+async function insertLatexRendered() {
+  const rawLatex = cleanupLatex(document.getElementById('latexInput').value);
+  closeLatexModal();
+  if (!rawLatex) return;
+
+  const resolved = resolveFieldPlaceholders(rawLatex);
+
+  if (editingFormulaBlock) {
+    // Bestehende Formel updaten
+    const target = editingFormulaBlock.querySelector('.render-target');
+    target.dataset.rawLatex = rawLatex;
+    target.dataset.latex = resolved;
+    await renderLatexInElement(target, resolved);
+    addToLibrary(rawLatex);
+    return;
+  }
+
+  // Neue Formel einfügen
+  const block = document.createElement('div');
+  block.className = 'formula-block';
+  block.draggable = true;
+  block.innerHTML =
+    '<span class="drag-handle" contenteditable="false">&#10074;&#10074;</span>'
+    + '<div class="render-target" contenteditable="false" data-raw-latex="' + escapeHtml(rawLatex) + '" data-latex="' + escapeHtml(resolved) + '">'
+    + escapeHtml(resolved)
+    + '</div>';
+
+  const trailing = document.createElement('p');
+  trailing.innerHTML = '<br>';
+  insertBlockAtCursor(block, trailing);
+
+  const target = block.querySelector('.render-target');
+  await renderLatexInElement(target, resolved);
+
+  addToLibrary(rawLatex);
+}
+
+function deleteCurrentFormula() {
+  if (editingFormulaBlock) {
+    editingFormulaBlock.remove();
+  }
+  closeLatexModal();
+}
+
+// Klick auf irgendeine gerenderte Formel im Editor öffnet das Bearbeiten-Modal
+editor.addEventListener('click', (e) => {
+  const target = e.target.closest('.render-target');
+  if (!target) return;
+  const block = target.closest('.formula-block');
+  if (!block) return;
+  e.stopPropagation();
+  openLatexModal(block);
+});
+
+// --- Formel-Bibliothek ---
+async function addToLibrary(latex) {
+  if (!latex) return;
+  const list = document.getElementById('libraryList');
+  // Duplikate vermeiden
+  const exists = Array.from(list.querySelectorAll('.library-item'))
+    .some(it => it.dataset.latex === latex);
+  if (exists) return;
+
+  const empty = list.querySelector('.library-empty');
+  if (empty) empty.remove();
+
+  const item = document.createElement('div');
+  item.className = 'library-item';
+  item.draggable = true;
+  item.dataset.latex = latex;
+  item.title = 'Ziehen, um in den Editor einzufügen';
+
+  const preview = document.createElement('div');
+  preview.className = 'preview';
+  preview.textContent = latex;
+  item.appendChild(preview);
+
+  const rm = document.createElement('button');
+  rm.className = 'lib-remove';
+  rm.textContent = '×';
+  rm.title = 'Aus Bibliothek entfernen';
+  rm.addEventListener('click', (e) => {
+    e.stopPropagation();
+    item.remove();
+    if (!list.querySelector('.library-item')) {
+      const e2 = document.createElement('div');
+      e2.className = 'library-empty';
+      e2.textContent = 'Noch keine Formeln in der Bibliothek.';
+      list.appendChild(e2);
+    }
+  });
+  item.appendChild(rm);
+
+  list.appendChild(item);
+
+  item.addEventListener('dragstart', (e) => {
+    e.dataTransfer.effectAllowed = 'copy';
+    e.dataTransfer.setData('application/x-latex', latex);
+    e.dataTransfer.setData('text/plain', latex);
+  });
+
+  // Mini-Render (aufgelöste Version zeigen, falls Platzhalter enthalten sind)
+  try {
+    await waitForMathJax();
+    const resolved = resolveFieldPlaceholders(latex);
+    const svg = await MathJax.tex2svgPromise(resolved, { display: true });
+    preview.innerHTML = '';
+    preview.appendChild(svg);
+  } catch (err) {
+    /* lass den LaTeX-Text als Fallback stehen */
+  }
+}
+
+async function insertFormulaFromLibraryAt(rawLatex, clientX, clientY) {
+  // Cursor an Drop-Position setzen
+  let dropRange = null;
+  if (document.caretRangeFromPoint) {
+    dropRange = document.caretRangeFromPoint(clientX, clientY);
+  } else if (document.caretPositionFromPoint) {
+    const pos = document.caretPositionFromPoint(clientX, clientY);
+    if (pos) {
+      dropRange = document.createRange();
+      dropRange.setStart(pos.offsetNode, pos.offset);
+      dropRange.collapse(true);
+    }
+  }
+  if (dropRange && editor.contains(dropRange.startContainer)) {
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(dropRange);
+    savedRange = dropRange.cloneRange();
+  }
+
+  const resolved = resolveFieldPlaceholders(rawLatex);
+
+  const block = document.createElement('div');
+  block.className = 'formula-block';
+  block.draggable = true;
+  block.innerHTML =
+    '<span class="drag-handle" contenteditable="false">&#10074;&#10074;</span>'
+    + '<div class="render-target" contenteditable="false" data-raw-latex="' + escapeHtml(rawLatex) + '" data-latex="' + escapeHtml(resolved) + '">'
+    + escapeHtml(resolved)
+    + '</div>';
+  const trailing = document.createElement('p');
+  trailing.innerHTML = '<br>';
+  insertBlockAtCursor(block, trailing);
+
+  const target = block.querySelector('.render-target');
+  await renderLatexInElement(target, resolved);
+}
+
+function handleImageSelect(event) {
+  const file = event.target.files && event.target.files[0];
+  event.target.value = '';
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    const block = document.createElement('div');
+    block.className = 'image-block';
+    block.draggable = true;
+    block.innerHTML =
+      '<span class="drag-handle" contenteditable="false">&#10074;&#10074;</span>'
+      + '<img src="' + reader.result + '" alt="' + escapeHtml(file.name) + '" contenteditable="false">';
+    const trailing = document.createElement('p');
+    trailing.innerHTML = '<br>';
+    insertBlockAtCursor(block, trailing);
+  };
+  reader.onerror = () => {
+    alert('Bild konnte nicht gelesen werden.');
+  };
+  reader.readAsDataURL(file);
+}
+
+function insertSampleContent() {
+  appendHtml(
+    '<h1>Management Summary</h1>'
+    + '<p>Dies ist ein Beispielabsatz mit <b>fettem</b>, <i>kursivem</i> und <u>unterstrichenem</u> Text.</p>'
+    + '<ul><li>Erster Punkt</li><li>Zweiter Punkt</li></ul>'
+  );
+  insertSampleFormula();
+}
+
+async function insertSampleFormula() {
+  const latex = String.raw`\begin{aligned}
+\hat{\boldsymbol{\beta}}
+&= \left(\mathbf{X}^{\top}\mathbf{W}\mathbf{X}+\lambda\mathbf{I}\right)^{-1}\mathbf{X}^{\top}\mathbf{W}\mathbf{y} \\
+R^2_{\mathrm{adj}}
+&= 1-\left(1-R^2\right)\frac{n-1}{n-k-1}
+\end{aligned}`;
+  appendHtml(
+    '<div class="formula-block" draggable="true">'
+    + '<span class="drag-handle" contenteditable="false">&#10074;&#10074;</span>'
+    + '<div class="render-target" contenteditable="false" data-latex="' + escapeHtml(latex) + '">'
+    + escapeHtml(latex)
+    + '</div></div><p><br></p>'
+  );
+  const blocks = editor.querySelectorAll('.formula-block .render-target');
+  const target = blocks[blocks.length - 1];
+  await renderLatexInElement(target, latex);
+}
+
+function updateFilename() {
+  const term = document.getElementById('selTerm').value;
+  const kurs = document.getElementById('selKurs').value;
+  const unit = document.getElementById('selUnit').value;
+  const mc = document.getElementById('selMC').value;
+  document.getElementById('pngFilename').value = `${term}_C${kurs}_Unit${unit}_MC${mc}.png`;
+}
+updateFilename();
+
+function resetEditor() {
+  if (confirm('Editor wirklich zurücksetzen? Alle Inhalte gehen verloren.')) {
+    editor.innerHTML = '';
+  }
+}
+
+function svgToPngDataUrl(svgEl) {
+  return new Promise((resolve, reject) => {
+    // Größe vom mjx-container nehmen (das ist das, was der Browser tatsächlich anzeigt)
+    const container = svgEl.closest('mjx-container') || svgEl;
+    const rect = container.getBoundingClientRect();
+    const width = Math.max(1, Math.round(rect.width));
+    const height = Math.max(1, Math.round(rect.height));
+
+    const clone = svgEl.cloneNode(true);
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    clone.setAttribute('width', width);
+    clone.setAttribute('height', height);
+
+    // currentColor in echten Farbwert übersetzen
+    const color = getComputedStyle(svgEl).color || '#111827';
+    clone.querySelectorAll('[fill="currentColor"], [stroke="currentColor"]').forEach((el) => {
+      if (el.getAttribute('fill') === 'currentColor') el.setAttribute('fill', color);
+      if (el.getAttribute('stroke') === 'currentColor') el.setAttribute('stroke', color);
+    });
+    if (!clone.getAttribute('fill') || clone.getAttribute('fill') === 'currentColor') {
+      clone.setAttribute('fill', color);
+    }
+
+    const svgStr = new XMLSerializer().serializeToString(clone);
+    const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+
+    const tmpImg = new Image();
+    tmpImg.onload = () => {
+      const scale = 2;
+      const canvas = document.createElement('canvas');
+      canvas.width = width * scale;
+      canvas.height = height * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(scale, scale);
+      ctx.drawImage(tmpImg, 0, 0, width, height);
+      URL.revokeObjectURL(url);
+      resolve({ dataUrl: canvas.toDataURL('image/png'), width, height });
+    };
+    tmpImg.onerror = (e) => {
+      URL.revokeObjectURL(url);
+      reject(e);
+    };
+    tmpImg.src = url;
+  });
+}
+
+async function exportPng() {
+  const filenameInput = document.getElementById('pngFilename');
+  let filename = (filenameInput.value || 'export.png').trim();
+  if (!filename.toLowerCase().endsWith('.png')) filename += '.png';
+
+  const exportArea = document.getElementById('exportArea');
+  const scrollBox = document.getElementById('editorScroll');
+  const prevMaxHeight = scrollBox.style.maxHeight;
+  const prevOverflow = scrollBox.style.overflowY;
+
+  scrollBox.style.maxHeight = 'none';
+  scrollBox.style.overflowY = 'visible';
+
+  const handles = exportArea.querySelectorAll('.drag-handle');
+  handles.forEach((h) => { h.dataset.prevDisplay = h.style.display; h.style.display = 'none'; });
+
+  // Export-Modus an: Input/Output/Formular-Highlights aus
+  exportArea.classList.add('exporting');
+
+  // Jede Formel rasterisieren und den GANZEN render-target Inhalt durch ein PNG-Img ersetzen
+  const renderTargets = Array.from(exportArea.querySelectorAll('.render-target'));
+  const swaps = [];
+  for (const target of renderTargets) {
+    const svg = target.querySelector('svg');
+    if (!svg) continue;
+    try {
+      const { dataUrl, width, height } = await svgToPngDataUrl(svg);
+      const savedHTML = target.innerHTML;
+      const img = document.createElement('img');
+      img.style.width = width + 'px';
+      img.style.height = height + 'px';
+      img.style.display = 'inline-block';
+      // erst auf load warten, dann erst einsetzen
+      await new Promise((res, rej) => {
+        img.onload = res;
+        img.onerror = rej;
+        img.src = dataUrl;
+      });
+      target.innerHTML = '';
+      target.appendChild(img);
+      swaps.push({ target, savedHTML });
+    } catch (e) {
+      console.error('SVG-Rasterisierung fehlgeschlagen:', e);
+    }
+  }
+
+  const restore = () => {
+    scrollBox.style.maxHeight = prevMaxHeight;
+    scrollBox.style.overflowY = prevOverflow;
+    handles.forEach((h) => { h.style.display = h.dataset.prevDisplay || ''; delete h.dataset.prevDisplay; });
+    swaps.forEach(({ target, savedHTML }) => { target.innerHTML = savedHTML; });
+    exportArea.classList.remove('exporting');
+  };
+
+  try {
+    const canvas = await html2canvas(exportArea, {
+      backgroundColor: '#ffffff',
+      scale: 2,
+      useCORS: true,
+      logging: false
+    });
+    restore();
+    const link = document.createElement('a');
+    link.download = filename;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  } catch (err) {
+    restore();
+    alert('PNG-Export fehlgeschlagen: ' + (err.message || err));
+  }
+}
+
+document.getElementById('latexOverlay').addEventListener('click', (e) => {
+  if (e.target.id === 'latexOverlay') closeLatexModal();
+});
+
+// savedRange immer aktuell halten, solange im Editor getippt/geklickt wird
+document.addEventListener('selectionchange', () => {
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount > 0 && editor.contains(sel.anchorNode)) {
+    savedRange = sel.getRangeAt(0).cloneRange();
+  }
+});
+
+// --- Tab zum Einrücken ---
+function insertTabAtCursor() {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return;
+  const range = sel.getRangeAt(0);
+  range.deleteContents();
+  const tabNode = document.createTextNode('\u00A0\u00A0\u00A0\u00A0');
+  range.insertNode(tabNode);
+  range.setStartAfter(tabNode);
+  range.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+function removeIndentAtCursor() {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return;
+  const range = sel.getRangeAt(0);
+  if (!range.collapsed) return;
+  const node = range.startContainer;
+  if (node.nodeType !== Node.TEXT_NODE) return;
+  const offset = range.startOffset;
+  const text = node.textContent;
+  let removeCount = 0;
+  for (let i = offset - 1; i >= 0 && removeCount < 4; i--) {
+    if (text[i] === '\u00A0') removeCount++;
+    else break;
+  }
+  if (removeCount > 0) {
+    node.textContent = text.slice(0, offset - removeCount) + text.slice(offset);
+    const newRange = document.createRange();
+    newRange.setStart(node, offset - removeCount);
+    newRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+  }
+}
+
+editor.addEventListener('keydown', (e) => {
+  if (e.key !== 'Tab') return;
+  e.preventDefault();
+
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return;
+
+  let node = sel.anchorNode;
+  let li = null;
+  while (node && node !== editor) {
+    if (node.nodeName === 'LI') { li = node; break; }
+    node = node.parentNode;
+  }
+
+  if (li) {
+    document.execCommand(e.shiftKey ? 'outdent' : 'indent');
+  } else if (e.shiftKey) {
+    removeIndentAtCursor();
+  } else {
+    insertTabAtCursor();
+  }
+});
+
+// --- Strg+V für Bilder ---
+editor.addEventListener('paste', (e) => {
+  const items = (e.clipboardData || window.clipboardData)?.items;
+  if (!items) return;
+  for (const item of items) {
+    if (item.type && item.type.startsWith('image/')) {
+      e.preventDefault();
+      const file = item.getAsFile();
+      if (!file) continue;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const block = document.createElement('div');
+        block.className = 'image-block';
+        block.draggable = true;
+        block.innerHTML =
+          '<span class="drag-handle" contenteditable="false">&#10074;&#10074;</span>'
+          + '<img src="' + reader.result + '" alt="pasted" contenteditable="false">';
+        const trailing = document.createElement('p');
+        trailing.innerHTML = '<br>';
+        saveSelection();
+        insertBlockAtCursor(block, trailing);
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
+  }
+});
+
+// ========================================
+// FORMULAR / INPUT / OUTPUT
+// ========================================
+let fieldCounter = 0;
+function nextFieldId() {
+  return 'fld_' + Date.now().toString(36) + '_' + (++fieldCounter);
+}
+
+function getFieldElement(id) {
+  return editor.querySelector(`[data-field-id="${id}"]`);
+}
+function getAllFields() {
+  return Array.from(editor.querySelectorAll('.input-field, .output-field'));
+}
+function getFieldByName(name) {
+  if (!name) return null;
+  return getAllFields().find(el => el.dataset.name === name) || null;
+}
+
+function getFieldValue(id, visited = new Set()) {
+  if (visited.has(id)) return NaN;
+  visited.add(id);
+  const el = getFieldElement(id);
+  if (!el) return NaN;
+  const t = el.dataset.type;
+  if (t === 'input') {
+    if (el.dataset.refType === 'ref' && el.dataset.refId) {
+      return getFieldValue(el.dataset.refId, visited);
+    }
+    return parseFloat(el.dataset.value);
+  }
+  if (t === 'output') {
+    let expr = el.dataset.expr || '';
+    if (!expr.trim()) {
+      expr = getAutoExpression(el, visited);
+    }
+    return evalExpression(expr, visited);
+  }
+  return NaN;
+}
+
+// Findet den Top-Level-Block (direktes Kind von #editor), in dem ein Knoten liegt.
+function getOwningTopLevelNode(node) {
+  while (node && node.parentNode && node.parentNode !== editor) {
+    node = node.parentNode;
+  }
+  return (node && node.parentNode === editor) ? node : null;
+}
+
+// Baut eine Liste aller "Tokens" (Text-Zeichen + Feld-Referenzen) einer Zeile
+// (= eines Top-Level-Blocks wie <p>, <h1> etc.) in Dokumentreihenfolge.
+function tokenizeLine(lineNode) {
+  const tokens = []; // { char: '=' | other, fieldId?: string }
+  function walk(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      for (const ch of node.textContent) tokens.push({ char: ch });
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    if (node.classList && node.classList.contains('drag-handle')) return;
+    if (node.classList && (node.classList.contains('input-field') || node.classList.contains('output-field'))) {
+      tokens.push({ char: '\u0000', fieldId: node.dataset.fieldId });
+      return;
+    }
+    for (const child of node.childNodes) walk(child);
+  }
+  walk(lineNode);
+  return tokens;
+}
+
+// Ermittelt die Expression für ein Output-Feld nach der Regel:
+// Text zwischen ":" und "=", ODER zwischen "=" und "=", ODER zwischen Zeilenanfang und "="
+// (das "=" ist das nächste Gleichheitszeichen VOR dem Output-Feld, z.B. "Berechnung: 2+4*3 = [Output]")
+function getAutoExpression(outputEl, visited = new Set()) {
+  const line = getOwningTopLevelNode(outputEl);
+  if (!line) return '';
+  if (line.id === 'hiddenFields') return ''; // versteckte Felder haben keinen Text-Kontext
+  const tokens = tokenizeLine(line);
+
+  const outputIndex = tokens.findIndex(t => t.fieldId === outputEl.dataset.fieldId);
+  if (outputIndex === -1) return '';
+
+  // Nächstes "=" VOR dem Output-Feld suchen (schließt die Formel ab)
+  let eqIndex = -1;
+  for (let i = outputIndex - 1; i >= 0; i--) {
+    if (tokens[i].char === '=') { eqIndex = i; break; }
+  }
+  if (eqIndex === -1) return '';
+
+  // Startgrenze davor suchen: letztes ":" oder "=" VOR diesem "=", sonst Zeilenanfang
+  let startIndex = 0;
+  for (let i = eqIndex - 1; i >= 0; i--) {
+    if (tokens[i].char === ':' || tokens[i].char === '=') { startIndex = i + 1; break; }
+  }
+
+  let expr = '';
+  for (let i = startIndex; i < eqIndex; i++) {
+    const tok = tokens[i];
+    if (tok.fieldId) {
+      const v = getFieldValue(tok.fieldId, new Set(visited));
+      expr += isFinite(v) ? '(' + v + ')' : '(0)';
+    } else {
+      expr += tok.char;
+    }
+  }
+  return expr.trim();
+}
+
+function evalExpression(expr, visited = new Set()) {
+  if (!expr || !expr.trim()) return NaN;
+  let processed = expr;
+
+  // LaTeX-Mathe-Befehle zu JS übersetzen (damit Auto-Erkennung aus LaTeX-Code funktioniert)
+  processed = processed.replace(/\\,|\\;|\\:|\\!|\\quad|\\qquad|~/g, ' '); // Whitespace-Befehle
+  processed = processed.replace(/\\left|\\right/g, '');                    // \left( \right) entfernen
+  processed = processed.replace(/\\frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/g, '(($1)/($2))');
+  processed = processed.replace(/\\sqrt\s*\{([^{}]+)\}/g, 'sqrt($1)');
+  processed = processed.replace(/\\pi\b/g, 'pi');
+  processed = processed.replace(/\\cdot\b|\\times\b/g, '*');
+  processed = processed.replace(/\\div\b/g, '/');
+  processed = processed.replace(/\\sin\b/g, 'sin');
+  processed = processed.replace(/\\cos\b/g, 'cos');
+  processed = processed.replace(/\\tan\b/g, 'tan');
+  processed = processed.replace(/\\ln\b/g, 'ln');
+  processed = processed.replace(/\\log\b/g, 'log');
+  processed = processed.replace(/\\abs\b/g, 'abs');
+  // Übrig gebliebene geschweifte Klammern (z.B. aus \begin{...}) sicherheitshalber zu runden machen
+  processed = processed.replace(/\{/g, '(').replace(/\}/g, ')');
+
+  // Mathe-Notation "^" (Potenz) -> JS-Operator "**"
+  processed = processed.replace(/\^/g, '**');
+
+  // Variablen-Namen durch Werte ersetzen (längste zuerst, um Teil-Matches zu vermeiden)
+  const named = getAllFields()
+    .filter(el => el.dataset.name && /^[a-zA-Z_]\w*$/.test(el.dataset.name))
+    .sort((a, b) => b.dataset.name.length - a.dataset.name.length);
+  const seenNames = new Set();
+  for (const el of named) {
+    const name = el.dataset.name;
+    if (seenNames.has(name)) continue; // mehrere DOM-Klone gleichen Namens: nur einmal substituieren
+    seenNames.add(name);
+    const re = new RegExp('\\b' + name + '\\b', 'g');
+    if (re.test(processed)) {
+      const v = getFieldValue(el.dataset.fieldId, new Set(visited));
+      processed = processed.replace(re, isFinite(v) ? '(' + v + ')' : '(0)');
+    }
+  }
+  try {
+    const fn = new Function(
+      'pi', 'e', 'sqrt', 'abs', 'pow', 'sin', 'cos', 'tan', 'log', 'ln', 'min', 'max', 'round', 'floor', 'ceil',
+      '"use strict"; return (' + processed + ')'
+    );
+    const result = fn(
+      Math.PI, Math.E, Math.sqrt, Math.abs, Math.pow, Math.sin, Math.cos, Math.tan,
+      Math.log10, Math.log, Math.min, Math.max, Math.round, Math.floor, Math.ceil
+    );
+    return typeof result === 'number' ? result : NaN;
+  } catch (e) {
+    return NaN;
+  }
+}
+
+function formatValue(v) {
+  if (!isFinite(v)) return '—';
+  if (Number.isInteger(v)) return String(v);
+  return String(Math.round(v * 10000) / 10000);
+}
+
+function updateAllFields() {
+  getAllFields().forEach(el => {
+    const t = el.dataset.type;
+    if (t === 'input') {
+      if (el.dataset.refType === 'ref' && el.dataset.refId) {
+        const v = getFieldValue(el.dataset.fieldId);
+        el.textContent = formatValue(v);
+        el.classList.add('is-ref');
+      } else {
+        el.textContent = el.dataset.value || '0';
+        el.classList.remove('is-ref');
+      }
+    } else if (t === 'output') {
+      const v = getFieldValue(el.dataset.fieldId);
+      if (!isFinite(v)) {
+        el.textContent = 'Err';
+        el.classList.add('is-error');
+      } else {
+        el.textContent = formatValue(v);
+        el.classList.remove('is-error');
+      }
+    }
+  });
+  renderVariableList();
+  reRenderFormulasWithPlaceholders();
+}
+
+async function reRenderFormulasWithPlaceholders() {
+  const targets = editor.querySelectorAll('.render-target[data-raw-latex]');
+  for (const target of targets) {
+    const raw = target.dataset.rawLatex;
+    if (!raw || !/\[(input|output):/.test(raw)) continue;
+    const resolved = resolveFieldPlaceholders(raw);
+    if (resolved === target.dataset.latex) continue; // unverändert, kein Re-Render nötig
+    target.dataset.latex = resolved;
+    await renderLatexInElement(target, resolved);
+  }
+}
+
+function renderVariableList() {
+  const list = document.getElementById('variableList');
+  const allFields = getAllFields();
+  // Nur eindeutige field-ids zeigen (Klone überspringen)
+  const seen = new Set();
+  const fields = allFields.filter(el => {
+    if (seen.has(el.dataset.fieldId)) return false;
+    seen.add(el.dataset.fieldId);
+    return true;
+  });
+  list.innerHTML = '';
+  if (!fields.length) {
+    const e = document.createElement('div');
+    e.className = 'library-empty';
+    e.textContent = 'Noch keine Felder. Füge Input/Output über die Toolbar hinzu.';
+    list.appendChild(e);
+    return;
+  }
+  fields.forEach(el => {
+    const t = el.dataset.type;
+    const item = document.createElement('div');
+    item.className = 'var-item ' + (t === 'input' ? 'var-input' : 'var-output');
+    if (!el.dataset.name) item.classList.add('var-noname');
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'var-name';
+    nameSpan.textContent = el.dataset.name || '(unbenannt)';
+    nameSpan.title = (t === 'input' ? 'Input: ' : 'Output: ') + (el.dataset.name || '(unbenannt)');
+
+    const valSpan = document.createElement('span');
+    valSpan.className = 'var-value';
+    valSpan.textContent = el.textContent;
+
+    item.appendChild(nameSpan);
+    item.appendChild(valSpan);
+    item.style.cursor = 'grab';
+    item.draggable = true;
+    item.title = 'Ziehen, um diese Variable an eine Stelle im Text zu verschieben';
+    item.addEventListener('click', () => openFieldModal(el.dataset.fieldId));
+    item.addEventListener('dragstart', (e) => {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('application/x-field-id', el.dataset.fieldId);
+      e.dataTransfer.setData('text/plain', '');
+    });
+    list.appendChild(item);
+  });
+}
+
+// --- Einfügen ---
+function makeFieldSpan(type) {
+  const span = document.createElement('span');
+  span.className = type === 'input' ? 'input-field' : 'output-field';
+  span.contentEditable = 'false';
+  span.dataset.fieldId = nextFieldId();
+  span.dataset.type = type;
+  if (type === 'input') {
+    span.dataset.refType = 'static';
+    span.dataset.value = '0';
+    span.textContent = '0';
+  } else {
+    span.dataset.expr = '';
+    span.textContent = '?';
+  }
+  span.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openFieldModal(span.dataset.fieldId);
+  });
+  return span;
+}
+
+function insertNodeAtCursor(node) {
+  editor.focus();
+  let sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || !editor.contains(sel.anchorNode)) {
+    if (savedRange) {
+      sel.removeAllRanges();
+      sel.addRange(savedRange);
+    } else {
+      ensureEditorSelection();
+    }
+  }
+  sel = window.getSelection();
+  const range = sel.getRangeAt(0);
+  range.deleteContents();
+  range.insertNode(node);
+  // Cursor nach dem eingefügten Knoten + ein non-breaking-space als Platzhalter
+  const after = document.createRange();
+  after.setStartAfter(node);
+  after.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(after);
+  savedRange = after.cloneRange();
+}
+
+function insertInputField() {
+  isFieldBeingCreated = true;
+  if (isLatexActive()) {
+    const textarea = document.getElementById('latexInput');
+    savedLatexTextareaPos = { start: textarea.selectionStart, end: textarea.selectionEnd };
+    pendingLatexFieldInsert = true;
+    const span = makeFieldSpan('input');
+    putFieldIntoHiddenStore(span);
+    openFieldModal(span.dataset.fieldId);
+    return;
+  }
+  const span = makeFieldSpan('input');
+  insertNodeAtCursor(span);
+  openFieldModal(span.dataset.fieldId);
+}
+
+function insertOutputField() {
+  isFieldBeingCreated = true;
+  if (isLatexActive()) {
+    const textarea = document.getElementById('latexInput');
+    savedLatexTextareaPos = { start: textarea.selectionStart, end: textarea.selectionEnd };
+    pendingLatexFieldInsert = true;
+    const span = makeFieldSpan('output');
+    putFieldIntoHiddenStore(span);
+    openFieldModal(span.dataset.fieldId);
+    return;
+  }
+  const span = makeFieldSpan('output');
+  insertNodeAtCursor(span);
+  openFieldModal(span.dataset.fieldId);
+}
+
+// Felder die nur in LaTeX-Formeln referenziert werden, leben im Editor (für getAllFields / Sidebar / Platzhalter-Lookup),
+// werden aber visuell nicht inline angezeigt — sondern in einem verstecken Container.
+function putFieldIntoHiddenStore(span) {
+  let store = editor.querySelector('#hiddenFields');
+  if (!store) {
+    store = document.createElement('div');
+    store.id = 'hiddenFields';
+    store.style.display = 'none';
+    store.contentEditable = 'false';
+    editor.appendChild(store);
+  }
+  store.appendChild(span);
+}
+
+// --- Modal ---
+let editingFieldId = null;
+
+function openFieldModal(id) {
+  const el = getFieldElement(id);
+  if (!el) return;
+  editingFieldId = id;
+  const t = el.dataset.type;
+  document.getElementById('fieldModalTitle').textContent =
+    t === 'input' ? 'Input-Feld bearbeiten' : 'Output-Feld bearbeiten';
+  document.getElementById('fieldName').value = el.dataset.name || '';
+  document.getElementById('nameRequiredHint').textContent = (t === 'output') ? '(Pflicht)' : '(optional)';
+  document.getElementById('fieldInputOptions').style.display = (t === 'input') ? '' : 'none';
+  document.getElementById('fieldOutputOptions').style.display = (t === 'output') ? '' : 'none';
+
+  if (t === 'input') {
+    document.getElementById('fieldRefType').value = el.dataset.refType || 'static';
+    document.getElementById('fieldValue').value = el.dataset.value || '';
+    // Output-Optionen für Referenz befüllen
+    const refSel = document.getElementById('fieldRefTarget');
+    refSel.innerHTML = '';
+    getAllFields()
+      .filter(f => f.dataset.type === 'output' && f.dataset.fieldId !== id)
+      .forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f.dataset.fieldId;
+        opt.textContent = (f.dataset.name || '(unbenannt)');
+        if (f.dataset.fieldId === el.dataset.refId) opt.selected = true;
+        refSel.appendChild(opt);
+      });
+    if (!refSel.options.length) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = '(keine Output-Felder vorhanden)';
+      refSel.appendChild(opt);
+    }
+    onFieldRefTypeChange();
+  } else {
+    document.getElementById('fieldExpr').value = el.dataset.expr || '';
+    const avail = getAllFields()
+      .filter(f => f.dataset.name && f.dataset.fieldId !== id)
+      .map(f => f.dataset.name);
+    document.getElementById('fieldAvailVars').textContent = avail.length ? avail.join(', ') : '—';
+
+    // Bei "frei schwebenden" Outputs (LaTeX-Modus): Auto-Erkennung funktioniert auch hier,
+    // liest aber aus dem LaTeX-Code selbst statt aus dem Haupteditor-Text.
+    const isInHiddenStore = !!el.closest('#hiddenFields');
+    document.getElementById('outputAutoHint').innerHTML = isInHiddenStore
+      ? 'Die Formel wird automatisch aus dem <b>LaTeX-Code</b> abgeleitet: zwischen <code>:</code> und <code>=</code>, zwischen zwei <code>=</code>, oder zwischen Textanfang und <code>=</code> (relativ zur Stelle des Platzhalters im Code).<br>Beispiel: <code>A = 2^2 = [output:AA]</code> → rechnet <code>2^2</code>.'
+      : 'Die Formel wird automatisch aus dem Text davor erkannt: zwischen <code>:</code> und <code>=</code>, zwischen zwei <code>=</code>, oder zwischen Zeilenanfang und <code>=</code>.<br>Beispiel: „Berechnung: 2+4*3 = <b>[Output]</b>“ → rechnet <code>2+4*3</code>.';
+    document.getElementById('fieldExprLabel').firstChild.nodeValue = 'Expression manuell überschreiben (optional)';
+    document.getElementById('fieldExpr').placeholder = 'leer lassen für Auto-Erkennung';
+  }
+
+  document.getElementById('fieldOverlay').classList.add('open');
+  document.getElementById('fieldName').focus();
+}
+
+function onFieldRefTypeChange() {
+  const t = document.getElementById('fieldRefType').value;
+  document.getElementById('fieldValueLabel').style.display = (t === 'static') ? '' : 'none';
+  document.getElementById('fieldRefLabel').style.display = (t === 'ref') ? '' : 'none';
+}
+
+function saveFieldFromModal() {
+  if (!editingFieldId) return;
+  const el = getFieldElement(editingFieldId);
+  if (!el) { closeFieldModal(); return; }
+  const name = document.getElementById('fieldName').value.trim();
+
+  if (el.dataset.type === 'output' && !name) {
+    alert('Bitte einen Namen für das Output-Feld eingeben.');
+    document.getElementById('fieldName').focus();
+    return;
+  }
+
+  el.dataset.name = name;
+  if (el.dataset.type === 'input') {
+    const rt = document.getElementById('fieldRefType').value;
+    el.dataset.refType = rt;
+    if (rt === 'static') {
+      el.dataset.value = document.getElementById('fieldValue').value.trim() || '0';
+      delete el.dataset.refId;
+    } else {
+      el.dataset.refId = document.getElementById('fieldRefTarget').value;
+    }
+  } else {
+    el.dataset.expr = document.getElementById('fieldExpr').value.trim();
+  }
+
+  // Daten auf alle Klone mit gleicher field-id übertragen
+  syncFieldClones(el);
+
+  updateAllFields();
+
+  // LaTeX-Modus: Platzhalter an gespeicherte Textarea-Position einfügen
+  if (pendingLatexFieldInsert && name) {
+    const textarea = document.getElementById('latexInput');
+    if (savedLatexTextareaPos) {
+      textarea.setSelectionRange(savedLatexTextareaPos.start, savedLatexTextareaPos.end);
+    }
+    insertAtTextareaCursor('[' + el.dataset.type + ':' + name + ']');
+  }
+  pendingLatexFieldInsert = false;
+  savedLatexTextareaPos = null;
+  isFieldBeingCreated = false;
+
+  closeFieldModal();
+}
+
+// Überträgt Konfigurations-Daten vom Master-Element auf alle DOM-Klone mit gleicher field-id.
+function syncFieldClones(master) {
+  const id = master.dataset.fieldId;
+  if (!id) return;
+  editor.querySelectorAll('[data-field-id="' + id + '"]').forEach(other => {
+    if (other === master) return;
+    other.dataset.name = master.dataset.name || '';
+    other.dataset.type = master.dataset.type;
+    if (master.dataset.type === 'input') {
+      other.dataset.refType = master.dataset.refType || 'static';
+      if (master.dataset.value !== undefined) other.dataset.value = master.dataset.value;
+      if (master.dataset.refId !== undefined) other.dataset.refId = master.dataset.refId;
+      else delete other.dataset.refId;
+    } else {
+      other.dataset.expr = master.dataset.expr || '';
+    }
+  });
+}
+
+function closeFieldModal() {
+  // Wenn das Feld gerade erst angelegt und nicht bestätigt wurde: wieder entfernen (alle Klone)
+  if (isFieldBeingCreated && editingFieldId) {
+    editor.querySelectorAll('[data-field-id="' + editingFieldId + '"]').forEach(el => el.remove());
+    updateAllFields();
+  }
+  isFieldBeingCreated = false;
+  document.getElementById('fieldOverlay').classList.remove('open');
+  editingFieldId = null;
+  pendingLatexFieldInsert = false;
+  savedLatexTextareaPos = null;
+}
+
+function deleteCurrentField() {
+  if (!editingFieldId) return;
+  editor.querySelectorAll('[data-field-id="' + editingFieldId + '"]').forEach(el => el.remove());
+  isFieldBeingCreated = false;
+  updateAllFields();
+  closeFieldModal();
+}
+
+document.getElementById('fieldOverlay').addEventListener('click', (e) => {
+  if (e.target.id === 'fieldOverlay') closeFieldModal();
+});
+
+// Bei Tippen im Editor: Auto-Outputs (ohne manuelle Expression) neu berechnen
+editor.addEventListener('input', () => {
+  let needUpdate = false;
+  editor.querySelectorAll('.output-field').forEach(el => {
+    if (!el.dataset.expr || !el.dataset.expr.trim()) needUpdate = true;
+  });
+  if (needUpdate) updateAllFields();
+});
+
+// --- Drag & Drop: Formula-Blocks in der Reihenfolge verschieben ---
+let dragEl = null;
+let dropIndicator = null;
+
+function ensureDropIndicator() {
+  if (!dropIndicator) {
+    dropIndicator = document.createElement('div');
+    dropIndicator.className = 'drop-indicator';
+  }
+  return dropIndicator;
+}
+
+function removeDropIndicator() {
+  if (dropIndicator && dropIndicator.parentNode) {
+    dropIndicator.parentNode.removeChild(dropIndicator);
+  }
+}
+
+function getDragAfterElement(container, y) {
+  const elements = [...container.children].filter(
+    (el) => el !== dragEl && el !== dropIndicator && el.id !== 'hiddenFields'
+  );
+  let closest = { offset: Number.NEGATIVE_INFINITY, element: null };
+  for (const el of elements) {
+    const box = el.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) {
+      closest = { offset, element: el };
+    }
+  }
+  return closest.element;
+}
+
+editor.addEventListener('dragstart', (e) => {
+  const block = e.target.closest('.formula-block, .image-block');
+  if (!block) return;
+  dragEl = block;
+  setTimeout(() => block.classList.add('dragging'), 0);
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', 'block-drag');
+});
+
+editor.addEventListener('dragend', () => {
+  if (dragEl) dragEl.classList.remove('dragging');
+  removeDropIndicator();
+  dragEl = null;
+});
+
+editor.addEventListener('dragover', (e) => {
+  if (dragEl) {
+    e.preventDefault();
+    const afterEl = getDragAfterElement(editor, e.clientY);
+    const indicator = ensureDropIndicator();
+    if (afterEl == null) {
+      editor.appendChild(indicator);
+    } else {
+      editor.insertBefore(indicator, afterEl);
+    }
+  } else if (e.dataTransfer && (e.dataTransfer.types.includes('application/x-latex') || e.dataTransfer.types.includes('application/x-field-id'))) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    showInlineDropCaret(e.clientX, e.clientY);
+  }
+});
+
+editor.addEventListener('dragleave', (e) => {
+  // Nur entfernen, wenn der Mauszeiger den Editor wirklich verlässt (nicht nur ein Kind-Element)
+  if (e.target === editor) hideInlineDropCaret();
+});
+
+editor.addEventListener('drop', (e) => {
+  hideInlineDropCaret();
+  if (dragEl) {
+    e.preventDefault();
+    const afterEl = getDragAfterElement(editor, e.clientY);
+    removeDropIndicator();
+    if (afterEl == null) {
+      editor.appendChild(dragEl);
+    } else {
+      editor.insertBefore(dragEl, afterEl);
+    }
+    return;
+  }
+
+  const fieldId = e.dataTransfer.getData('application/x-field-id');
+  if (fieldId) {
+    e.preventDefault();
+    cloneFieldToDropPosition(fieldId, e.clientX, e.clientY);
+    return;
+  }
+
+  const latex = e.dataTransfer.getData('application/x-latex');
+  if (latex) {
+    e.preventDefault();
+    insertFormulaFromLibraryAt(latex, e.clientX, e.clientY);
+  }
+});
+
+// --- Live-Drop-Vorschau ---
+let inlineDropCaret = null;
+
+function showInlineDropCaret(clientX, clientY) {
+  hideInlineDropCaret();
+  let dropRange = null;
+  if (document.caretRangeFromPoint) {
+    dropRange = document.caretRangeFromPoint(clientX, clientY);
+  } else if (document.caretPositionFromPoint) {
+    const pos = document.caretPositionFromPoint(clientX, clientY);
+    if (pos) {
+      dropRange = document.createRange();
+      dropRange.setStart(pos.offsetNode, pos.offset);
+      dropRange.collapse(true);
+    }
+  }
+  if (!dropRange || !editor.contains(dropRange.startContainer)) return;
+  inlineDropCaret = document.createElement('span');
+  inlineDropCaret.className = 'inline-drop-caret';
+  inlineDropCaret.setAttribute('contenteditable', 'false');
+  try { dropRange.insertNode(inlineDropCaret); } catch (e) { inlineDropCaret = null; }
+}
+
+function hideInlineDropCaret() {
+  if (inlineDropCaret && inlineDropCaret.parentNode) {
+    inlineDropCaret.parentNode.removeChild(inlineDropCaret);
+  }
+  inlineDropCaret = null;
+}
+
+// Klont ein Feld an die Drop-Position. Wenn das Original im Hidden-Store liegt und
+// dort die einzige Instanz ist, wird es stattdessen verschoben (damit es nicht hidden bleibt).
+function cloneFieldToDropPosition(fieldId, clientX, clientY) {
+  const master = getFieldElement(fieldId);
+  if (!master) return;
+
+  let dropRange = null;
+  if (document.caretRangeFromPoint) {
+    dropRange = document.caretRangeFromPoint(clientX, clientY);
+  } else if (document.caretPositionFromPoint) {
+    const pos = document.caretPositionFromPoint(clientX, clientY);
+    if (pos) {
+      dropRange = document.createRange();
+      dropRange.setStart(pos.offsetNode, pos.offset);
+      dropRange.collapse(true);
+    }
+  }
+  if (!dropRange || !editor.contains(dropRange.startContainer)) return;
+  if (master.contains(dropRange.startContainer)) return; // ins eigene Feld ist sinnlos
+
+  // Klon erstellen: gleiche fieldId, gleiche Daten, eigener Klick-Handler
+  const clone = master.cloneNode(true);
+  clone.addEventListener('click', (e) => {
+    e.stopPropagation();
+    openFieldModal(clone.dataset.fieldId);
+  });
+  dropRange.insertNode(clone);
+
+  // Cursor nach dem Klon
+  const sel = window.getSelection();
+  const after = document.createRange();
+  after.setStartAfter(clone);
+  after.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(after);
+  savedRange = after.cloneRange();
+
+  // Falls Master im Hidden-Store war und das war seine einzige Instanz: Master dort entfernen
+  // (er ist jetzt sichtbar im Text repräsentiert)
+  if (master.closest('#hiddenFields')) {
+    const otherInstances = editor.querySelectorAll('[data-field-id="' + fieldId + '"]');
+    if (otherInstances.length > 1) {
+      master.remove();
+      const store = editor.querySelector('#hiddenFields');
+      if (store && !store.children.length) store.remove();
+    }
+  }
+
+  updateAllFields();
+}
+
+
+// =====================================================
+// FINAL PATCH: LaTeX output value persistence + variable DnD + 1s refresh
+// =====================================================
+(function(){
+  function fieldClick(el){ el.addEventListener('click', function(e){ e.stopPropagation(); openFieldModal(el.dataset.fieldId); }); }
+  function hasType(dt, type){ if(!dt || !dt.types) return false; var t=dt.types; return (typeof t.includes==='function') ? t.includes(type) : (typeof t.contains==='function' ? t.contains(type) : Array.from(t).includes(type)); }
+  function dropRange(x,y){ var r=null; if(document.caretRangeFromPoint) r=document.caretRangeFromPoint(x,y); else if(document.caretPositionFromPoint){ var p=document.caretPositionFromPoint(x,y); if(p){ r=document.createRange(); r.setStart(p.offsetNode,p.offset); r.collapse(true); } } return r; }
+  function storedLatexValue(el){ if(!el || el.dataset.type!=='output' || el.dataset.latexValue===undefined) return NaN; var v=parseFloat(el.dataset.latexValue); return isFinite(v)?v:NaN; }
+
+  var baseGetFieldValue = window.getFieldValue;
+  window.getFieldValue = function(id, visited){
+    visited = visited || new Set();
+    var el = getFieldElement(id);
+    if(el && el.dataset.type==='output' && (!el.dataset.expr || !el.dataset.expr.trim())){
+      var sv = storedLatexValue(el);
+      if(isFinite(sv)) return sv;
+    }
+    return baseGetFieldValue(id, visited);
+  };
+
+  function makeVisibleInputClone(inputEl){
+    var n=document.createElement('span');
+    n.className='input-field' + (inputEl.dataset.refType==='ref' ? ' is-ref' : '');
+    n.contentEditable='false';
+    n.dataset.fieldId=inputEl.dataset.fieldId;
+    n.dataset.type='input';
+    n.dataset.name=inputEl.dataset.name || '';
+    n.dataset.refType=inputEl.dataset.refType || 'static';
+    if(inputEl.dataset.value!==undefined) n.dataset.value=inputEl.dataset.value;
+    if(inputEl.dataset.refId!==undefined) n.dataset.refId=inputEl.dataset.refId;
+    n.textContent=inputEl.textContent || inputEl.dataset.value || '0';
+    fieldClick(n);
+    return n;
+  }
+  window.makeVisibleInputClone = makeVisibleInputClone;
+
+  window.makeInputReferenceToOutput = function(outputEl){
+    var ref=document.createElement('span');
+    ref.className='input-field is-ref';
+    ref.contentEditable='false';
+    ref.dataset.fieldId=nextFieldId();
+    ref.dataset.type='input';
+    ref.dataset.refType='ref';
+    ref.dataset.refId=outputEl.dataset.fieldId;
+    ref.dataset.referenceClone='true';
+    ref.dataset.sourceOutputName=outputEl.dataset.name || '';
+    ref.dataset.name='';
+    var v=getFieldValue(outputEl.dataset.fieldId, new Set());
+    ref.textContent=isFinite(v) ? formatValue(v) : (outputEl.textContent || '—');
+    fieldClick(ref);
+    return ref;
+  };
+
+  function insertAtDrop(node, x, y){
+    var r=dropRange(x,y), hidden=editor.querySelector('#hiddenFields');
+    if(!r || !editor.contains(r.startContainer) || (hidden && hidden.contains(r.startContainer))){
+      var p=document.createElement('p'); p.appendChild(node); p.appendChild(document.createTextNode('\u00A0')); editor.appendChild(p);
+      var s0=window.getSelection(), r0=document.createRange(); r0.setStart(p,p.childNodes.length); r0.collapse(true); s0.removeAllRanges(); s0.addRange(r0); savedRange=r0.cloneRange(); return true;
+    }
+    r.deleteContents(); r.insertNode(node); var sp=document.createTextNode('\u00A0'); node.parentNode.insertBefore(sp,node.nextSibling);
+    var s=window.getSelection(), a=document.createRange(); a.setStartAfter(sp); a.collapse(true); s.removeAllRanges(); s.addRange(a); savedRange=a.cloneRange(); return true;
+  }
+
+  window.cloneFieldToDropPosition = function(fieldId, x, y){
+    var master=getFieldElement(fieldId); if(!master) return;
+    var node = master.dataset.type==='output' ? makeInputReferenceToOutput(master) : makeVisibleInputClone(master);
+    insertAtDrop(node,x,y); updateAllFields();
+  };
+
+  // Sidebar renderer with robust drag payload and no duplicate reference-clones.
+  window.renderVariableList = function(){
+    var list=document.getElementById('variableList'), seen=new Set();
+    var fields=getAllFields().filter(function(el){ if(el.dataset.referenceClone==='true') return false; if(seen.has(el.dataset.fieldId)) return false; seen.add(el.dataset.fieldId); return true; });
+    list.innerHTML='';
+    if(!fields.length){ var e=document.createElement('div'); e.className='library-empty'; e.textContent='Noch keine Felder. Füge Input/Output über die Toolbar hinzu.'; list.appendChild(e); return; }
+    fields.forEach(function(el){
+      var t=el.dataset.type, item=document.createElement('div'); item.className='var-item '+(t==='input'?'var-input':'var-output'); if(!el.dataset.name) item.classList.add('var-noname');
+      var ns=document.createElement('span'); ns.className='var-name'; ns.textContent=el.dataset.name || '(unbenannt)'; ns.title=(t==='input'?'Input: ':'Output: ')+(el.dataset.name || '(unbenannt)');
+      var vs=document.createElement('span'); vs.className='var-value'; vs.textContent=el.textContent;
+      item.appendChild(ns); item.appendChild(vs); item.style.cursor='grab'; item.draggable=true; item.title='Ziehen, um diese Variable in den Text einzufügen';
+      item.addEventListener('click', function(){ openFieldModal(el.dataset.fieldId); });
+      item.addEventListener('dragstart', function(ev){ ev.dataTransfer.effectAllowed='copy'; ev.dataTransfer.setData('application/x-field-id', el.dataset.fieldId); ev.dataTransfer.setData('application/x-field-kind', el.dataset.type || ''); ev.dataTransfer.setData('text/plain','__FIELD_ID__:'+el.dataset.fieldId); });
+      list.appendChild(item);
+    });
+  };
+
+  // Capture only field drops once; prevents triple insertion from bubbling handlers.
+  function fieldOver(e){ if(e.dataTransfer && hasType(e.dataTransfer,'application/x-field-id')){ e.preventDefault(); e.stopImmediatePropagation(); e.dataTransfer.dropEffect='copy'; } }
+  function fieldDrop(e){ if(!e.dataTransfer) return; var id=e.dataTransfer.getData('application/x-field-id') || ''; if(!id){ var p=e.dataTransfer.getData('text/plain') || ''; if(p.indexOf('__FIELD_ID__:')===0) id=p.slice('__FIELD_ID__:'.length); } if(!id) return; e.preventDefault(); e.stopImmediatePropagation(); cloneFieldToDropPosition(id,e.clientX,e.clientY); }
+  ['editor','editorScroll','exportArea'].forEach(function(id){ var el=document.getElementById(id); if(el){ el.addEventListener('dragover',fieldOver,true); el.addEventListener('drop',fieldDrop,true); } });
+
+  // LaTeX evaluation helpers.
+  function readBalanced(s,o){ if(s[o]!=='{') return null; var d=0; for(var i=o;i<s.length;i++){ if(s[i]==='{') d++; if(s[i]==='}') d--; if(d===0) return {content:s.slice(o+1,i),end:i}; } return null; }
+  function replFrac(s){ var token='\\frac',out='',i=0; while(i<s.length){ var pos=s.indexOf(token,i); if(pos===-1){out+=s.slice(i);break;} out+=s.slice(i,pos); var j=pos+token.length; while(j<s.length && /\s/.test(s[j])) j++; var num=readBalanced(s,j); if(!num){out+=token;i=j;continue;} j=num.end+1; while(j<s.length && /\s/.test(s[j])) j++; var den=readBalanced(s,j); if(!den){out+=token+'{'+num.content+'}';i=j;continue;} out+='(('+replFrac(num.content)+')/('+replFrac(den.content)+'))'; i=den.end+1; } return out; }
+  function replOne(s,cmd,rep){ var token='\\'+cmd,out='',i=0; while(i<s.length){ var pos=s.indexOf(token,i); if(pos===-1){out+=s.slice(i);break;} out+=s.slice(i,pos); var j=pos+token.length; while(j<s.length && /\s/.test(s[j])) j++; var a=readBalanced(s,j); if(!a){out+=token;i=j;continue;} out+=rep+'('+a.content+')'; i=a.end+1; } return out; }
+
+  window.normaliseLatexForEvaluation = function(expr){
+    var p=expr || ''; p=p.replace(/\\begin\{[^}]+\}|\\end\{[^}]+\}/g,' '); p=p.replace(/\\\\(?:\s*\[[^\]]*\])?/g,' '); p=p.replace(/&/g,' ');
+    p=p.replace(/\\,|\\;|\\:|\\!|\\quad|\\qquad|~/g,' '); p=p.replace(/\\left|\\right/g,''); p=p.replace(/\\(?:mathrm|mathbf|mathit|text|operatorname)\s*\{([^{}]*)\}/g,'$1');
+    p=replFrac(p); p=replOne(p,'sqrt','sqrt'); p=p.replace(/\\pi\b/g,'pi'); p=p.replace(/\\cdot|\\times/g,'*'); p=p.replace(/\\div/g,'/');
+    p=p.replace(/\\sin\b/g,'sin').replace(/\\cos\b/g,'cos').replace(/\\tan\b/g,'tan').replace(/\\ln\b/g,'ln').replace(/\\log\b/g,'log').replace(/\\abs\b/g,'abs');
+    p=p.replace(/(\d),(\d)/g,'$1.$2'); p=p.replace(/\{/g,'(').replace(/\}/g,')'); p=p.replace(/\^/g,'**'); return p;
+  };
+
+  window.evalExpression = function(expr, visited){
+    visited=visited || new Set(); if(!expr || !expr.trim()) return NaN; var p=normaliseLatexForEvaluation(expr);
+    var named=getAllFields().filter(function(el){return el.dataset.name && /^[a-zA-Z_]\w*$/.test(el.dataset.name);}).sort(function(a,b){return b.dataset.name.length-a.dataset.name.length;});
+    var seen=new Set(); named.forEach(function(el){ var n=el.dataset.name; if(seen.has(n)) return; seen.add(n); var r=new RegExp('\\b'+n+'\\b','g'); if(r.test(p)){ var v=getFieldValue(el.dataset.fieldId,new Set(visited)); p=p.replace(r,isFinite(v)?'('+v+')':'(0)'); } });
+    try{ var fn=new Function('pi','e','sqrt','abs','pow','sin','cos','tan','log','ln','min','max','round','floor','ceil','"use strict"; return ('+p+')'); var res=fn(Math.PI,Math.E,Math.sqrt,Math.abs,Math.pow,Math.sin,Math.cos,Math.tan,Math.log10,Math.log,Math.min,Math.max,Math.round,Math.floor,Math.ceil); return typeof res==='number'?res:NaN; }catch(e){ return NaN; }
+  };
+
+  window.normaliseAutoExpressionText = function(exprText, visited){
+    var e=(exprText || '').trim(); e=e.replace(/&/g,' '); e=e.replace(/\\begin\{[^}]+\}|\\end\{[^}]+\}/g,' '); e=e.replace(/\\\\(?:\s*\[[^\]]*\])?/g,' ');
+    e=e.replace(/\[(input|output):([^\]]+)\]/g,function(m,k,n){ var f=getFieldByName(n.trim()); if(!f) return '0'; if(visited && visited.has(f.dataset.fieldId)) return '0'; var v=getFieldValue(f.dataset.fieldId,new Set(visited || [])); return isFinite(v)?'('+v+')':'(0)'; });
+    return e.trim();
+  };
+
+  window.getAutoExpressionFromLatexText = function(rawLatex, placeholderStart, visited){
+    var idx=Number(placeholderStart); if(!Number.isFinite(idx) || idx<0) return ''; var lastNl=rawLatex.lastIndexOf('\n',idx-1), lastBr=rawLatex.lastIndexOf('\\\\',idx-1), lineStart=Math.max(lastNl,lastBr)+1;
+    var before=rawLatex.substring(lineStart,idx), eq=[]; for(var i=0;i<before.length;i++) if(before[i]==='=') eq.push(lineStart+i); if(!eq.length) return normaliseAutoExpressionText(before,visited);
+    var expr=''; if(eq.length>=2){ expr=rawLatex.substring(eq[eq.length-2]+1,eq[eq.length-1]); } else { var only=eq[0], b=rawLatex.substring(lineStart,only), a=rawLatex.substring(only+1,idx); var after=normaliseAutoExpressionText(a,visited); var label=/[A-Za-z\\]|&/.test(b) && !/[+\-*/^]|\\frac|\\sqrt|\\cdot|\\times|\d/.test(b.replace(/&/g,'')); expr=(after && label)?a:b; }
+    return normaliseAutoExpressionText(expr,visited);
+  };
+
+  window.resolveFieldPlaceholders = function(rawLatex, visited){
+    visited=visited || new Set();
+    return rawLatex.replace(/\[(input|output):([^\]]+)\]/g,function(match,kind,name,offset){
+      var el=getFieldByName(name.trim()); if(!el) return match; if(visited.has(el.dataset.fieldId)) return '\\text{Err}'; var v;
+      if(el.dataset.type==='output' && (!el.dataset.expr || !el.dataset.expr.trim())){ var expr=getAutoExpressionFromLatexText(rawLatex,offset,visited); v=evalExpression(expr,new Set(visited).add(el.dataset.fieldId)); if(isFinite(v)){ el.dataset.latexValue=String(v); el.textContent=formatValue(v); el.classList.remove('is-error'); } else { delete el.dataset.latexValue; el.textContent='Err'; el.classList.add('is-error'); } }
+      else { v=getFieldValue(el.dataset.fieldId,new Set(visited)); }
+      return isFinite(v) ? formatValue(v) : '\\text{Err}';
+    });
+  };
+
+  window.convertTypedFieldPlaceholders = function(){
+    var hidden=editor.querySelector('#hiddenFields'), re=/\[(input|output):([^\]]+)\]/g;
+    var walker=document.createTreeWalker(editor,NodeFilter.SHOW_TEXT,{acceptNode:function(node){ if(!node.nodeValue || !/\[(input|output):([^\]]+)\]/.test(node.nodeValue)) return NodeFilter.FILTER_REJECT; var p=node.parentElement; if(!p) return NodeFilter.FILTER_REJECT; if(hidden && hidden.contains(node)) return NodeFilter.FILTER_REJECT; if(p.closest('.input-field, .output-field, .render-target, .formula-block, .image-block, pre')) return NodeFilter.FILTER_REJECT; return NodeFilter.FILTER_ACCEPT; }});
+    var nodes=[]; while(walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach(function(node){ var val=node.nodeValue,last=0,frag=document.createDocumentFragment(),m; re.lastIndex=0; while((m=re.exec(val))!==null){ if(m.index>last) frag.appendChild(document.createTextNode(val.slice(last,m.index))); var f=getFieldByName((m[2]||'').trim()), rep=null; if(f){ if(m[1]==='output' && f.dataset.type==='output') rep=makeInputReferenceToOutput(f); if(m[1]==='input' && f.dataset.type==='input') rep=makeVisibleInputClone(f); } frag.appendChild(rep || document.createTextNode(m[0])); last=re.lastIndex; } if(last<val.length) frag.appendChild(document.createTextNode(val.slice(last))); node.parentNode.replaceChild(frag,node); });
+  };
+
+  var baseUpdateAllFields=window.updateAllFields;
+  window.updateAllFields=function(){
+    baseUpdateAllFields();
+    getAllFields().forEach(function(el){
+      if(el.dataset.type==='output' && (!el.dataset.expr || !el.dataset.expr.trim())){ var sv=storedLatexValue(el); if(isFinite(sv)){ el.textContent=formatValue(sv); el.classList.remove('is-error'); } }
+      if(el.dataset.type==='input' && el.dataset.refType==='ref' && el.dataset.refId){ var rv=getFieldValue(el.dataset.fieldId,new Set()); if(isFinite(rv)) el.textContent=formatValue(rv); }
+    });
+    renderVariableList();
+  };
+
+  var running=false; setInterval(function(){ if(running) return; running=true; try{ convertTypedFieldPlaceholders(); updateAllFields(); } finally{ running=false; } },1000);
+})();
+
+</script>
+
+
+<style id="json-import-style-v1">
+#jsonOverlay .modal{width:min(860px,94vw)!important;max-height:88vh;overflow:auto}#jsonInput{width:100%;min-height:330px;font-family:Consolas,monospace;font-size:12px;line-height:1.4;border:1px solid #d7dce2;border-radius:10px;padding:10px;resize:vertical;background:#fbfdff}#jsonImportHelp{font-size:11px;color:#64748b;background:#f8fafc;border:1px solid #e8edf4;border-radius:10px;padding:10px;margin-top:8px}.json-row{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:#374151}.json-row input{margin:0}
+</style>
+<script>
+// BIG FEATURE: JSON import for full editor documents (text, formulas, fields, formatting, library).
+// The importer is additive as a UI feature and does not change the existing calculation/parser logic.
+(function(){
+  var JSON_IMPORT_EXAMPLE = {
+    version: '1.0',
+    meta: { title: 'Example JSON import' },
+    variables: [
+      { id: 'v_revenue', type: 'input', name: 'Revenue', value: 1200 },
+      { id: 'v_margin', type: 'input', name: 'Margin', value: 0.2534 },
+      { id: 'v_ebit', type: 'output', name: 'EBIT', expr: '' }
+    ],
+    content: [
+      { type: 'heading', level: 1, children: [{ text: 'Imported valuation note', style: { color: '#00338D', bold: true } }] },
+      { type: 'paragraph', children: [
+        { text: 'Revenue: ' }, { field: 'Revenue' }, { text: ' | Margin: ' }, { field: 'Margin' }
+      ]},
+      { type: 'formula', latex: '\\begin{aligned}EBIT &= [input:Revenue] * [input:Margin] = [output:EBIT]\\end{aligned}', library: true },
+      { type: 'paragraph', children: [
+        { text: 'Result: ', style: { bold: true } }, { field: 'EBIT' }
+      ]}
+    ]
+  };
+
+  function ensureJsonModal(){
+    var overlay = document.getElementById('jsonOverlay');
+    if (overlay) return overlay;
+    overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.id = 'jsonOverlay';
+    overlay.innerHTML =
+      '<div class="modal">'
+      + '<h2>JSON importieren</h2>'
+      + '<textarea id="jsonInput" spellcheck="false" placeholder="JSON hier einfügen ..."></textarea>'
+      + '<div class="json-row"><label><input type="checkbox" id="jsonReplaceExisting" checked> Bestehenden Editor-Inhalt ersetzen</label></div>'
+      + '<div id="jsonImportHelp">Erwartete Struktur: <code>{ version, variables, content }</code>. Unterstützt u.a. <code>paragraph</code>, <code>heading</code>, <code>list</code>, <code>formula</code>, <code>image</code>, Inline-Text mit <code>style</code> und Feldreferenzen über <code>{ field: "Name" }</code>.</div>'
+      + '<div class="modal-actions">'
+      + '<button class="ghost" type="button" onclick="closeJsonImportModal()">Abbrechen</button>'
+      + '<button type="button" onclick="fillJsonExample()">Beispiel laden</button>'
+      + '<button class="primary" type="button" onclick="importJsonFromModal()">Importieren</button>'
+      + '</div>'
+      + '</div>';
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', function(e){ if(e.target.id === 'jsonOverlay') closeJsonImportModal(); });
+    return overlay;
+  }
+
+  window.openJsonImportModal = function(){
+    var overlay = ensureJsonModal();
+    overlay.classList.add('open');
+    setTimeout(function(){ var ta=document.getElementById('jsonInput'); if(ta) ta.focus(); }, 0);
+  };
+
+  window.closeJsonImportModal = function(){
+    var overlay = document.getElementById('jsonOverlay');
+    if (overlay) overlay.classList.remove('open');
+  };
+
+  window.fillJsonExample = function(){
+    var ta = document.getElementById('jsonInput');
+    if (ta) ta.value = JSON.stringify(JSON_IMPORT_EXAMPLE, null, 2);
+  };
+
+  function addJsonButton(){
+    if (document.getElementById('btnAddJson')) return;
+    var toolbar = document.querySelector('.toolbar');
+    if (!toolbar) return;
+    var group = document.createElement('div');
+    group.className = 'group';
+    var btn = document.createElement('button');
+    btn.id = 'btnAddJson';
+    btn.type = 'button';
+    btn.textContent = 'Add JSON';
+    btn.title = 'JSON-Dokument importieren';
+    btn.addEventListener('click', openJsonImportModal);
+    group.appendChild(btn);
+    toolbar.appendChild(group);
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', addJsonButton);
+  else addJsonButton();
+
+  function strictText(v){ return (v === null || v === undefined) ? '' : String(v); }
+  function normaliseName(name){ return strictText(name).trim().toLowerCase(); }
+  function safeFieldId(raw){ return strictText(raw || nextFieldId()).replace(/[^a-zA-Z0-9_\-:.]/g, '_'); }
+
+  function getOrCreateHiddenStoreForJson(){
+    var store = editor.querySelector('#hiddenFields');
+    if (!store) {
+      store = document.createElement('div');
+      store.id = 'hiddenFields';
+      store.style.display = 'none';
+      store.contentEditable = 'false';
+      editor.appendChild(store);
+    }
+    return store;
+  }
+
+  function fieldNameExistsOutsideImport(name){
+    var target = normaliseName(name);
+    if (!target) return false;
+    return getAllFields().some(function(f){ return normaliseName(f.dataset.name) === target; });
+  }
+
+  function validateUniqueImportedVariables(vars, replaceExisting){
+    var seen = new Map();
+    for (var i=0;i<vars.length;i++){
+      var name = strictText(vars[i].name).trim();
+      if (!name) continue;
+      var key = normaliseName(name);
+      if (seen.has(key)) throw new Error('Doppelter Variablenname im JSON: "' + name + '". Variablennamen müssen eindeutig sein.');
+      seen.set(key, true);
+      if (!replaceExisting && fieldNameExistsOutsideImport(name)) throw new Error('Variablenname existiert bereits im Editor: "' + name + '". Bitte eindeutigen Namen verwenden oder Import mit Ersetzen ausführen.');
+    }
+  }
+
+  function applyStyle(el, style){
+    if (!style || typeof style !== 'object') return;
+    if (style.color) el.style.color = style.color;
+    if (style.backgroundColor || style.highlight) el.style.backgroundColor = style.backgroundColor || style.highlight;
+    if (style.fontSize) el.style.fontSize = (typeof style.fontSize === 'number' ? style.fontSize + 'px' : style.fontSize);
+    if (style.bold) el.style.fontWeight = '700';
+    if (style.italic) el.style.fontStyle = 'italic';
+    var decorations = [];
+    if (style.underline) decorations.push('underline');
+    if (style.strike || style.strikethrough) decorations.push('line-through');
+    if (decorations.length) el.style.textDecoration = decorations.join(' ');
+    if (style.align) el.style.textAlign = style.align;
+  }
+
+  function makeImportedFieldSpan(master){
+    var clone = master.cloneNode(true);
+    clone.addEventListener('click', function(e){ e.stopPropagation(); openFieldModal(clone.dataset.fieldId); });
+    return clone;
+  }
+
+  function createTextSpan(node){
+    var span = document.createElement('span');
+    span.textContent = strictText(node.text);
+    applyStyle(span, node.style);
+    return span;
+  }
+
+  function createInlineNodes(children, fieldByName, fieldById){
+    var frag = document.createDocumentFragment();
+    (children || []).forEach(function(ch){
+      if (ch === null || ch === undefined) return;
+      if (typeof ch === 'string' || typeof ch === 'number') { frag.appendChild(document.createTextNode(String(ch))); return; }
+      if (ch.br || ch.type === 'br') { frag.appendChild(document.createElement('br')); return; }
+      if (Object.prototype.hasOwnProperty.call(ch, 'text')) { frag.appendChild(createTextSpan(ch)); return; }
+      if (ch.field || ch.fieldId) {
+        var master = ch.fieldId ? fieldById.get(strictText(ch.fieldId)) : fieldByName.get(normaliseName(ch.field));
+        if (!master) {
+          var missing = document.createElement('span');
+          missing.textContent = '[NOT FOUND: ' + strictText(ch.field || ch.fieldId) + ']';
+          missing.style.color = '#ff0000';
+          missing.style.fontWeight = '700';
+          frag.appendChild(missing);
+        } else {
+          frag.appendChild(makeImportedFieldSpan(master));
+        }
+        return;
+      }
+      if (ch.children) {
+        var span = document.createElement('span');
+        span.appendChild(createInlineNodes(ch.children, fieldByName, fieldById));
+        applyStyle(span, ch.style);
+        frag.appendChild(span);
+      }
+    });
+    return frag;
+  }
+
+  function createFieldMaster(v, idMap){
+    var span = document.createElement('span');
+    var type = (v.type === 'output') ? 'output' : 'input';
+    span.className = type === 'input' ? 'input-field' : 'output-field';
+    span.contentEditable = 'false';
+    var sourceId = strictText(v.id || v.name || nextFieldId());
+    var newId = safeFieldId(sourceId);
+    while (editor.querySelector('[data-field-id="' + newId.replace(/"/g,'\\"') + '"]')) newId = nextFieldId();
+    idMap.set(sourceId, newId);
+    span.dataset.fieldId = newId;
+    span.dataset.type = type;
+    span.dataset.name = strictText(v.name).trim();
+    if (type === 'input') {
+      span.dataset.refType = v.ref || v.refName || v.refId ? 'ref' : (v.refType || 'static');
+      if (span.dataset.refType === 'static') span.dataset.value = strictText(v.value !== undefined ? v.value : 0);
+      else if (v.refId) span.dataset.pendingRefId = strictText(v.refId);
+      else if (v.refName || v.ref) span.dataset.pendingRefName = strictText(v.refName || v.ref);
+      span.textContent = span.dataset.value || '0';
+    } else {
+      span.dataset.expr = strictText(v.expr || '');
+      span.textContent = '?';
+    }
+    span.addEventListener('click', function(e){ e.stopPropagation(); openFieldModal(span.dataset.fieldId); });
+    return span;
+  }
+
+  function resolveImportedRefs(fieldMasters, fieldByName, idMap){
+    fieldMasters.forEach(function(f){
+      if (f.dataset.type !== 'input' || f.dataset.refType !== 'ref') return;
+      if (f.dataset.pendingRefId) {
+        var mapped = idMap.get(f.dataset.pendingRefId) || f.dataset.pendingRefId;
+        f.dataset.refId = mapped;
+        delete f.dataset.pendingRefId;
+      } else if (f.dataset.pendingRefName) {
+        var target = fieldByName.get(normaliseName(f.dataset.pendingRefName));
+        if (target) f.dataset.refId = target.dataset.fieldId;
+        delete f.dataset.pendingRefName;
+      }
+    });
+  }
+
+  function createBlock(block, fieldByName, fieldById){
+    var type = strictText(block.type || 'paragraph').toLowerCase();
+    var el;
+    if (type === 'heading') {
+      var lvl = Math.min(2, Math.max(1, Number(block.level || 1)));
+      el = document.createElement(lvl === 1 ? 'h1' : 'h2');
+      el.appendChild(createInlineNodes(block.children || [{text:block.text||''}], fieldByName, fieldById));
+    } else if (type === 'list') {
+      el = document.createElement(block.ordered ? 'ol' : 'ul');
+      (block.items || []).forEach(function(item){
+        var li = document.createElement('li');
+        li.appendChild(createInlineNodes(Array.isArray(item) ? item : (item.children || [{text:item.text||''}]), fieldByName, fieldById));
+        el.appendChild(li);
+      });
+    } else if (type === 'formula') {
+      el = document.createElement('div');
+      el.className = 'formula-block';
+      el.draggable = true;
+      var rawLatex = strictText(block.latex || block.rawLatex || '');
+      var resolved = resolveFieldPlaceholders(rawLatex);
+      el.innerHTML = '<span class="drag-handle" contenteditable="false">&#10074;&#10074;</span>'
+        + '<div class="render-target" contenteditable="false" data-raw-latex="' + escapeHtml(rawLatex) + '" data-latex="' + escapeHtml(resolved) + '">' + escapeHtml(resolved) + '</div>';
+      if (block.caption) {
+        var cap = document.createElement('div');
+        cap.className = 'block-caption';
+        cap.contentEditable = 'true';
+        cap.dataset.ph = 'Caption ...';
+        cap.appendChild(createInlineNodes(block.caption.children || [{text:block.caption.text || block.caption}], fieldByName, fieldById));
+        el.appendChild(cap);
+      }
+      setTimeout(function(){
+        var target = el.querySelector('.render-target');
+        if (target) renderLatexInElement(target, resolved);
+        if (block.library !== false && rawLatex) addToLibrary(rawLatex);
+      }, 0);
+    } else if (type === 'image') {
+      el = document.createElement('div');
+      el.className = 'image-block';
+      el.draggable = true;
+      el.innerHTML = '<span class="drag-handle" contenteditable="false">&#10074;&#10074;</span><img src="' + escapeHtml(strictText(block.src)) + '" alt="' + escapeHtml(strictText(block.alt || '')) + '" contenteditable="false">';
+    } else {
+      el = document.createElement('p');
+      el.appendChild(createInlineNodes(block.children || [{text:block.text||''}], fieldByName, fieldById));
+      if (!el.childNodes.length) el.innerHTML = '<br>';
+    }
+    applyStyle(el, block.style);
+    return el;
+  }
+
+  window.importEditorJson = async function(doc, options){
+    options = options || {};
+    if (!doc || typeof doc !== 'object') throw new Error('JSON muss ein Objekt sein.');
+    var vars = Array.isArray(doc.variables) ? doc.variables : [];
+    var blocks = Array.isArray(doc.content) ? doc.content : [];
+    var replaceExisting = options.replaceExisting !== false;
+
+    validateUniqueImportedVariables(vars, replaceExisting);
+
+    if (replaceExisting) {
+      editor.innerHTML = '';
+      var lib = document.getElementById('libraryList');
+      if (lib) lib.innerHTML = '<div class="library-empty">Noch keine Formeln in der Bibliothek.</div>';
+    }
+
+    var idMap = new Map();
+    var fieldByName = new Map();
+    var fieldById = new Map();
+    var store = getOrCreateHiddenStoreForJson();
+    var fieldMasters = [];
+
+    vars.forEach(function(v){
+      var master = createFieldMaster(v, idMap);
+      fieldMasters.push(master);
+      if (master.dataset.name) fieldByName.set(normaliseName(master.dataset.name), master);
+      fieldById.set(strictText(v.id || master.dataset.fieldId), master);
+      fieldById.set(master.dataset.fieldId, master);
+      store.appendChild(master);
+    });
+    resolveImportedRefs(fieldMasters, fieldByName, idMap);
+
+    blocks.forEach(function(block){
+      var node = createBlock(block, fieldByName, fieldById);
+      editor.insertBefore(node, store);
+    });
+
+    updateAllFields();
+    renderVariableList();
+    return true;
+  };
+
+  window.importJsonFromModal = async function(){
+    var ta = document.getElementById('jsonInput');
+    var replace = document.getElementById('jsonReplaceExisting');
+    try {
+      var raw = ta ? ta.value.trim() : '';
+      if (!raw) { alert('Bitte JSON einfügen.'); return; }
+      var doc = JSON.parse(raw);
+      await importEditorJson(doc, { replaceExisting: !replace || replace.checked });
+      closeJsonImportModal();
+    } catch (err) {
+      alert('JSON Import fehlgeschlagen:\n' + (err.message || String(err)));
+    }
+  };
+})();
+</script>
+
+
+<script>
+// PATCH ONLY: simple display formatting on top of last working calculation version.
+(function(){function d(v){var a=Math.abs(v);if(a>1000)return 0;if(a<1)return 4;if(a<10)return 3;return 2;}function trim(s){return s.replace(/(\.\d*?[1-9])0+$/,'$1').replace(/\.0+$/,'');}function grp(i){return i.replace(/\B(?=(\d{3})+(?!\d))/g,' ');}window.formatValue=function(v){if(!isFinite(v))return '—';if(Object.is(v,-0))v=0;var dec=d(v),r=Number(v.toFixed(dec));if(Object.is(r,-0))r=0;var sign=r<0?'-':'';var raw=trim(Math.abs(r).toFixed(dec));var p=raw.split('.');return sign+grp(p[0]||'0')+(p[1]?','+p[1]:'');};})();
+</script>
+
+
+<script>
+// PATCH ONLY: keep LaTeX formula visual size stable in PNG export.
+(function(){window.svgToPngDataUrl=function(svgEl){return new Promise(function(resolve,reject){var svgRect=svgEl.getBoundingClientRect(),fc=svgEl.closest('mjx-container')||svgEl,fr=fc.getBoundingClientRect(),width=Math.max(1,Math.round(svgRect.width||fr.width)),height=Math.max(1,Math.round(svgRect.height||fr.height)),clone=svgEl.cloneNode(true);clone.setAttribute('xmlns','http://www.w3.org/2000/svg');clone.setAttribute('width',width);clone.setAttribute('height',height);if(!clone.getAttribute('viewBox'))clone.setAttribute('viewBox','0 0 '+width+' '+height);var color=getComputedStyle(svgEl).color||'#111827';clone.querySelectorAll('[fill="currentColor"], [stroke="currentColor"]').forEach(function(el){if(el.getAttribute('fill')==='currentColor')el.setAttribute('fill',color);if(el.getAttribute('stroke')==='currentColor')el.setAttribute('stroke',color);});if(!clone.getAttribute('fill')||clone.getAttribute('fill')==='currentColor')clone.setAttribute('fill',color);var blob=new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml;charset=utf-8'}),url=URL.createObjectURL(blob),img=new Image();img.onload=function(){var scale=2,canvas=document.createElement('canvas');canvas.width=width*scale;canvas.height=height*scale;var ctx=canvas.getContext('2d');ctx.scale(scale,scale);ctx.drawImage(img,0,0,width,height);URL.revokeObjectURL(url);resolve({dataUrl:canvas.toDataURL('image/png'),width:width,height:height});};img.onerror=function(e){URL.revokeObjectURL(url);reject(e);};img.src=url;});};})();
+</script>
+
+
+<script>
+// PATCH ONLY: display '*' as a nice multiplication dot in rendered LaTeX.
+(function(){function pretty(latex){if(!latex)return latex;var parts=[];var s=latex.replace(/\\(?:begin|end)\{[^}]*\}/g,function(m){var k='\uE000'+parts.length+'\uE000';parts.push(m);return k;});var out='';for(var i=0;i<s.length;i++){var ch=s[i],p=i>0?s[i-1]:'',n=i+1<s.length?s[i+1]:'';out+=(ch==='*'&&p!=='\\'&&p!=='*'&&n!=='*')?'\\,\\cdot\\,':ch;}return out.replace(/\uE000(\d+)\uE000/g,function(_,i){return parts[Number(i)]||'';});}var base=window.resolveFieldPlaceholders;window.resolveFieldPlaceholders=function(raw,visited){return pretty(base(raw,visited));};})();
+</script>
+
+
+<script>
+// PATCH ONLY: Editing an existing LaTeX formula updates it instead of inserting a new one.
+(function(){function items(){return Array.from(document.querySelectorAll('#libraryList .library-item'));}function ensureDrag(item){if(!item||item.dataset.dynamicDrag==='true')return;item.dataset.dynamicDrag='true';item.addEventListener('dragstart',function(e){e.stopImmediatePropagation();var latex=item.dataset.latex||'';e.dataTransfer.effectAllowed='copy';e.dataTransfer.setData('application/x-latex',latex);e.dataTransfer.setData('text/plain',latex);},true);}async function preview(item,latex){var p=item?item.querySelector('.preview'):null;if(!p)return;p.textContent=latex;try{await waitForMathJax();var svg=await MathJax.tex2svgPromise(resolveFieldPlaceholders(latex),{display:true});p.innerHTML='';p.appendChild(svg);}catch(e){p.textContent=latex;}}window.syncFormulaLibraryAfterEdit=async function(oldLatex,newLatex){if(!newLatex)return;var list=document.getElementById('libraryList');if(!list)return;var its=items(),old=oldLatex?its.find(it=>it.dataset.latex===oldLatex):null,existing=its.find(it=>it.dataset.latex===newLatex);if(existing&&existing!==old){if(old)old.remove();ensureDrag(existing);return;}if(old){old.dataset.latex=newLatex;ensureDrag(old);await preview(old,newLatex);return;}await addToLibrary(newLatex);};window.insertLatexRendered=async function(){var raw=cleanupLatex(document.getElementById('latexInput').value),block=editingFormulaBlock||null,old=block?(block.querySelector('.render-target')?.dataset.rawLatex||block.querySelector('.render-target')?.dataset.latex||''):'';closeLatexModal();if(!raw)return;var resolved=resolveFieldPlaceholders(raw);if(block){var target=block.querySelector('.render-target');if(!target)return;target.dataset.rawLatex=raw;target.dataset.latex=resolved;await renderLatexInElement(target,resolved);await syncFormulaLibraryAfterEdit(old,raw);return;}var b=document.createElement('div');b.className='formula-block';b.draggable=true;b.innerHTML='<span class="drag-handle" contenteditable="false">&#10074;&#10074;</span><div class="render-target" contenteditable="false" data-raw-latex="'+escapeHtml(raw)+'" data-latex="'+escapeHtml(resolved)+'">'+escapeHtml(resolved)+'</div>';var trailing=document.createElement('p');trailing.innerHTML='<br>';insertBlockAtCursor(b,trailing);var t=b.querySelector('.render-target');await renderLatexInElement(t,resolved);await addToLibrary(raw);};})();
+</script>
+
+
+<script>
+// PATCH ONLY: enforce unique variable names across all Input/Output fields.
+(function(){function norm(n){return(n||'').trim().toLowerCase();}function dup(name,current){var target=norm(name);if(!target)return null;var seen=new Set();for(var f of getAllFields()){var id=f.dataset.fieldId||'';if(!id||id===current||seen.has(id))continue;seen.add(id);if(norm(f.dataset.name)===target)return f;}return null;}var baseSave=window.saveFieldFromModal;window.saveFieldFromModal=function(){if(!editingFieldId)return baseSave();var input=document.getElementById('fieldName'),name=(input&&input.value?input.value:'').trim(),d=dup(name,editingFieldId);if(d){alert('Variablenname bereits vergeben: "'+name+'".\nBitte einen eindeutigen Namen verwenden.');if(input){input.focus();input.select();}return;}return baseSave();};})();
+</script>
+
+
+
+<script id="patch-output-as-input-latex-fix-v1">
+// PATCH: Output-as-Input references inside LaTeX must reuse an existing output value,
+// not recalculate/overwrite that output from the current LaTeX expression.
+// Rule:
+//   [output:Name] => calculation target in the current formula line
+//   [input:Name]  => value reference, even if Name is technically an Output variable
+(function(){
+  function prettifyMultiplicationStarsForDisplay(latex){
+    if(!latex) return latex;
+    var protectedParts=[];
+    var protectedLatex=latex.replace(/\\(?:begin|end)\{[^}]*\}/g,function(m){
+      var key='\uE000'+protectedParts.length+'\uE000';
+      protectedParts.push(m);
+      return key;
+    });
+    var out='';
+    for(var i=0;i<protectedLatex.length;i++){
+      var ch=protectedLatex[i];
+      var prev=i>0?protectedLatex[i-1]:'';
+      var next=i+1<protectedLatex.length?protectedLatex[i+1]:'';
+      if(ch==='*' && prev!=='\\' && prev!=='*' && next!=='*') out+='\\,\\cdot\\,';
+      else out+=ch;
+    }
+    return out.replace(/\uE000(\d+)\uE000/g,function(_,idx){ return protectedParts[Number(idx)]||''; });
+  }
+
+  function getStoredOrCalculatedValueAsReference(el, visited){
+    if(!el) return NaN;
+
+    // If it is an output generated from a LaTeX formula, prefer its stored LaTeX value.
+    // This avoids the bug where [input:OutputName] recalculates OutputName from the CURRENT formula instead.
+    if(el.dataset.type === 'output' && (!el.dataset.expr || !el.dataset.expr.trim())){
+      var sv = parseFloat(el.dataset.latexValue);
+      if(isFinite(sv)) return sv;
+    }
+
+    // Fallback to normal field value logic.
+    return getFieldValue(el.dataset.fieldId, new Set(visited || []));
+  }
+
+  window.resolveFieldPlaceholders = function(rawLatex, visited){
+    visited = visited || new Set();
+    var resolved = (rawLatex || '').replace(/\[(input|output):([^\]]+)\]/g, function(match, kind, name, offset){
+      var el = getFieldByName((name || '').trim());
+      if(!el) return match;
+      if(visited.has(el.dataset.fieldId)) return '\\text{Err}';
+
+      var v;
+      if(kind === 'output' && el.dataset.type === 'output' && (!el.dataset.expr || !el.dataset.expr.trim())){
+        // Only an explicit [output:Name] is allowed to update/declare the output from the current LaTeX formula.
+        var expr = getAutoExpressionFromLatexText(rawLatex, offset, visited);
+        v = evalExpression(expr, new Set(visited).add(el.dataset.fieldId));
+        if(isFinite(v)){
+          el.dataset.latexValue = String(v);
+          el.textContent = formatValue(v);
+          el.classList.remove('is-error');
+        } else {
+          delete el.dataset.latexValue;
+          el.textContent = 'Err';
+          el.classList.add('is-error');
+        }
+      } else {
+        // [input:Name] is always a reference/read operation.
+        // This is true even when Name belongs to an Output variable.
+        v = getStoredOrCalculatedValueAsReference(el, visited);
+      }
+
+      return isFinite(v) ? formatValue(v) : '\\text{Err}';
+    });
+    return prettifyMultiplicationStarsForDisplay(resolved);
+  };
+
+  // Re-render formulas once after loading/importing so already imported formulas benefit immediately.
+  window.reRenderAllLatexFormulasOutputInputAware = async function(){
+    var targets = Array.from(editor.querySelectorAll('.render-target[data-raw-latex]'));
+    for(var i=0;i<targets.length;i++){
+      var target = targets[i];
+      var raw = target.dataset.rawLatex || '';
+      if(!raw) continue;
+      var resolved = resolveFieldPlaceholders(raw);
+      target.dataset.latex = resolved;
+      await renderLatexInElement(target, resolved);
+    }
+    updateAllFields();
+    renderVariableList();
+  };
+
+  var baseImportEditorJsonOutputInputAware = window.importEditorJson;
+  if(typeof baseImportEditorJsonOutputInputAware === 'function'){
+    window.importEditorJson = async function(doc, options){
+      var result = await baseImportEditorJsonOutputInputAware(doc, options);
+      await reRenderAllLatexFormulasOutputInputAware();
+      return result;
+    };
+  }
+})();
+</script>
+
+</body>
+</html>

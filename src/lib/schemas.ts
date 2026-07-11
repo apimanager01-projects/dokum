@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { DocumentJsonSchema } from '@/lib/editor/document-json'
 
 // ── Shared field definitions ────────────────────────────────────────────────
 
@@ -45,6 +46,52 @@ export const DocumentUpdateMetaSchema = z.object({
   position: positionField,
 })
 
+// Editor drafts (PRD #28, slice 7). German messages — the editor UI is
+// German end to end. `content` arrives as a JSON string in FormData and is
+// validated against the versioned document schema before touching the DB
+// (operator story 34).
+export const EditorDraftFormSchema = z.object({
+  title: z
+    .string()
+    .trim()
+    .min(1, 'Titel ist erforderlich.')
+    .max(200, 'Titel darf höchstens 200 Zeichen lang sein.'),
+  content: z
+    .string()
+    .max(3_000_000, 'Der Entwurf ist zu groß.')
+    .transform((raw, ctx) => {
+      try {
+        return JSON.parse(raw) as unknown
+      } catch {
+        ctx.addIssue({ code: 'custom', message: 'Ungültiges Dokument-JSON.' })
+        return z.NEVER
+      }
+    })
+    .pipe(DocumentJsonSchema),
+})
+
+// Editor-image upload (slice 8). Only the optional draft link goes through
+// Zod — absent when the upload must create the implicit „Unbenannt" anchor
+// draft. The file itself is validated manually in the action (documents.ts
+// precedent: MIME allowlist + size limit with German messages).
+export const EditorImageUploadSchema = z.object({
+  draft_id: uuidField.optional(),
+})
+
+// Publish an editor draft as a Document (slice 11, #39). `mode: 'update'`
+// updates the linked Document's file in place IF a live link exists, else it
+// creates a new Document under `task_id` — that single rule doubles as the
+// deleted-link fallback. `mode: 'new'` always creates („Als neues Dokument").
+// `title` is seeded client-side from the export filename (PRD story 27). The
+// PNG File itself is validated manually in the action (documents.ts
+// precedent: MIME + size limit with German messages).
+export const EditorPublishSchema = z.object({
+  draft_id: uuidField,
+  task_id: uuidField,
+  title: titleField,
+  mode: z.enum(['update', 'new']).default('update'),
+})
+
 // ── Auth schemas ────────────────────────────────────────────────────────────
 
 export const SignInSchema = z.object({
@@ -65,3 +112,6 @@ export type UnitFormData = z.infer<typeof UnitFormSchema>
 export type TaskFormData = z.infer<typeof TaskFormSchema>
 export type DocumentMetaData = z.infer<typeof DocumentMetaSchema>
 export type DocumentUpdateMetaData = z.infer<typeof DocumentUpdateMetaSchema>
+export type EditorDraftFormData = z.infer<typeof EditorDraftFormSchema>
+export type EditorImageUploadData = z.infer<typeof EditorImageUploadSchema>
+export type EditorPublishData = z.infer<typeof EditorPublishSchema>

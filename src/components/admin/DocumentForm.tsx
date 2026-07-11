@@ -48,7 +48,7 @@ export function DocumentForm({
 
   useEffect(() => {
     if (state?.ok === true) router.refresh()
-  }, [state?.ok])
+  }, [state?.ok, router])
 
   function validateFiles(files: FileList | null) {
     if (!files) return

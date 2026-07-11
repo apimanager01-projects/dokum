@@ -60,10 +60,6 @@ export default function UnitDetailClient({ tasks, openTaskId, watermarkId }: { t
   const [openTaskIds, setOpenTaskIds] = useState<Set<string>>(openTaskId ? new Set([openTaskId]) : new Set())
   const [lightbox, setLightbox] = useState<LightboxState | null>(null)
 
-  function openLightbox(images: string[], index: number) {
-    setLightbox({ slides: images.map((src) => ({ src })), index })
-  }
-
   function toggleTask(taskId: string, docs: DocumentWithImages[]) {
     setOpenTaskIds((prev) => {
       const next = new Set(prev)

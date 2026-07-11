@@ -1,0 +1,795 @@
+/*
+ * LaTeX editor styles — consolidated port of the standalone editor's two
+ * style layers (base <style> + #layout-refresh-v2-compact, last-wins) from
+ * latexEditor/latex_editor_FIXED_JSON_IMPORT_COMPLETE_OUTPUT_AS_INPUT_LATEX_FIX.htm.html.
+ *
+ * Rebrand (PRD #28 / issue #29, approved): KPMG blue #00338D → Dokum red
+ * #db3627 (--editor-accent); dark hover #002266 → #a6281c; export-area top
+ * bar is SOLID red (the original's blue→purple gradient was dropped).
+ *
+ * Everything is scoped under .latex-editor so nothing leaks into the rest
+ * of the admin UI. The standalone file's page-global rules (html/body
+ * backgrounds, .app-wrap, page h1, dead .footer-bar) are intentionally not
+ * ported. Styles for later slices (formula blocks, field pills, library,
+ * modals, export row) are already ported here so the red rebrand happens
+ * exactly once; those slices add behavior only.
+ */
+
+.latex-editor {
+  --editor-accent: #db3627; /* = --color-brand (globals.css) */
+  --editor-accent-dark: #a6281c; /* = --color-brand-dark */
+  --surface2: #f8fafc;
+  --border: #d9e1ec;
+  --soft: #e8edf4;
+  --text: #111827;
+  --muted: #64748b;
+  --shadow: 0 10px 30px rgba(15, 23, 42, 0.1);
+
+  font-family: Arial, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text);
+}
+
+/* ---------------------------------------------------------------- toolbar */
+
+.latex-editor .toolbar {
+  position: sticky;
+  top: 76px; /* root navbar is sticky (66px high); original value was 10px */
+  z-index: 40;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  padding: 8px;
+  margin-bottom: 10px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.latex-editor .toolbar .group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--soft);
+  border-radius: 12px;
+  background: var(--surface2);
+}
+
+.latex-editor .sep {
+  width: 0;
+  height: 0;
+  margin: 0;
+}
+
+/* ------------------------------------------------- export rows (slice 10) */
+
+/* Consolidated container rule: base .export-row (reference L77–86) with the
+   layout-refresh layer's surface overrides (its shared `.toolbar,.export-row`
+   rule — background/border/radius/shadow/blur — took the last word). The
+   layer left the base margin-bottom:16px untouched, unlike the toolbar's. */
+.latex-editor .export-row {
+  display: flex;
+  flex-wrap: wrap; /* like the ported .toolbar — narrow admin viewports */
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  margin-bottom: 16px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+/* Busy/degenerate-tree states (no reference counterpart: the original had
+   neither disabled selects nor a re-entrancy guard on the download button). */
+.latex-editor .export-row button:disabled,
+.latex-editor .export-row select:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.latex-editor .toolbar button,
+.latex-editor .toolbar select,
+.latex-editor .export-row button,
+.latex-editor .export-row select,
+.latex-editor .export-row input[type='text'] {
+  min-height: 30px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text);
+  /* !important beats the global iOS-zoom rule in globals.css
+     (input/select/textarea { font-size: 1rem !important }) */
+  font-size: 12px !important;
+  line-height: 1;
+  padding: 7px 9px;
+  cursor: pointer;
+}
+
+.latex-editor .export-row input[type='text'] {
+  cursor: text;
+  flex: 1;
+  max-width: 260px;
+}
+
+.latex-editor .toolbar button:hover,
+.latex-editor .toolbar select:hover,
+.latex-editor .export-row button:hover,
+.latex-editor .export-row select:hover {
+  background: #fdeeec; /* light accent tint (was blue #eef4ff) */
+  border-color: #f3c4be; /* (was #c8d9ff) */
+  color: var(--editor-accent);
+}
+
+/* The original targeted `button[onclick*="openLatexModal"]` etc. — the React
+   port uses .accent on those toolbar buttons instead (added in slices 3/5). */
+.latex-editor .toolbar button.accent,
+.latex-editor button.primary,
+.latex-editor .export-row button.primary {
+  background: var(--editor-accent);
+  border-color: var(--editor-accent);
+  color: #fff;
+  font-weight: 700;
+}
+
+.latex-editor .export-row button.primary:hover {
+  background: var(--editor-accent-dark);
+}
+
+.latex-editor .template-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.latex-editor .template-btn .swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
+}
+
+.latex-editor .toolbar input[type='color'] {
+  width: 30px;
+  height: 30px;
+  border: 1px solid #d7dce2;
+  border-radius: 6px;
+  padding: 0;
+  cursor: pointer;
+}
+
+/* #42: „Kein Highlight" — kompakter ✕-Knopf neben dem Highlight-Picker. */
+.latex-editor .toolbar button.clear-highlight {
+  min-height: 30px;
+  padding: 7px 8px;
+  color: var(--muted);
+  font-size: 12px !important;
+}
+
+.latex-editor .toolbar button.clear-highlight:hover {
+  color: var(--editor-accent);
+}
+
+/* ------------------------------------------------- export row (slice 10) */
+
+.latex-editor .export-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  margin-bottom: 16px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+/* ------------------------------------------------------------- workspace */
+
+/* Editor column + 284px library sidebar (populated since slice 4, #32) */
+.latex-editor .workspace {
+  display: grid;
+  grid-template-columns: minmax(720px, 1fr) 284px;
+  gap: 14px;
+  align-items: start;
+}
+
+/* ------------------------------------------------------------ export area */
+
+.latex-editor #exportArea {
+  width: 100%;
+  min-height: calc(100vh - 205px);
+  margin: 0;
+  background: #fff;
+  color: #111827;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Dokum-red top bar — approved rebrand: solid #db3627, no gradient */
+.latex-editor #exportArea .topbar {
+  height: 6px;
+  width: 100%;
+  flex-shrink: 0;
+  background: var(--editor-accent);
+}
+
+.latex-editor .editor-scroll {
+  flex: 1;
+  max-height: calc(100vh - 230px);
+  overflow-y: auto;
+}
+
+.latex-editor #editor {
+  min-height: calc(100vh - 250px);
+  padding: 34px 42px 44px;
+  outline: none;
+  font-size: 18px;
+  line-height: 1.48;
+  color: #111827;
+  background: #fff;
+}
+
+.latex-editor #editor h1 {
+  font-size: 30px;
+  color: var(--editor-accent);
+  margin: 0 0 12px;
+}
+
+.latex-editor #editor h2 {
+  font-size: 24px;
+  color: var(--editor-accent);
+  margin: 0 0 10px;
+}
+
+.latex-editor #editor pre {
+  background: #f1f4f8;
+  border: 1px solid #d7dce2;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 1em 0; /* Tailwind preflight zeroes it; browser default in the original */
+  font-family: Consolas, monospace;
+  font-size: 14px;
+  overflow-x: auto;
+}
+
+/* Tailwind preflight resets — restore the browser defaults the standalone
+   editor relied on inside the contenteditable surface. */
+.latex-editor #editor p {
+  margin: 1em 0;
+}
+
+.latex-editor #editor ul {
+  list-style: disc;
+  margin: 1em 0;
+  padding-left: 40px;
+}
+
+.latex-editor #editor ol {
+  list-style: decimal;
+  margin: 1em 0;
+  padding-left: 40px;
+}
+
+.latex-editor #editor:empty::before {
+  content: attr(data-placeholder);
+  color: #9aa3af;
+}
+
+/* --------------------------------------- formula/image blocks (slice 3+) */
+
+.latex-editor .formula-block,
+.latex-editor .image-block {
+  margin: 16px 0;
+  padding: 16px 18px 16px 38px;
+  border-left: 5px solid var(--editor-accent);
+  border-radius: 16px;
+  background: linear-gradient(180deg, #fbfdff, #f5f8fc);
+  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04), inset 0 0 0 1px var(--soft);
+  color: #111827 !important;
+  font-size: 20px;
+  overflow-x: auto;
+  position: relative;
+  cursor: grab;
+}
+
+.latex-editor .image-block {
+  text-align: center;
+}
+
+.latex-editor .image-block img {
+  max-width: 100%;
+  border-radius: 8px;
+  display: block;
+  margin: 0 auto;
+}
+
+/* #44: Lösch-✕ oben rechts im Bildblock — erst beim Hover sichtbar (wie die
+   Bibliothekseinträge). Beim PNG-Export via display:none ausgeblendet
+   (png-export.ts). */
+.latex-editor .image-block .img-remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #991b1b;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.latex-editor .image-block:hover .img-remove {
+  opacity: 1;
+}
+
+.latex-editor .image-block .img-remove:hover {
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.latex-editor .formula-block.dragging,
+.latex-editor .image-block.dragging {
+  opacity: 0.35;
+}
+
+/* Upload läuft noch (slice 8): blob:-Vorschau leicht gedimmt, bis der Block
+   auf die Proxy-Route zeigt. */
+.latex-editor .image-block.is-uploading {
+  opacity: 0.6;
+}
+
+.latex-editor .formula-block .drag-handle,
+.latex-editor .image-block .drag-handle {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  font-size: 18px;
+  line-height: 1;
+  cursor: grab;
+  user-select: none;
+}
+
+.latex-editor .formula-block .drag-handle:active,
+.latex-editor .image-block .drag-handle:active {
+  cursor: grabbing;
+}
+
+.latex-editor .drop-indicator {
+  height: 3px;
+  background: var(--editor-accent);
+  border-radius: 2px;
+  margin: 6px 0;
+}
+
+.latex-editor .inline-drop-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  vertical-align: -0.2em;
+  background: var(--editor-accent);
+  animation: latex-editor-caret-blink 0.8s step-end infinite;
+  margin: 0 1px;
+  pointer-events: none;
+}
+
+@keyframes latex-editor-caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.latex-editor .block-caption {
+  min-height: 1.4em;
+  margin-top: 12px;
+  padding: 4px 8px;
+  font-size: 16px;
+  color: #374151;
+  border-radius: 6px;
+  outline: none;
+  text-align: left;
+  line-height: 1.4;
+}
+
+.latex-editor .block-caption:empty::before {
+  content: attr(data-ph);
+  color: #9aa3af;
+  font-style: italic;
+  pointer-events: none;
+}
+
+.latex-editor .block-caption:focus {
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px #d7dce2;
+}
+
+/* ------------------------------------------- input/output pills (slice 5) */
+
+.latex-editor .input-field,
+.latex-editor .output-field {
+  display: inline-block;
+  padding: 2px 7px;
+  margin: 0 2px;
+  border-radius: 999px;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 500;
+  font-size: 0.92em;
+  transition: filter 0.1s;
+}
+
+.latex-editor .input-field:hover,
+.latex-editor .output-field:hover {
+  filter: brightness(0.95);
+}
+
+.latex-editor .input-field {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fbbf24;
+}
+
+.latex-editor .input-field.is-ref {
+  background: #fef3c7;
+  border-style: dashed;
+}
+
+.latex-editor .output-field {
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #60a5fa;
+}
+
+.latex-editor .output-field.is-error {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fca5a5;
+}
+
+/* Exportmodus: Felder als normaler Text rendern (slice 10) */
+.latex-editor .exporting .formula-block {
+  padding-left: 22px !important;
+}
+
+.latex-editor .exporting .image-block {
+  padding-left: 22px !important;
+}
+
+.latex-editor .exporting .input-field,
+.latex-editor .exporting .output-field {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  color: inherit !important;
+  font-weight: inherit !important;
+}
+
+/* --------------------------------------------- library sidebar (slice 4) */
+
+.latex-editor #formulaLibrary {
+  position: sticky;
+  top: 140px; /* original 74px; +66px sticky navbar (same shift as the toolbar's 76px) */
+  max-height: calc(100vh - 158px); /* original calc(100vh - 92px) */
+  overflow-y: auto;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+.latex-editor #formulaLibrary h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 10px;
+  color: var(--editor-accent);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.latex-editor #formulaLibrary h3::after {
+  content: '';
+  height: 1px;
+  flex: 1;
+  background: var(--soft);
+}
+
+.latex-editor .library-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  background: #f8fafc;
+  border: 1px solid #e0e6ee;
+  border-left: 3px solid var(--editor-accent);
+  border-radius: 12px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  cursor: grab;
+  user-select: none;
+  overflow-x: auto;
+  font-size: 13px;
+  transition: filter 0.1s;
+}
+
+.latex-editor .library-item:hover {
+  filter: brightness(0.97);
+}
+
+.latex-editor .library-item:active {
+  cursor: grabbing;
+}
+
+.latex-editor .library-item .preview {
+  flex: 1;
+  pointer-events: none;
+  overflow-x: auto;
+}
+
+.latex-editor .library-item .lib-remove {
+  background: transparent;
+  border: none;
+  color: #9aa3af;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.latex-editor .library-item .lib-remove:hover {
+  color: #991b1b;
+}
+
+.latex-editor .library-empty {
+  color: #9aa3af;
+  font-size: 12px;
+  font-style: italic;
+  padding: 4px;
+}
+
+.latex-editor .var-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  border-radius: 12px;
+  font-size: 13px;
+}
+
+.latex-editor .var-item.var-input {
+  background: #fef3c7;
+  border: 1px solid #fbbf24;
+}
+
+.latex-editor .var-item.var-output {
+  background: #dbeafe;
+  border: 1px solid #60a5fa;
+}
+
+.latex-editor .var-item .var-name {
+  font-weight: 600;
+  font-family: Consolas, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.latex-editor .var-item .var-value {
+  font-family: Consolas, monospace;
+  flex-shrink: 0;
+}
+
+.latex-editor .var-item.var-noname .var-name {
+  color: #9aa3af;
+  font-style: italic;
+  font-weight: 400;
+}
+
+/* -------------------------------------------- formula rendering (slice 3) */
+
+.latex-editor .formula-error {
+  color: #991b1b;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  padding: 10px;
+  font-family: Consolas, monospace;
+  font-size: 14px;
+  white-space: pre-wrap;
+}
+
+.latex-editor .render-target.is-loading {
+  color: #6b7280;
+  font-family: Consolas, monospace;
+  font-size: 14px;
+}
+
+.latex-editor .formula-block .render-target {
+  cursor: pointer;
+}
+
+.latex-editor .formula-block .render-target:hover {
+  outline: 2px dashed var(--editor-accent);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+
+/* -------------------------------------------------------- modals (slice 3) */
+
+.latex-editor .modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.latex-editor .modal-overlay.open {
+  display: flex;
+}
+
+.latex-editor .modal {
+  background: #fff;
+  width: 560px;
+  max-width: 90vw;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.25);
+}
+
+.latex-editor .modal h2 {
+  font-size: 16px;
+  color: var(--editor-accent);
+  margin: 0 0 12px;
+}
+
+.latex-editor .modal textarea {
+  width: 100%;
+  min-height: 160px;
+  font-family: Consolas, monospace;
+  font-size: 14px !important; /* beats the global iOS-zoom rule */
+  border: 1px solid #d7dce2;
+  border-radius: 8px;
+  padding: 10px;
+  resize: vertical;
+}
+
+.latex-editor .modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.latex-editor .modal-actions button {
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  border: 1px solid #d7dce2;
+  background: #f1f4f8;
+}
+
+.latex-editor .modal-actions button.primary {
+  background: var(--editor-accent);
+  color: #fff;
+  border-color: var(--editor-accent);
+}
+
+.latex-editor .modal-actions button.ghost {
+  background: #fff;
+}
+
+/* LaTeX-Editor: schwebendes Panel, NICHT blockierend */
+.latex-editor #latexOverlay {
+  background: transparent;
+  pointer-events: none;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 24px;
+}
+
+.latex-editor #latexOverlay .modal {
+  pointer-events: auto;
+  width: min(720px, 92vw);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+  border: 1px solid #d7dce2;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+/* ----------------------------------------- JSON-Import-Modal (slice 9) */
+/* Port of the reference's #json-import-style-v1 block (L2303–2305). The
+   reference's `!important` on the modal width only fought its own base
+   rule — the scoped id selector wins here without it. */
+
+.latex-editor #jsonOverlay .modal {
+  width: min(860px, 94vw);
+  max-height: 88vh;
+  overflow: auto;
+}
+
+.latex-editor #jsonInput {
+  width: 100%;
+  min-height: 330px;
+  font-family: Consolas, monospace;
+  /* !important: beats the base modal-textarea rule (14px !important, the
+     iOS-zoom guard above) — the reference styles this textarea at 12px. */
+  font-size: 12px !important;
+  line-height: 1.4;
+  border: 1px solid #d7dce2;
+  border-radius: 10px;
+  padding: 10px;
+  resize: vertical;
+  background: #fbfdff;
+}
+
+.latex-editor #jsonImportHelp {
+  font-size: 11px;
+  color: #64748b;
+  background: #f8fafc;
+  border: 1px solid #e8edf4;
+  border-radius: 10px;
+  padding: 10px;
+  margin-top: 8px;
+}
+
+.latex-editor .json-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #374151;
+}
+
+.latex-editor .json-row input {
+  margin: 0;
+}
+
+/* ------------------------------------------------------------- responsive */
+
+@media (max-width: 1120px) {
+  .latex-editor .workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .latex-editor #formulaLibrary {
+    position: static;
+    max-height: none;
+  }
+
+  .latex-editor .toolbar {
+    position: static;
+  }
+}

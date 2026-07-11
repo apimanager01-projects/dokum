@@ -23,6 +23,11 @@ const cards = [
     subtitle: 'zu einem Task',
     href: '/admin/documents/new',
   },
+  {
+    label: 'Editor',
+    subtitle: 'LaTeX-Dokumente erstellen',
+    href: '/admin/editor',
+  },
 ]
 
 export default async function AdminPage() {

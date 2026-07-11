@@ -6,7 +6,7 @@
 
 ## Quick Facts
 
-- **Status**: v4.0 (foundation refactor complete, production-ready)
+- **Status**: v4.3 (LaTeX editor integrated into the admin panel — PRD #28)
 - **Repository**: git (`master` branch is stable; feature work on separate branches)
 - **Tech Stack**: Next.js 16 + React 19 + TypeScript 5 + Tailwind CSS 4
 - **Backend/Database**: Supabase (PostgreSQL + Auth + Storage)
@@ -65,8 +65,10 @@ Kurs (Course)
 | `tasks` | Unit assignments | `id`, `unit_id` (FK), `title`, `description`, `position`, `created_at` |
 | `documents` | PDFs/images | `id`, `task_id` (FK), `title`, `description`, `file_path`, `file_type` (`pdf`\|`image`\|`image_collection`), `position`, `created_at` |
 | `document_images` | Image collection items | `id`, `document_id` (FK CASCADE), `file_path`, `position`, `created_at` |
-| `audit_logs` | Admin + purchase action log | `id`, `actor_id` (FK auth.users), `action` (`create`\|`update`\|`delete`\|`grant`\|`revoke`), `entity_type` (incl. `entitlement`), `entity_id`, `entity_title`, `metadata` (JSONB), `created_at` |
+| `audit_logs` | Admin + purchase action log | `id`, `actor_id` (FK auth.users), `action` (`create`\|`update`\|`delete`\|`grant`\|`revoke`), `entity_type` (incl. `entitlement`, `editor_document`, `editor_image`), `entity_id`, `entity_title`, `metadata` (JSONB), `created_at` |
 | `entitlements` | Per-(user, unit) paid access | `id`, `user_id` (FK auth.users), `unit_id` (FK units), `granted_at`, `source` (`purchase`\|`admin`), `stripe_session_id` |
+| `editor_documents` | LaTeX-editor drafts (PRD #28; outside the Kurs hierarchy until published) | `id`, `title`, `content` (JSONB, versioned document JSON), `published_document_id` (FK documents, SET NULL), `created_by` (FK auth.users, SET NULL), `created_at`, `updated_at` (trigger-maintained) |
+| `editor_images` | Uploaded images of editor drafts (slice 8; never base64 in `content` — blocks store the row id) | `id`, `editor_document_id` (FK CASCADE), `file_path` (in bucket `pdfs` under `editor-images/<draftId>/…`), `created_at` |
 
 ### Row-Level Security (RLS)
 
@@ -80,6 +82,8 @@ Kurs (Course)
 | `entitlements` | SELECT own rows or admin; INSERT/DELETE where role = admin (webhook inserts via service-role) | Users see their grants; admins manage |
 | `storage.objects` (`pdfs` bucket) | INSERT/DELETE where bucket = `pdfs` and role = admin; SELECT requires entitlement for the unit owning the path | File access matches in-DB access |
 | `audit_logs` | SELECT/INSERT where role = admin; no UPDATE/DELETE | Immutable audit trail; admin-readable only |
+| `editor_documents` | SELECT/INSERT/UPDATE/DELETE where role = admin (not filtered by `created_by`) | Drafts are admin-only; both admins see and edit all drafts |
+| `editor_images` | SELECT/INSERT/DELETE where role = admin (no UPDATE — rows are immutable) | Editor images admin-only; the bucket-wide admin storage policies cover their objects (entitlement SELECT never matches these paths) |
 
 ## Project Structure
 
@@ -92,6 +96,9 @@ src/
 │   │   ├── units.ts               # createUnit, updateUnit, deleteUnit
 │   │   ├── tasks.ts               # createTask, updateTask, deleteTask
 │   │   ├── documents.ts           # createDocument, updateDocument, deleteDocument
+│   │   ├── editor-documents.ts    # createEditorDraft, updateEditorDraft, deleteEditorDraft
+│   │   ├── editor-images.ts       # uploadEditorImage (implicit anchor draft, storage upload)
+│   │   ├── editor-publish.ts      # publishEditorDraft (PNG → Document; create / update-in-place)
 │   │   └── index.ts               # Re-exports all actions
 │   └── auth.ts                    # signIn, signUp, signOut
 ├── app/
@@ -122,10 +129,14 @@ src/
 │   │   ├── kurse/new/page.tsx     # Create/edit Kurs
 │   │   ├── units/new/page.tsx     # Create/edit Unit
 │   │   ├── tasks/new/page.tsx     # Create/edit Task
-│   │   └── documents/new/page.tsx # Create/edit Document
+│   │   ├── documents/new/page.tsx # Create/edit Document
+│   │   └── editor/                # LaTeX editor (PRD #28): draft list, editor shell, PNG export, publish
+│   │       ├── page.tsx           #   loads draft + target tree via DAL, remounts shell per draftId
+│   │       └── editor.css         #   consolidated editor styles (Dokum-red rebrand)
 │   └── api/
-│       ├── file/[docId]/route.ts      # Auth-gated file proxy (PDFs/images)
-│       └── image/[imageId]/route.ts   # Auth-gated image collection proxy
+│       ├── file/[docId]/route.ts          # Auth-gated file proxy (PDFs/images)
+│       ├── image/[imageId]/route.ts       # Auth-gated image collection proxy
+│       └── editor-image/[imageId]/route.ts # Admin-only editor-image proxy (STREAMS, same-origin)
 ├── components/
 │   ├── admin/
 │   │   ├── KursForm.tsx           # Create/edit Kurs form
@@ -136,7 +147,12 @@ src/
 │   │   ├── TaskPageClient.tsx     # Client wrapper for Task admin page
 │   │   ├── DocumentPageClient.tsx # Client wrapper for Document admin page
 │   │   ├── AdminTree.tsx          # Generic nested tree visualizer
-│   │   └── AdminSubpageNav.tsx    # Tab navigation for admin subpages
+│   │   ├── AdminSubpageNav.tsx    # Tab navigation for admin subpages
+│   │   └── editor/                # LaTeX editor React shell (PRD #28)
+│   │       ├── EditorShell.tsx    #   save bar + Term state + imperative mount (controller)
+│   │       ├── EditorToolbar.tsx  #   rich-text toolbar (uncontrolled → controller)
+│   │       ├── ExportBar.tsx      #   Kurs/Unit/Task targets, Term, filename, PNG download + publish (size guard)
+│   │       └── DraftList.tsx      #   draft list with open/delete
 │   ├── auth/
 │   │   ├── LoginForm.tsx
 │   │   └── RegisterForm.tsx
@@ -157,6 +173,20 @@ src/
 │   ├── dal.ts                     # Data access layer — all Supabase read queries
 │   ├── schemas.ts                 # Zod schemas for server action input validation
 │   ├── audit.ts                   # logAdminAction() — fire-and-forget audit log writer
+│   ├── editor/                    # LaTeX editor (PRD #28): imperative core + pure modules
+│   │   ├── controller.ts          # Imperative contenteditable controller (browser-only)
+│   │   ├── document-json.ts       # Versioned Zod schema (v1.0) + ported importer + serializer (draft JSON)
+│   │   ├── expression-evaluator.ts # CSP-safe math tokenizer/parser — replaces new Function; errors → NaN
+│   │   ├── latex-normalise.ts     # LaTeX→expression translation + auto-expression extraction
+│   │   ├── field-resolver.ts      # Input/Output field graph: value resolution, cycle → Err, output-as-input rule — pure
+│   │   ├── latex-display.ts       # LaTeX display cleanup (cleanupLatex, `*` → `\,\cdot\,`) — pure
+│   │   ├── library-sync.ts        # Formula-library entry sync after formula edits — pure
+│   │   ├── number-format.ts       # German display formatting (formatValue)
+│   │   ├── export-filename.ts     # PNG filename builder (Term + 1-based tree ordinals) + Document-title seed — pure
+│   │   ├── png-export.ts          # PNG export pipeline → Blob (SVG raster at 2×, html2canvas; browser-only)
+│   │   ├── mathjax-loader.ts      # Bundled MathJax loader — config set BEFORE the dynamic tex-svg-full import (full build: color macros need it; browser-only)
+│   │   ├── mathjax.d.ts           # Minimal type declarations for the bundled MathJax component
+│   │   └── *.test.ts              # Colocated Vitest golden tests (parity contract with the standalone editor)
 │   ├── supabase/
 │   │   ├── server.ts              # Supabase SSR client (server/proxy)
 │   │   └── client.ts              # Supabase browser client
@@ -165,6 +195,8 @@ src/
 └── types/
     └── index.ts                   # TypeScript interfaces + ActionResult<T> union
 ```
+
+Outside `src/`: `supabase/` holds the SQL migrations (see [Database Migrations](#database-migrations)), and `latexEditor/` holds the committed standalone reference editor (PRD #28) — the port's behavioral ground truth, still runnable in a plain browser.
 
 ## Key Patterns
 
@@ -234,12 +266,13 @@ Files are stored in the private Supabase Storage bucket `pdfs`. Access is always
 
 - `GET /api/file/[docId]` — PDFs and single images
 - `GET /api/image/[imageId]` — image collection items
+- `GET /api/editor-image/[imageId]` — LaTeX-editor draft images (admin-only)
 
-Both routes verify:
+The document routes verify:
 1. User is authenticated
 2. If not admin: the document's parent course is published (join query up to `kurse.published`)
 
-Short-lived signed URLs (60s) are generated server-side and used for a single streaming fetch. Supabase URLs are never exposed to the browser.
+Short-lived signed URLs (60s) are generated server-side. The document routes respond with a single 302 redirect to the signed URL (the link dies after 60 s); the editor-image route instead fetches it server-side and **streams** the body, so the browser only ever sees a same-origin response — that is what lets the PNG export (html2canvas) rasterise editor images without CORS handling or canvas tainting. Signed Supabase URLs are never stored, embedded in content, or exposed beyond that one redirect.
 
 ### Error & Loading Boundaries
 
@@ -263,6 +296,11 @@ Every major route segment has scoped `error.tsx` and `loading.tsx` files. A fail
 | `createDocument` | `documents.ts` | Upload file + insert Document record |
 | `updateDocument` | `documents.ts` | Update metadata, optionally replace file |
 | `deleteDocument` | `documents.ts` | Delete Document record + storage file(s) |
+| `createEditorDraft` | `editor-documents.ts` | Insert editor draft (validated document JSON); returns the new id |
+| `updateEditorDraft` | `editor-documents.ts` | Update draft title + content; reconciles images (rows/objects the content no longer references are deleted) |
+| `deleteEditorDraft` | `editor-documents.ts` | Delete editor draft + its `editor_images` rows (cascade) + storage objects |
+| `uploadEditorImage` | `editor-images.ts` | Upload an editor image to storage + insert `editor_images` row; creates the implicit „Unbenannt" anchor draft when no draft exists yet |
+| `publishEditorDraft` | `editor-publish.ts` | Publish a draft's rendered PNG as a Document: updates the linked Document's file + title in place by default (same entry for students), or creates + links a new Document (first publish, „Als neues Dokument", dead-link fallback); mirrors the documents.ts upload/rollback pattern and maintains `published_document_id` |
 
 All actions: validate input via Zod → auth check via `getAdminUser()` → database operation → audit log → revalidate cache.
 
@@ -282,6 +320,7 @@ All magic values live in `src/lib/constants.ts`:
 | `ALLOWED_IMAGE_MIMES` | `['image/jpeg', ...]` | Accepted image types |
 | `ALLOWED_FILE_MIMES` | `['application/pdf', ...]` | Accepted file types |
 | `MIME_TO_EXT` | `Record<string, string>` | MIME → file extension map |
+| `editorImageUrl(imageId)` | `` `/api/editor-image/${imageId}` `` | Single source for editor-image browser URLs (controller, JSON importer, proxy route) |
 
 ## Dependencies
 
@@ -296,6 +335,8 @@ All magic values live in `src/lib/constants.ts`:
 | `server-only` | Build-time guard for server-only modules |
 | `yet-another-react-lightbox` | Image gallery/lightbox |
 | `clsx` + `tailwind-merge` | Conditional className helpers |
+| `mathjax` (exact `3.2.2`) | LaTeX → SVG rendering, bundled + code-split to the editor page (no CDN — CSP) |
+| `html2canvas` (exact `1.4.1`) | Editor PNG export rasterizer, bundled + code-split, loaded on first export (no CDN — CSP) |
 
 ## Running Locally
 
@@ -318,6 +359,17 @@ npm run dev
 
 Visit `http://localhost:3000`
 
+### Tests
+
+Vitest (`vitest.config.ts`) is a dev-only dependency — no runtime impact.
+
+```bash
+npm test             # run all unit tests once
+npm run test:watch   # watch mode
+```
+
+Conventions: tests are colocated `*.test.ts` files next to their modules and assert **external behavior only** (inputs → outputs, no internal call structure). The default environment is plain Node; DOM-dependent suites opt into jsdom per file via a `@vitest-environment jsdom` docblock — currently `document-json.test.ts`, whose importer builds real DOM. The editor-module tests under `src/lib/editor/` are golden cases generated from the standalone reference editor (`latexEditor/*.html`) and double as the React port's parity contract — expected values must not be changed without checking the reference behavior first.
+
 ### Two Supabase Projects
 
 The app talks to **two completely separate Supabase projects** — not one project with branches.
@@ -338,6 +390,8 @@ Migrations live in `supabase/`. Apply them in order — first to dev (Supabase S
 | `migration.sql` | Initial schema (all tables, RLS, storage policies) |
 | `add_audit_log.sql` | Audit log table and policies |
 | `add_entitlements.sql` | `entitlements` table + RLS rewire so tasks/documents/storage require a purchase |
+| `add_editor_documents.sql` | `editor_documents` drafts table (admin-only RLS, `updated_at` trigger) + audit `entity_type` extension |
+| `add_editor_images.sql` | `editor_images` table (admin-only RLS, cascade with draft) + audit `entity_type` extension (`editor_image`); no storage-policy changes needed |
 
 ## Common Tasks
 
@@ -383,6 +437,14 @@ Set `published = true/false` in the `kurse` table. All child items inherit visib
 | PDF won't open in iPhone Safari | Content-Disposition | Route sets `{ download: false }` in signed URL — ensure it stays |
 | Admin role not working after grant | JWT not refreshed | User must sign out and back in |
 | TypeScript error on DAL import in client | `server-only` guard | Move the import to a server component or action |
+| Editor formulas don't render | MathJax chunk failed or config set too late | `mathjax-loader.ts` must set `window.MathJax` config **before** the dynamic import — check the console for chunk 404s / CSP violations |
+| Editor field or formula shows `Err` | Circular reference or invalid expression | By design: the evaluator returns NaN on any parse/eval error and the resolver breaks cycles — fix the expression or reference in the field modal |
+| PNG export fails / editor images missing in the PNG | Image not served same-origin | Editor images must load via `/api/editor-image/[imageId]` (streaming route) — any cross-origin URL taints the html2canvas canvas |
+| „Als Dokument speichern" disabled | Draft never saved, or image upload in flight | Publishing requires a saved draft; saves (and thus publish) are blocked while uploads are pending |
+| Draft content older than the published PNG | Pre-#40 behavior | No longer possible: publish persists the draft first (publish implies save, ExportBar → saveDraft) |
+| Color in LaTeX shows an error box | Formula uses the legacy `\textcolor[HTML]{…}` syntax | MathJax v3 has no HTML color model — re-apply color via the toolbar (emits `\textcolor{#HEX}{…}` / `\colorbox{#HEX}{$…$}`) |
+| Publish rejected: PNG too large | 2×-rendered PNG exceeds the 4 MB limit | The size guard offers a reduced 1× export; beyond that the document must be shortened or split (Vercel body ceiling — the limit cannot be raised) |
+| Typed `[input:x]` stays plain text | Conversion is a 1-second interval sweep | Wait a second; if it still doesn't convert, check the placeholder syntax for typos |
 
 ## File Reference Guide
 
@@ -397,9 +459,12 @@ Set `published = true/false` in the `kurse` table. All child items inherit visib
 | TypeScript types + ActionResult | `src/types/index.ts` |
 | Admin form components | `src/components/admin/{Kurs,Unit,Task,Document}Form.tsx` |
 | Admin tree visualizer | `src/components/admin/AdminTree.tsx` |
-| File proxy routes | `src/app/api/file/[docId]/route.ts`, `src/app/api/image/[imageId]/route.ts` |
+| File proxy routes | `src/app/api/file/[docId]/route.ts`, `src/app/api/image/[imageId]/route.ts`, `src/app/api/editor-image/[imageId]/route.ts` |
+| LaTeX editor core (controller + pure modules) | `src/lib/editor/*` |
+| LaTeX editor UI (page, shell, toolbar, export, drafts) | `src/app/admin/editor/*`, `src/components/admin/editor/*` |
+| Standalone reference editor (parity ground truth) | `latexEditor/*.html` |
 | Error/loading boundaries | `src/app/**/error.tsx`, `src/app/**/loading.tsx` |
 
 ---
 
-**Last Updated**: 2026-05-03 | **Version**: 4.0
+**Last Updated**: 2026-07-05 | **Version**: 4.3

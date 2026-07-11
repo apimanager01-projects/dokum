@@ -583,6 +583,29 @@ describe('importEditorJson', () => {
     editor.remove()
   })
 
+  it('renders the #44 image delete ✕ as editor chrome the serializer ignores', () => {
+    const editor = makeEditor()
+    importEditorJson(
+      parse({
+        version: '1.0',
+        variables: [],
+        content: [{ type: 'image', imageId: IMG_ID, alt: 'Screenshot' }],
+      }),
+      editor,
+      makeAdapters()
+    )
+    const block = editor.querySelector<HTMLElement>('.image-block')!
+    const remove = block.querySelector<HTMLButtonElement>('button.img-remove')!
+    expect(remove).not.toBeNull()
+    expect(remove.getAttribute('contenteditable')).toBe('false')
+    expect(remove.getAttribute('type')).toBe('button')
+    // The button is chrome only — serialization reads img[data-image-id] and
+    // must round-trip the block unchanged despite the extra child.
+    const json = serializeEditorState(editor, [])
+    expect(json.content).toEqual([{ type: 'image', imageId: IMG_ID, alt: 'Screenshot' }])
+    editor.remove()
+  })
+
   it('restores the slice-7 variable extras as datasets', () => {
     const editor = makeEditor()
     importEditorJson(

@@ -124,7 +124,11 @@ export async function exportAreaToPngBlob(
   editorScroll.style.maxHeight = 'none'
   editorScroll.style.overflowY = 'visible'
 
-  const handles = Array.from(exportArea.querySelectorAll<HTMLElement>('.drag-handle'))
+  // Editor-Chrome ausblenden: Drag-Handles und die Bild-Lösch-✕ (#44) dürfen
+  // nicht im PNG landen.
+  const handles = Array.from(
+    exportArea.querySelectorAll<HTMLElement>('.drag-handle, .img-remove')
+  )
   handles.forEach((h) => {
     h.dataset['prevDisplay'] = h.style.display
     h.style.display = 'none'

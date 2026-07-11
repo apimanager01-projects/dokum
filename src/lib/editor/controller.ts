@@ -79,6 +79,7 @@ import {
 import {
   DocumentJsonSchema,
   JSON_IMPORT_EXAMPLE,
+  createImageRemoveButton,
   describeDocumentJsonError,
   importEditorJson,
   serializeEditorState,
@@ -110,6 +111,20 @@ export interface EditorControllerHooks {
   uploadImage(file: File): Promise<{ ok: true; imageId: string } | { ok: false; error: string }>
 }
 
+/**
+ * Optional callbacks the React shell wires to component state. Unlike the
+ * server `hooks`, these carry no side effects into the controller — they let
+ * React mirror editor state that lives outside the contenteditable surface.
+ */
+export interface EditorControllerCallbacks {
+  /**
+   * Fired on every editor selectionchange with the effective font size at the
+   * selection anchor as an integer px string (e.g. `"18"`), or `""` when it
+   * can't be determined. Drives the toolbar size dropdown (#43).
+   */
+  onSelectionFontSize?: (px: string) => void
+}
+
 export interface EditorController {
   /** `document.execCommand` wrapper (bold, italic, lists, alignment, …). */
   exec(cmd: string, value?: string): void
@@ -125,6 +140,13 @@ export interface EditorController {
   applyFontSize(px: string): void
   /** Style template: color + size + optional bold. */
   applyTemplate(color: string, px: number, bold: boolean): void
+  /**
+   * Removes the highlight (`background-color`) from the styled spans touched
+   * by the current selection (or, when collapsed, the highlighted span under
+   * the cursor) and unwraps any span left with no inline style. No-op while
+   * the LaTeX textarea is focused.
+   */
+  clearHighlight(): void
   /**
    * Snapshots the current editor selection into internal state — the saved
    * range is what block insertion (LaTeX modal, later the image file
@@ -206,7 +228,8 @@ function errorMessage(err: unknown): string {
 
 export function createEditorController(
   container: HTMLElement,
-  hooks: EditorControllerHooks
+  hooks: EditorControllerHooks,
+  callbacks: EditorControllerCallbacks = {}
 ): EditorController {
   // --- Static skeleton (imperative DOM; the React reconciler never sees it) ---
   // The LaTeX modal is part of the skeleton (PRD: modals stay DOM-driven).
@@ -418,11 +441,33 @@ export function createEditorController(
     if (!sel || sel.rangeCount === 0) return
     const range = sel.getRangeAt(0)
 
-    const span = document.createElement('span')
-    Object.assign(span.style, styleObj)
+    if (range.collapsed) {
+      // Keine Auswahl: leerer Style-Span mit Zero-Width-Space, Cursor rein
+      const span = document.createElement('span')
+      Object.assign(span.style, styleObj)
+      const zwsp = document.createTextNode('\u200B')
+      span.appendChild(zwsp)
+      range.insertNode(span)
+      const inside = document.createRange()
+      inside.setStart(zwsp, 1)
+      inside.collapse(true)
+      sel.removeAllRanges()
+      sel.addRange(inside)
+      return
+    }
 
-    if (!range.collapsed) {
-      // Auswahl vorhanden: wrappen, Cursor ans Ende
+    // Auswahl vorhanden: pro Textknoten den ausgew\u00E4hlten Teil in einen eigenen
+    // Style-Span wrappen (#41). Der fr\u00FChere Ansatz (`range.extractContents()`
+    // in EINEN Span) zog bei mehrzeiligen Auswahlen ganze Block-Teilb\u00E4ume
+    // heraus \u2014 Listen wurden gespalten (doppelte Nummerierung), Normaltext gar
+    // nicht gef\u00E4rbt. Textknoten \u00FCberschreiten nie eine Blockgrenze, also l\u00E4sst
+    // das Wrappen je Knoten Listen-/Block-Struktur unangetastet.
+    const textNodes = collectSelectedTextNodes(range)
+    if (textNodes.length === 0) {
+      // Reine Nicht-Text-Auswahl (z. B. nur ein Bild): altes Verhalten als
+      // Fallback, damit sich hier nichts regressiert.
+      const span = document.createElement('span')
+      Object.assign(span.style, styleObj)
       try {
         span.appendChild(range.extractContents())
       } catch {
@@ -434,17 +479,61 @@ export function createEditorController(
       after.collapse(true)
       sel.removeAllRanges()
       sel.addRange(after)
-    } else {
-      // Keine Auswahl: leerer Style-Span mit Zero-Width-Space, Cursor rein
-      const zwsp = document.createTextNode('\u200B')
-      span.appendChild(zwsp)
-      range.insertNode(span)
-      const inside = document.createRange()
-      inside.setStart(zwsp, 1)
-      inside.collapse(true)
-      sel.removeAllRanges()
-      sel.addRange(inside)
+      return
     }
+
+    let lastSpan: HTMLElement | null = null
+    for (const node of textNodes) {
+      const startOffset = node === range.startContainer ? range.startOffset : 0
+      const endOffset = node === range.endContainer ? range.endOffset : node.length
+      if (startOffset >= endOffset) continue
+      // Den ausgew\u00E4hlten Bereich zu einem eigenen Textknoten aufspalten.
+      let target = node
+      if (endOffset < target.length) target.splitText(endOffset)
+      if (startOffset > 0) target = target.splitText(startOffset)
+      const span = document.createElement('span')
+      Object.assign(span.style, styleObj)
+      target.parentNode?.insertBefore(span, target)
+      span.appendChild(target)
+      lastSpan = span
+    }
+
+    // Cursor ans Ende der Auswahl (wie im Einzelspan-Verhalten der Referenz).
+    // Bewusst KEINE Auswahl \u00FCber die Spans halten: das Textfarb-/Highlight-
+    // <input> feuert `input` w\u00E4hrend des Ziehens laufend, ein erhaltenes
+    // Selektion-Rewrap w\u00FCrde die Spans bei jedem Tick verschachteln.
+    if (lastSpan) {
+      const after = document.createRange()
+      after.setStartAfter(lastSpan)
+      after.collapse(true)
+      sel.removeAllRanges()
+      sel.addRange(after)
+    }
+  }
+
+  // Sammelt alle Textknoten, die sich mit dem Range \u00FCberschneiden (f\u00FCr das
+  // per-Knoten-Styling in #41). Reine Whitespace-Knoten (Formatierungs-
+  // whitespace zwischen Bl\u00F6cken) werden \u00FCbersprungen, damit keine losen
+  // Style-Spans direkt im Editor entstehen.
+  function collectSelectedTextNodes(range: Range): Text[] {
+    const root = range.commonAncestorContainer
+    if (root.nodeType === Node.TEXT_NODE) {
+      return range.startOffset < range.endOffset ? [root as Text] : []
+    }
+    const nodes: Text[] = []
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        if (!range.intersectsNode(node)) return NodeFilter.FILTER_REJECT
+        if (!node.nodeValue || node.nodeValue.trim() === '') return NodeFilter.FILTER_REJECT
+        return NodeFilter.FILTER_ACCEPT
+      },
+    })
+    let n = walker.nextNode()
+    while (n) {
+      nodes.push(n as Text)
+      n = walker.nextNode()
+    }
+    return nodes
   }
 
   function applyFontSize(px: string) {
@@ -454,6 +543,59 @@ export function createEditorController(
 
   function applyTemplate(color: string, px: number, bold: boolean) {
     applyStyles({ color, fontSize: px + 'px', fontWeight: bold ? 'bold' : 'normal' })
+  }
+
+  // Ersetzt ein Element durch seine Kindknoten (für #42: Style-Span auflösen,
+  // wenn nach dem Entfernen des Highlights kein Inline-Stil mehr übrig ist).
+  function unwrapElement(el: HTMLElement) {
+    const parent = el.parentNode
+    if (!parent) return
+    while (el.firstChild) parent.insertBefore(el.firstChild, el)
+    parent.removeChild(el)
+  }
+
+  // #42: „Kein Highlight" — entfernt `background-color` aus den Style-Spans der
+  // Auswahl. Der Highlight-Picker kann nur setzen; ohne diese Umkehr stapelten
+  // sich verschachtelte gefärbte Spans. Ein Span, der danach keinen Inline-Stil
+  // mehr trägt, wird aufgelöst, damit keine leeren Wrapper zurückbleiben.
+  function clearHighlight() {
+    if (isLatexActive()) return
+    const sel = ensureEditorSelection()
+    if (!sel || sel.rangeCount === 0) return
+    const range = sel.getRangeAt(0)
+
+    const targets = new Set<HTMLElement>()
+    const addHighlightedAncestors = (start: Node | null) => {
+      let node: Node | null = start
+      while (node && node !== editor) {
+        if (node instanceof HTMLElement && node.style.backgroundColor) targets.add(node)
+        node = node.parentNode
+      }
+    }
+
+    if (range.collapsed) {
+      addHighlightedAncestors(range.startContainer)
+    } else {
+      // Nachkommen im gemeinsamen Vorfahren, die die Auswahl schneiden …
+      const root = range.commonAncestorContainer
+      const rootEl =
+        root.nodeType === Node.ELEMENT_NODE ? (root as Element) : root.parentElement
+      rootEl?.querySelectorAll<HTMLElement>('[style*="background"]').forEach((el) => {
+        if (el.style.backgroundColor && range.intersectsNode(el)) targets.add(el)
+      })
+      // … plus gehighlightete Vorfahren der Auswahlgrenzen (Span umschließt die
+      // Auswahl komplett und wird daher nicht von querySelectorAll erfasst).
+      addHighlightedAncestors(range.startContainer)
+      addHighlightedAncestors(range.endContainer)
+    }
+
+    for (const el of targets) {
+      el.style.removeProperty('background-color')
+      if (el.tagName === 'SPAN' && el.style.length === 0 && !el.className) {
+        unwrapElement(el)
+      }
+    }
+    editor.focus()
   }
 
   function formatBlock(tag: string) {
@@ -1683,6 +1825,9 @@ export function createEditorController(
     img.setAttribute('contenteditable', 'false')
     block.appendChild(handle)
     block.appendChild(img)
+    // Lösch-✕ (#44) — identische Chrome wie im Import-Renderer; der Klick wird
+    // in onEditorClick delegiert.
+    block.appendChild(createImageRemoveButton(document))
     return block
   }
 
@@ -1755,11 +1900,30 @@ export function createEditorController(
     }
   }
 
+  // Effektive Schriftgröße am Auswahlanker als Ganzzahl-px-String (#43).
+  // getComputedStyle löst die Kaskade auf, liefert also automatisch die Größe
+  // des nächstgelegenen Style-Spans bzw. — bei kollabiertem Cursor hinter einem
+  // Span oder in Normaltext — die des Blocks. '' wenn nicht ermittelbar.
+  function currentSelectionFontSize(): string {
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0 || !editor.contains(sel.anchorNode)) return ''
+    const node = sel.anchorNode
+    const el =
+      node && node.nodeType === Node.ELEMENT_NODE
+        ? (node as Element)
+        : (node?.parentElement ?? null)
+    if (!el || !editor.contains(el)) return ''
+    const match = /^(\d+(?:\.\d+)?)px$/.exec(window.getComputedStyle(el).fontSize)
+    if (!match) return ''
+    return String(Math.round(parseFloat(match[1]!)))
+  }
+
   // savedRange immer aktuell halten, solange im Editor getippt/geklickt wird
   const onSelectionChange = () => {
     const sel = window.getSelection()
     if (sel && sel.rangeCount > 0 && editor.contains(sel.anchorNode)) {
       state.savedRange = sel.getRangeAt(0).cloneRange()
+      callbacks.onSelectionFontSize?.(currentSelectionFontSize())
     }
   }
 
@@ -1771,6 +1935,15 @@ export function createEditorController(
   // editing (copy/paste), which are click-dead in the reference.
   const onEditorClick = (e: MouseEvent) => {
     const clicked = e.target instanceof Element ? e.target : null
+    // Lösch-✕ eines Bildblocks (#44): ganzen .image-block entfernen. Delegiert
+    // wie die Pillen unten — greift auch für vom Browser geklonte Buttons.
+    const removeBtn = clicked?.closest<HTMLElement>('.img-remove')
+    if (removeBtn && editor.contains(removeBtn)) {
+      e.preventDefault()
+      e.stopPropagation()
+      removeBtn.closest<HTMLElement>('.image-block')?.remove()
+      return
+    }
     const pill = clicked?.closest<HTMLElement>('.input-field, .output-field')
     if (pill && editor.contains(pill)) {
       e.stopPropagation()
@@ -1812,6 +1985,41 @@ export function createEditorController(
   let dragEl: HTMLElement | null = null
   let dropIndicator: HTMLElement | null = null
   let inlineDropCaret: HTMLElement | null = null
+
+  // #45: Auto-Scroll beim Blockziehen. Der .editor-scroll-Container hat feste
+  // Höhe; bei Dokumenten, die höher sind als das Sichtfenster, ließen sich
+  // Drop-Ziele außerhalb des sichtbaren Bereichs nicht erreichen, weil ein
+  // aktiver Drag das normale Scrollen blockiert. Solange der Zeiger in der
+  // oberen/unteren Randzone hängt, scrollt ein Intervall in fester Schrittweite.
+  const AUTO_SCROLL_EDGE = 48 // px Randzone oben/unten
+  const AUTO_SCROLL_STEP = 12 // px pro Tick
+  let autoScrollDir = 0
+  let autoScrollTimer: ReturnType<typeof setInterval> | null = null
+
+  function stopAutoScroll() {
+    if (autoScrollTimer !== null) {
+      clearInterval(autoScrollTimer)
+      autoScrollTimer = null
+    }
+    autoScrollDir = 0
+  }
+
+  function updateAutoScroll(clientY: number) {
+    const rect = editorScroll.getBoundingClientRect()
+    if (clientY < rect.top + AUTO_SCROLL_EDGE) {
+      autoScrollDir = -1
+    } else if (clientY > rect.bottom - AUTO_SCROLL_EDGE) {
+      autoScrollDir = 1
+    } else {
+      stopAutoScroll()
+      return
+    }
+    if (autoScrollTimer === null) {
+      autoScrollTimer = setInterval(() => {
+        editorScroll.scrollTop += autoScrollDir * AUTO_SCROLL_STEP
+      }, 16)
+    }
+  }
 
   function ensureDropIndicator(): HTMLElement {
     if (!dropIndicator) {
@@ -1866,12 +2074,14 @@ export function createEditorController(
   const onDragEnd = () => {
     if (dragEl) dragEl.classList.remove('dragging')
     removeDropIndicator()
+    stopAutoScroll()
     dragEl = null
   }
 
   const onDragOver = (e: DragEvent) => {
     if (dragEl) {
       e.preventDefault()
+      updateAutoScroll(e.clientY)
       const afterEl = getDragAfterElement(editor, e.clientY)
       const indicator = ensureDropIndicator()
       if (afterEl == null) {
@@ -1902,6 +2112,7 @@ export function createEditorController(
 
   const onDrop = (e: DragEvent) => {
     hideInlineDropCaret()
+    stopAutoScroll()
     if (dragEl) {
       e.preventDefault()
       const afterEl = getDragAfterElement(editor, e.clientY)
@@ -1948,6 +2159,30 @@ export function createEditorController(
     }
     inlineDropCaret = null
   }
+
+  // #44: Löscht der Nutzer das <img> per Tastatur (Bild markieren + Entf),
+  // bleibt sonst der leere .image-block-Rahmen (Formel-Box + Drag-Handle)
+  // zurück. Wir beobachten das Entfernen von Bildknoten und räumen den dann
+  // bildlosen Block ab. Deckt jeden Löschweg ab (Entf, Backspace, Ausschneiden)
+  // — robuster als ein Entf-Keydown-Abfang. Blöcke entstehen nie ohne <img>
+  // (createImageBlockElement/Import bauen sie komplett vor dem Einfügen), daher
+  // ist „image-block ohne img" eindeutig ein gelöschtes Bild.
+  const imageCleanupObserver = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      if (m.type !== 'childList' || m.removedNodes.length === 0) continue
+      let removedImg = false
+      m.removedNodes.forEach((n) => {
+        if (n.nodeName === 'IMG' || (n instanceof Element && n.querySelector('img'))) {
+          removedImg = true
+        }
+      })
+      if (!removedImg) continue
+      const target = m.target instanceof Element ? m.target : null
+      const block = target?.closest<HTMLElement>('.image-block')
+      if (block && editor.contains(block) && !block.querySelector('img')) block.remove()
+    }
+  })
+  imageCleanupObserver.observe(editor, { childList: true, subtree: true })
 
   editor.addEventListener('keydown', onKeyDown)
   editor.addEventListener('paste', onPaste)
@@ -2023,6 +2258,8 @@ export function createEditorController(
   function destroy() {
     clearInterval(fieldSweepInterval)
     clearTimeout(latexPreviewTimer)
+    stopAutoScroll()
+    imageCleanupObserver.disconnect()
     document.removeEventListener('selectionchange', onSelectionChange)
     editor.removeEventListener('keydown', onKeyDown)
     editor.removeEventListener('paste', onPaste)
@@ -2051,6 +2288,7 @@ export function createEditorController(
     applyStyles,
     applyFontSize,
     applyTemplate,
+    clearHighlight,
     saveSelection,
     openLatexModal,
     insertInputField: () => insertField('input'),

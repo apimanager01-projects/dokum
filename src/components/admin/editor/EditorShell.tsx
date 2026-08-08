@@ -4,11 +4,8 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState, useTransition } from 'react'
 import { createEditorDraft, updateEditorDraft, uploadEditorImage } from '@/actions/admin'
 import { createEditorController, type EditorController } from '@/lib/editor/controller'
-import {
-  DocumentJsonSchema,
-  withDocumentMeta,
-  type EditorDocumentJson,
-} from '@/lib/editor/document-json'
+import { withDocumentMeta, type LatestEditorDocumentJson } from '@/lib/editor/document-json'
+import { readDocumentJson } from '@/lib/editor/document-version'
 import type { EditorTargetKurs } from '@/types'
 import { EditorToolbar } from './EditorToolbar'
 import { ExportBar } from './ExportBar'
@@ -85,11 +82,16 @@ export function EditorShell({
   // draft) — a router.refresh() re-render must never re-import over live
   // editing state. Invalid content becomes an error status instead of a
   // broken editor.
-  const [parsedDraft] = useState<EditorDocumentJson | 'invalid' | null>(() => {
+  // Upgrade-on-read (#64): a stored draft may carry any supported version;
+  // the controller only ever receives the newest. A snapshot that cannot be
+  // read is refused whole, with the boundary's own German reason.
+  const [parsedDraft] = useState<LatestEditorDocumentJson | { invalid: string } | null>(() => {
     if (!initialDraft) return null
-    const parsed = DocumentJsonSchema.safeParse(initialDraft.content)
-    return parsed.success ? parsed.data : 'invalid'
+    const parsed = readDocumentJson(initialDraft.content)
+    return parsed.ok ? parsed.doc : { invalid: parsed.error }
   })
+  const draftError = parsedDraft !== null && 'invalid' in parsedDraft ? parsedDraft.invalid : null
+  const draftDocument = parsedDraft !== null && !('invalid' in parsedDraft) ? parsedDraft : null
 
   const [title, setTitle] = useState(initialDraft?.title ?? 'Unbenannt')
   // ExportBar Term field (slice 10) — the only draft-persisted export state
@@ -97,11 +99,11 @@ export function EditorShell({
   // reach this state, so an imported meta.term is ignored until the draft is
   // saved and reopened (documented limitation).
   const [term, setTerm] = useState(() =>
-    parsedDraft && parsedDraft !== 'invalid' ? (parsedDraft.meta?.term ?? '') : ''
+    draftDocument?.meta?.term ?? ''
   )
   const [status, setStatus] = useState<SaveStatus>(() =>
-    parsedDraft === 'invalid'
-      ? { kind: 'error', text: 'Entwurf konnte nicht geladen werden: ungültiges Dokumentformat.' }
+    draftError !== null
+      ? { kind: 'error', text: `Entwurf konnte nicht geladen werden: ${draftError}` }
       : { kind: 'idle', text: '' }
   )
   const [isPending, startTransition] = useTransition()
@@ -161,8 +163,8 @@ export function EditorShell({
       { onSelectionFontSize: setSelectionFontSize }
     )
     controllerRef.current = controller
-    if (parsedDraft && parsedDraft !== 'invalid') {
-      void controller.loadDocument(parsedDraft)
+    if (draftDocument) {
+      void controller.loadDocument(draftDocument)
     }
     return () => {
       controller.destroy()

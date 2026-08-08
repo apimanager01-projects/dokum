@@ -4,9 +4,12 @@
  *
  * Three parts:
  *
- * 1. `DocumentJsonSchema` — the versioned Zod schema (version "1.0"). It
- *    doubles as the server-action validation for draft saves (operator story
- *    34: malformed content is rejected at the boundary). The schema is a
+ * 1. `DocumentJsonSchema` — the versioned Zod schema: a DISCRIMINATED UNION
+ *    over `version` (#64), currently the single member v1.0. It doubles as
+ *    the server-action validation for draft saves (operator story
+ *    34: malformed content is rejected at the boundary). Reading a stored
+ *    snapshot goes through `readDocumentJson` (document-version.ts), which
+ *    parses here and then migrates to the newest version. The schema is a
  *    SUPERSET of the standalone editor's import format (reference file
  *    latexEditor/latex_editor_FIXED_JSON_IMPORT_COMPLETE_OUTPUT_AS_INPUT_LATEX_FIX.htm.html,
  *    `JSON_IMPORT_EXAMPLE` L2310): the reference example validates verbatim.
@@ -223,7 +226,36 @@ const VariableSchema = z.strictObject({
   sourceOutputName: z.string().optional(),
 })
 
-export const DocumentJsonSchema = z.strictObject({
+// ── Versioned family (#64) ──────────────────────────────────────────────────
+
+/**
+ * Every document-JSON version this build can read, OLDEST FIRST; the last
+ * entry is the version the serializer emits. `version` is a discriminated
+ * union rather than a literal so a new node type can ship without either
+ * rejecting every stored snapshot or rewriting them all in place — the
+ * prefactor the linking and video work sit on.
+ *
+ * Adding a version means all four of: append it here, add its
+ * `DocumentJsonV<n>Schema` to the union below, point
+ * `LATEST_DOCUMENT_JSON_VERSION` at it, and add the vN→vN+1 step in
+ * document-version.ts. The upgrade chain is a total record over this list, so
+ * a half-done addition fails to compile.
+ */
+export const DOCUMENT_JSON_VERSIONS = ['1.0'] as const
+
+export type DocumentJsonVersion = (typeof DOCUMENT_JSON_VERSIONS)[number]
+
+/** The version `serializeEditorState` emits and the renderer understands. */
+export const LATEST_DOCUMENT_JSON_VERSION = '1.0' satisfies DocumentJsonVersion
+
+/** German enumeration of the supported versions — `"1.0"`, `"1.0" oder "1.1"`, … */
+function supportedVersionList(): string {
+  const quoted = DOCUMENT_JSON_VERSIONS.map((v) => `"${v}"`)
+  if (quoted.length === 1) return quoted[0]
+  return quoted.slice(0, -1).join(', ') + ' oder ' + quoted[quoted.length - 1]
+}
+
+const DocumentJsonV1_0Schema = z.strictObject({
   version: z.literal('1.0'),
   /**
    * Save-time metadata. `term` is the ExportBar's free Term field (slice 10,
@@ -265,7 +297,23 @@ export const DocumentJsonSchema = z.strictObject({
   library: z.array(z.string()).optional(),
 })
 
+/**
+ * The versioned family. A snapshot whose `version` is not in
+ * {@link DOCUMENT_JSON_VERSIONS} fails on the `version` path — which is what
+ * lets {@link describeDocumentJsonError} refuse it with a clear German
+ * message instead of letting it fail as an unreadable shape mismatch.
+ */
+export const DocumentJsonSchema = z.discriminatedUnion('version', [DocumentJsonV1_0Schema])
+
+/** A snapshot at ANY version this build can read — what the schema parses. */
 export type EditorDocumentJson = z.infer<typeof DocumentJsonSchema>
+/**
+ * A snapshot at the NEWEST version — what `serializeEditorState` emits and
+ * what the importer and the student renderer consume. Older snapshots reach
+ * this type through `upgradeDocumentJson` (document-version.ts), never by
+ * being passed straight through.
+ */
+export type LatestEditorDocumentJson = z.infer<typeof DocumentJsonV1_0Schema>
 export type EditorDocumentVariable = z.infer<typeof VariableSchema>
 export type EditorDocumentBlock = z.infer<typeof BlockSchema>
 
@@ -309,7 +357,7 @@ export const JSON_IMPORT_EXAMPLE = {
       children: [{ text: 'Result: ', style: { bold: true } }, { field: 'EBIT' }],
     },
   ],
-} satisfies EditorDocumentJson
+} satisfies LatestEditorDocumentJson
 
 /** `content[2].children[0]`-style dot/bracket path of a Zod issue. */
 function formatIssuePath(path: ReadonlyArray<PropertyKey>): string {
@@ -331,7 +379,9 @@ function mostSpecificIssue(issues: z.ZodIssue[]): z.ZodIssue | undefined {
 
 /**
  * German error message for a failed `DocumentJsonSchema` parse — shown by the
- * JSON import modal. Pragmatic per the slice-9 decisions: German lead-in plus
+ * JSON import modal, and the refusal text of the read boundary
+ * (`readDocumentJson`, document-version.ts). Pragmatic per the slice-9
+ * decisions: German lead-in plus
  * special-cased common failures (root shape, schema version, reference-style
  * image blocks with embedded `src` — the whole import fails for those by
  * design, base64 must stay structurally impossible). Other Zod detail
@@ -346,12 +396,16 @@ export function describeDocumentJsonError(error: z.ZodError, raw: unknown): stri
     return 'Das JSON muss ein Objekt mit { version, variables, content } sein.'
   }
 
+  // The version label enumerates DOCUMENT_JSON_VERSIONS rather than naming
+  // 1.0, so the boundary keeps telling the truth as versions are added.
+  const formatLabel = `Version ${DOCUMENT_JSON_VERSIONS.join('/')}`
+
   const issue = mostSpecificIssue(error.issues)
-  if (!issue) return 'Das JSON entspricht nicht dem Dokumentformat (Version 1.0).'
+  if (!issue) return `Das JSON entspricht nicht dem Dokumentformat (${formatLabel}).`
 
   const path = issue.path
   if (path[0] === 'version') {
-    return 'Nicht unterstützte Schema-Version — erwartet wird "1.0".'
+    return `Nicht unterstützte Schema-Version — erwartet wird ${supportedVersionList()}.`
   }
   if (path[0] === 'content' && typeof path[1] === 'number') {
     const content = (raw as Record<string, unknown>)['content']
@@ -380,7 +434,7 @@ export function describeDocumentJsonError(error: z.ZodError, raw: unknown): stri
         ? 'Kein gültiger Block-/Inline-Knoten an dieser Stelle.'
         : issue.message
   const where = path.length ? formatIssuePath(path) : 'Dokument'
-  return `Das JSON entspricht nicht dem Dokumentformat (Version 1.0) — ${where}: ${detail}`
+  return `Das JSON entspricht nicht dem Dokumentformat (${formatLabel}) — ${where}: ${detail}`
 }
 
 // ── Shared helpers (reference L2388–2390) ───────────────────────────────────
@@ -736,7 +790,7 @@ function createBlock(
  * {@link ImportResult}.
  */
 export function importEditorJson(
-  doc: EditorDocumentJson,
+  doc: LatestEditorDocumentJson,
   editor: HTMLElement,
   adapters: ImportAdapters,
   options?: { replaceExisting?: boolean }
@@ -1004,7 +1058,10 @@ function variableFromElement(el: HTMLElement, id: string): EditorDocumentVariabl
  * LaTeX list (the controller reads it from the sidebar items; the library
  * lives outside the editor element).
  */
-export function serializeEditorState(editor: HTMLElement, library: string[]): EditorDocumentJson {
+export function serializeEditorState(
+  editor: HTMLElement,
+  library: string[]
+): LatestEditorDocumentJson {
   const content: EditorDocumentBlock[] = []
   let pendingInline: InlineNode[] = []
 
@@ -1046,7 +1103,7 @@ export function serializeEditorState(editor: HTMLElement, library: string[]): Ed
   flushInline()
 
   return {
-    version: '1.0',
+    version: LATEST_DOCUMENT_JSON_VERSION,
     variables: serializeVariables(editor),
     content,
     library: [...library],
@@ -1077,8 +1134,8 @@ export function collectReferencedImageIds(doc: EditorDocumentJson): string[] {
  * draft that `uploadEditorImage` creates when an image is inserted before the
  * first save (an anchor row only, never content autosave).
  */
-export function emptyEditorDocumentJson(): EditorDocumentJson {
-  return { version: '1.0', variables: [], content: [], library: [] }
+export function emptyEditorDocumentJson(): LatestEditorDocumentJson {
+  return { version: LATEST_DOCUMENT_JSON_VERSION, variables: [], content: [], library: [] }
 }
 
 /**
@@ -1090,7 +1147,10 @@ export function emptyEditorDocumentJson(): EditorDocumentJson {
  * stringifying the save payload. A blank term returns the document unchanged
  * (no empty `meta` object is ever emitted).
  */
-export function withDocumentMeta(doc: EditorDocumentJson, term: string): EditorDocumentJson {
+export function withDocumentMeta(
+  doc: LatestEditorDocumentJson,
+  term: string
+): LatestEditorDocumentJson {
   const trimmed = term.trim()
   if (!trimmed) return doc
   return { ...doc, meta: { term: trimmed } }

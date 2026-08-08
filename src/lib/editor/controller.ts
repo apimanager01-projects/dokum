@@ -77,14 +77,13 @@ import {
   type LineToken,
 } from './field-resolver'
 import {
-  DocumentJsonSchema,
   JSON_IMPORT_EXAMPLE,
   createImageRemoveButton,
-  describeDocumentJsonError,
   importEditorJson,
   serializeEditorState,
-  type EditorDocumentJson,
+  type LatestEditorDocumentJson,
 } from './document-json'
+import { readDocumentJson } from './document-version'
 import { cleanupLatex } from './latex-display'
 import { librarySyncAction, shouldAddToLibrary } from './library-sync'
 import { loadMathJax } from './mathjax-loader'
@@ -178,13 +177,13 @@ export interface EditorController {
    * Serialises the live document (blocks, field state, formula library) to
    * versioned JSON — the draft-save payload (slice 7, #35).
    */
-  exportDocument(): EditorDocumentJson
+  exportDocument(): LatestEditorDocumentJson
   /**
    * Replaces the editor content and the formula library with a saved
    * document (draft load, slice 7). Resolves once every formula is
    * MathJax-rendered and the field state is refreshed.
    */
-  loadDocument(doc: EditorDocumentJson): Promise<void>
+  loadDocument(doc: LatestEditorDocumentJson): Promise<void>
   /**
    * „Add JSON"-Toolbar-Button (slice 9, #37): öffnet das JSON-Import-Modal
    * (Textarea, „Beispiel laden", Ersetzen/Anhängen-Checkbox). Import läuft
@@ -1621,7 +1620,7 @@ export function createEditorController(
 
   // --- Draft persistence (slice 7, #35) + JSON import (slice 9, #37) ---
 
-  function exportDocument(): EditorDocumentJson {
+  function exportDocument(): LatestEditorDocumentJson {
     return serializeEditorState(
       editor,
       libraryItems().map((it) => it.dataset['latex'] ?? '')
@@ -1653,7 +1652,7 @@ export function createEditorController(
   // The importer validates variable names BEFORE any DOM mutation, so a
   // throw here leaves the editor untouched.
   async function importDocument(
-    doc: EditorDocumentJson,
+    doc: LatestEditorDocumentJson,
     options: { replaceExisting: boolean }
   ): Promise<void> {
     const result = importEditorJson(
@@ -1677,7 +1676,7 @@ export function createEditorController(
     await reRenderAllLatexFormulas()
   }
 
-  async function loadDocument(doc: EditorDocumentJson): Promise<void> {
+  async function loadDocument(doc: LatestEditorDocumentJson): Promise<void> {
     return importDocument(doc, { replaceExisting: true })
   }
 
@@ -1716,15 +1715,16 @@ export function createEditorController(
       window.alert('JSON Import fehlgeschlagen:\nUngültiges JSON: ' + errorMessage(err))
       return
     }
-    const parsed = DocumentJsonSchema.safeParse(parsedJson)
-    if (!parsed.success) {
-      window.alert(
-        'JSON Import fehlgeschlagen:\n' + describeDocumentJsonError(parsed.error, parsedJson)
-      )
+    // Upgrade-on-read (#64): pasted JSON may carry any supported version, and
+    // the importer only ever sees the newest one. An unreadable snapshot is
+    // refused whole — never partially imported.
+    const parsed = readDocumentJson(parsedJson)
+    if (!parsed.ok) {
+      window.alert('JSON Import fehlgeschlagen:\n' + parsed.error)
       return
     }
     try {
-      await importDocument(parsed.data, { replaceExisting: jsonReplaceExisting.checked })
+      await importDocument(parsed.doc, { replaceExisting: jsonReplaceExisting.checked })
     } catch (err) {
       // Duplicate/colliding variable names — thrown before any DOM mutation
       // (German messages from the importer).

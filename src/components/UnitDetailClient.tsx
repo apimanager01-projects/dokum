@@ -155,7 +155,12 @@ export default function UnitDetailClient({ tasks, openTaskId, watermarkId }: { t
                                 ))}
                               </div>
                             </div>
-                          ) : doc.file_type === 'image' ? (
+                          ) : doc.file_type === 'image' || doc.file_type === 'interactive' ? (
+                            // 'interactive' is dual-written (#66): the row
+                            // carries the document JSON AND the exported PNG.
+                            // Until the live renderer lands (#67) the PNG is
+                            // what students see — deliberately no visible
+                            // difference from a published 'image'.
                             <div>
                               <p className="text-sm font-medium text-gray-800">{doc.title}</p>
                               {doc.description && (

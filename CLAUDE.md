@@ -6,6 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 [DEVELOPER_OVERVIEW.md](DEVELOPER_OVERVIEW.md) is the authoritative architecture doc — schema, RLS policies, full file map, debugging table. Read it before any non-trivial change. Keep it in sync when patterns shift.
 
+## Agent skills
+
+### Issue tracker
+
+Issues live as GitHub issues in `dokumtastisch/dokum`, driven via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
 ## Commands
 
 ```bash

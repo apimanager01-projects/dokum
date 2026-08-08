@@ -1,0 +1,42 @@
+[debug] [2026-07-15T19:49:27.943Z] ----------------------------------------------------------------------
+[debug] [2026-07-15T19:49:27.951Z] Command:       /Users/lucas/.nvm/versions/node/v22.14.0/bin/node /Users/lucas/.npm-global/bin/firebase apphosting:secrets:set STRIPE_SECRET_KEY --project dokum-8d8f4 --account admin@dokum.at
+[debug] [2026-07-15T19:49:27.952Z] CLI Version:   14.17.0
+[debug] [2026-07-15T19:49:27.952Z] Platform:      darwin
+[debug] [2026-07-15T19:49:27.952Z] Node Version:  v22.14.0
+[debug] [2026-07-15T19:49:27.952Z] Time:          Wed Jul 15 2026 21:49:27 GMT+0200 (Central European Summer Time)
+[debug] [2026-07-15T19:49:27.952Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-07-15T19:49:27.958Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-07-15T19:49:27.959Z] > authorizing via signed-in user (admin@dokum.at)
+[debug] [2026-07-15T19:49:27.959Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-07-15T19:49:27.959Z] > authorizing via signed-in user (admin@dokum.at)
+[debug] [2026-07-15T19:49:27.959Z] [iam] checking project dokum-8d8f4 for permissions ["firebase.projects.get","secretmanager.secrets.create","secretmanager.secrets.get","secretmanager.secrets.getIamPolicy","secretmanager.secrets.setIamPolicy","secretmanager.secrets.update","secretmanager.versions.add"]
+[debug] [2026-07-15T19:49:27.960Z] No OAuth tokens found
+[debug] [2026-07-15T19:49:27.960Z] No OAuth tokens found
+[debug] [2026-07-15T19:49:27.960Z] > refreshing access token with scopes: []
+[debug] [2026-07-15T19:49:27.962Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-07-15T19:49:27.962Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-07-15T19:49:28.145Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-07-15T19:49:28.145Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-07-15T19:49:28.151Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/dokum-8d8f4:testIamPermissions [none]
+[debug] [2026-07-15T19:49:28.151Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/dokum-8d8f4:testIamPermissions x-goog-quota-user=projects/dokum-8d8f4
+[debug] [2026-07-15T19:49:28.151Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/dokum-8d8f4:testIamPermissions {"permissions":["firebase.projects.get","secretmanager.secrets.create","secretmanager.secrets.get","secretmanager.secrets.getIamPolicy","secretmanager.secrets.setIamPolicy","secretmanager.secrets.update","secretmanager.versions.add"]}
+[debug] [2026-07-15T19:49:28.432Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/dokum-8d8f4:testIamPermissions 200
+[debug] [2026-07-15T19:49:28.433Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/dokum-8d8f4:testIamPermissions {"permissions":["firebase.projects.get","secretmanager.secrets.create","secretmanager.secrets.get","secretmanager.secrets.getIamPolicy","secretmanager.secrets.setIamPolicy","secretmanager.secrets.update","secretmanager.versions.add"]}
+[debug] [2026-07-15T19:49:28.434Z] Checked if tokens are valid: true, expires at: 1784148567145
+[debug] [2026-07-15T19:49:28.434Z] Checked if tokens are valid: true, expires at: 1784148567145
+[debug] [2026-07-15T19:49:28.434Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/dokum-8d8f4 [none]
+[debug] [2026-07-15T19:49:28.960Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/dokum-8d8f4 200
+[debug] [2026-07-15T19:49:28.960Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/dokum-8d8f4 {"projectNumber":"24894856390","projectId":"dokum-8d8f4","lifecycleState":"ACTIVE","name":"dokum","labels":{"firebase":"enabled","firebase-core":"disabled"},"createTime":"2026-07-12T13:16:21.117Z"}
+[debug] [2026-07-15T19:49:28.961Z] Checked if tokens are valid: true, expires at: 1784148567145
+[debug] [2026-07-15T19:49:28.961Z] Checked if tokens are valid: true, expires at: 1784148567145
+[debug] [2026-07-15T19:49:28.961Z] >>> [apiv2][query] GET https://secretmanager.googleapis.com/v1/projects/dokum-8d8f4/secrets/STRIPE_SECRET_KEY [none]
+[debug] [2026-07-15T19:49:29.228Z] <<< [apiv2][status] GET https://secretmanager.googleapis.com/v1/projects/dokum-8d8f4/secrets/STRIPE_SECRET_KEY 404
+[debug] [2026-07-15T19:49:29.228Z] <<< [apiv2][body] GET https://secretmanager.googleapis.com/v1/projects/dokum-8d8f4/secrets/STRIPE_SECRET_KEY {"error":{"code":404,"message":"Secret [projects/24894856390/secrets/STRIPE_SECRET_KEY] not found.","status":"NOT_FOUND"}}
+[debug] [2026-07-15T19:49:29.230Z] Checked if tokens are valid: true, expires at: 1784148567145
+[debug] [2026-07-15T19:49:29.230Z] Checked if tokens are valid: true, expires at: 1784148567145
+[debug] [2026-07-15T19:49:29.230Z] >>> [apiv2][query] POST https://secretmanager.googleapis.com/v1/projects/dokum-8d8f4/secrets secretId=STRIPE_SECRET_KEY
+[debug] [2026-07-15T19:49:29.231Z] >>> [apiv2][body] POST https://secretmanager.googleapis.com/v1/projects/dokum-8d8f4/secrets {"name":"STRIPE_SECRET_KEY","replication":{"automatic":{}},"labels":{"firebase-managed":"apphosting"}}
+[debug] [2026-07-15T19:49:30.176Z] <<< [apiv2][status] POST https://secretmanager.googleapis.com/v1/projects/dokum-8d8f4/secrets 200
+[debug] [2026-07-15T19:49:30.176Z] <<< [apiv2][body] POST https://secretmanager.googleapis.com/v1/projects/dokum-8d8f4/secrets {"name":"projects/24894856390/secrets/STRIPE_SECRET_KEY","replication":{"automatic":{}},"createTime":"2026-07-15T19:49:29.374756Z","labels":{"firebase-managed":"apphosting"},"etag":"\"1656ab9f2cbf1c\""}
+[info] ✔  Created new secret projects/dokum-8d8f4/secrets/STRIPE_SECRET_KEY 

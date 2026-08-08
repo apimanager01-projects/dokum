@@ -6,6 +6,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 [DEVELOPER_OVERVIEW.md](DEVELOPER_OVERVIEW.md) is the authoritative architecture doc — schema, RLS policies, full file map, debugging table. Read it before any non-trivial change. Keep it in sync when patterns shift.
 
+## Agent skills
+
+### Issue tracker
+
+Issues live as GitHub issues in `dokumtastisch/dokum`, driven via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical labels, unchanged. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context — `CONTEXT.md` + `docs/adr/` at the repo root, created lazily. See `docs/agents/domain.md`.
+
 ## Commands
 
 ```bash
@@ -74,17 +88,3 @@ Use the MCP to inspect and modify the dev project instead of asking the user to 
 - Prefer `apply_migration` over `execute_sql` for schema changes so the change is tracked.
 - Run `get_advisors` after schema changes to catch missing RLS or index issues.
 - After schema changes, regenerate types with `generate_typescript_types` and update [src/types/index.ts](src/types/index.ts) if the shape changed.
-
-## Agent skills
-
-### Issue tracker
-
-GitHub Issues on `apimanager01-projects/dokum`, via the `gh` CLI. See [docs/agents/issue-tracker.md](docs/agents/issue-tracker.md).
-
-### Triage labels
-
-The five canonical labels, unchanged. See [docs/agents/triage-labels.md](docs/agents/triage-labels.md).
-
-### Domain docs
-
-Single-context — `CONTEXT.md` + `docs/adr/` at the repo root, created lazily. See [docs/agents/domain.md](docs/agents/domain.md).

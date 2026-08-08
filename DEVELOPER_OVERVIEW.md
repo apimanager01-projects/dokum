@@ -63,7 +63,7 @@ Kurs (Course)
 | `kurse` | Courses | `id`, `title`, `description`, **`published`**, `position`, `created_at` |
 | `units` | Course sections | `id`, `kurs_id` (FK), `title`, `description`, `position`, `created_at` |
 | `tasks` | Unit assignments | `id`, `unit_id` (FK), `title`, `description`, `position`, `created_at` |
-| `documents` | PDFs/images | `id`, `task_id` (FK), `title`, `description`, `file_path`, `file_type` (`pdf`\|`image`\|`image_collection`), `position`, `created_at` |
+| `documents` | PDFs/images/published interactive documents | `id`, `task_id` (FK), `title`, `description`, `file_path`, `file_type` (`pdf`\|`image`\|`image_collection`\|`interactive`, CHECK-constrained), `position`, `created_at`, `content` (JSONB, published document JSON — NULL for legacy rows) |
 | `document_images` | Image collection items | `id`, `document_id` (FK CASCADE), `file_path`, `position`, `created_at` |
 | `audit_logs` | Admin + purchase action log | `id`, `actor_id` (FK auth.users), `action` (`create`\|`update`\|`delete`\|`grant`\|`revoke`), `entity_type` (incl. `entitlement`, `editor_document`, `editor_image`), `entity_id`, `entity_title`, `metadata` (JSONB), `created_at` |
 | `entitlements` | Per-(user, unit) paid access | `id`, `user_id` (FK auth.users), `unit_id` (FK units), `granted_at`, `source` (`purchase`\|`admin`), `stripe_session_id` |
@@ -392,6 +392,7 @@ Migrations live in `supabase/`. Apply them in order — first to dev (Supabase S
 | `add_entitlements.sql` | `entitlements` table + RLS rewire so tasks/documents/storage require a purchase |
 | `add_editor_documents.sql` | `editor_documents` drafts table (admin-only RLS, `updated_at` trigger) + audit `entity_type` extension |
 | `add_editor_images.sql` | `editor_images` table (admin-only RLS, cascade with draft) + audit `entity_type` extension (`editor_image`); no storage-policy changes needed |
+| `add_document_content.sql` | `documents.content` JSONB (published document snapshot, NULL for legacy rows) + `documents_file_type_check` CHECK adding `interactive`; no RLS changes needed — the row is already entitlement-gated |
 
 ## Common Tasks
 

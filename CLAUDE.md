@@ -67,7 +67,7 @@ The dev project is a free playground — break it freely. The prod project has r
 
 ## Database changes
 
-Migrations are plain SQL in [supabase/](supabase/) — apply via the Supabase SQL editor or CLI. Order matters: `migration.sql`, then `add_audit_log.sql`, then `add_entitlements.sql`, then `add_editor_documents.sql`, then `add_editor_images.sql`. There is no migration runner; new migrations must be applied manually.
+Migrations are plain SQL in [supabase/](supabase/) — apply via the Supabase SQL editor or CLI. Order matters: `migration.sql`, then `add_audit_log.sql`, then `add_entitlements.sql`, then `add_editor_documents.sql`, then `add_editor_images.sql`, then `add_document_content.sql`. There is no migration runner; new migrations must be applied manually.
 
 **Workflow for a new migration:** apply to **dev first** via `mcp__supabase__apply_migration`, verify with `get_advisors` and a quick read, then have the user apply the same migration to prod manually (MCP cannot reach prod — see below).
 

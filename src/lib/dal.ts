@@ -157,11 +157,23 @@ export async function getUnitById(
 }
 
 // Returns Unit with fully sorted Tasks → Documents → DocumentImages. Used by public Unit detail page.
+//
+// The document columns are listed EXPLICITLY rather than `documents(*)` (#65).
+// `documents` gained a `content` JSONB column holding the full published
+// snapshot, and `*` would ship every document's JSON to this page on every
+// load. Listing the columns makes including `content` a deliberate decision
+// instead of an accident — the DAL being the only read path means this
+// discipline lives in exactly one place.
 export async function getUnitWithTasks(unitId: string): Promise<UnitWithTasks | null> {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('units')
-    .select('*, tasks(*, documents(*, document_images(id, file_path, position, created_at)))')
+    .select(
+      `*, tasks(*, documents(
+        id, task_id, title, description, file_path, file_type, position, created_at,
+        document_images(id, file_path, position, created_at)
+      ))`
+    )
     .eq('id', unitId)
     .single()
   if (error || !data) return null

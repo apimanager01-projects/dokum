@@ -38,9 +38,24 @@ export interface Document {
   title: string
   description: string | null
   file_path: string | null
-  file_type: 'pdf' | 'image' | 'image_collection'
+  /**
+   * Mirrors the `documents_file_type_check` CHECK constraint
+   * (supabase/add_document_content.sql) — the two must list the same values.
+   * `'interactive'` is a published editor document; the legacy values are
+   * kept because file_type is the restoration key for archived rows.
+   */
+  file_type: 'pdf' | 'image' | 'image_collection' | 'interactive'
   position: number
   created_at: string
+  /**
+   * Published document JSON (#65) — NULL for every legacy row. Validated
+   * against the versioned schema on read via `readDocumentJson`, never
+   * trusted as-is.
+   *
+   * NOT selected by every query: the Unit-page read lists its columns
+   * explicitly so a page that does not render the snapshot does not ship it.
+   */
+  content: unknown
 }
 
 export interface DocumentImage {

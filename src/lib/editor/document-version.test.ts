@@ -21,6 +21,7 @@ import {
   DOCUMENT_JSON_UPGRADES,
   readDocumentJson,
   upgradeDocumentJson,
+  upgradeThroughChain,
 } from './document-version'
 
 /**
@@ -90,6 +91,80 @@ describe('upgradeDocumentJson', () => {
     // Only reachable through an unchecked cast — the schema rejects it first.
     const alien = { version: '9.9', variables: [], content: [] } as unknown as EditorDocumentJson
     expect(() => upgradeDocumentJson(alien)).toThrow(/Schema-Version/)
+  })
+
+  it('runs the identity step rather than short-circuiting past it', () => {
+    // The identity step is what terminates the walk, so a missing step can
+    // never be mistaken for "already newest".
+    let identityRuns = 0
+    const result = upgradeThroughChain(
+      { version: '1.0', marker: 'unverändert' },
+      { '1.0': (doc) => { identityRuns++; return doc } },
+      '1.0'
+    )
+    expect(identityRuns).toBe(1)
+    expect(result.marker).toBe('unverändert')
+  })
+})
+
+// ── The ladder itself, across real version hops ─────────────────────────────
+//
+// Only v1.0 exists in production, so the multi-version behaviour is exercised
+// against a synthetic ladder. This is what makes the chain a chain rather than
+// an assertion about a single entry — when v1.1 lands, these are the semantics
+// it inherits.
+
+describe('upgradeThroughChain', () => {
+  interface Fixture {
+    version: string
+    steps: string[]
+  }
+
+  const LADDER: Record<string, ((doc: Fixture) => Fixture) | undefined> = {
+    '0.8': (doc) => ({ version: '0.9', steps: [...doc.steps, '0.8→0.9'] }),
+    '0.9': (doc) => ({ version: '1.0', steps: [...doc.steps, '0.9→1.0'] }),
+    '1.0': (doc) => doc,
+  }
+
+  it('climbs every rung in order, oldest to newest', () => {
+    const result = upgradeThroughChain({ version: '0.8', steps: [] }, LADDER, '1.0')
+    expect(result.version).toBe('1.0')
+    expect(result.steps).toEqual(['0.8→0.9', '0.9→1.0'])
+  })
+
+  it('starts from whatever version the snapshot carries', () => {
+    const result = upgradeThroughChain({ version: '0.9', steps: [] }, LADDER, '1.0')
+    expect(result.steps).toEqual(['0.9→1.0'])
+  })
+
+  it('leaves the caller’s document alone — each rung returns a new value', () => {
+    const original = { version: '0.8', steps: [] }
+    upgradeThroughChain(original, LADDER, '1.0')
+    expect(original).toEqual({ version: '0.8', steps: [] })
+  })
+
+  it('refuses a version with no rung', () => {
+    expect(() => upgradeThroughChain({ version: '0.5', steps: [] }, LADDER, '1.0')).toThrow(
+      /Nicht unterstützte Schema-Version/
+    )
+  })
+
+  it('refuses a rung below the top that fails to advance, instead of looping', () => {
+    const broken: Record<string, ((doc: Fixture) => Fixture) | undefined> = {
+      '0.9': (doc) => doc, // claims to upgrade, does not
+      '1.0': (doc) => doc,
+    }
+    expect(() => upgradeThroughChain({ version: '0.9', steps: [] }, broken, '1.0')).toThrow(
+      /hat die Version nicht erhöht/
+    )
+  })
+
+  it('refuses a ladder that never reaches the top', () => {
+    const cyclic: Record<string, ((doc: Fixture) => Fixture) | undefined> = {
+      '0.8': (doc) => ({ ...doc, version: '0.9' }),
+      '0.9': (doc) => ({ ...doc, version: '0.8' }),
+    }
+    expect(() => upgradeThroughChain({ version: '0.8', steps: [] }, cyclic, '1.0')).toThrow()
   })
 })
 

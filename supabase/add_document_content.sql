@@ -4,8 +4,17 @@
 -- add_editor_documents.sql → add_editor_images.sql → THIS FILE.
 --
 -- Prepares the Document row to carry a published interactive document.
--- Nothing a student or author sees changes; this is the database half of the
--- foundation.
+--
+-- ⚠ APPLY THIS BEFORE DEPLOYING THE CODE THAT SHIPS WITH IT. The migration is
+-- backwards-compatible with the OLD code, but the new code is NOT
+-- backwards-compatible with the old schema: `getUnitWithTasks` names `content`
+-- in its select, so until the column exists PostgREST fails the whole query
+-- and EVERY student Unit page 404s — not only pages holding an interactive
+-- document. `publishEditorDraft` writes `content` on both paths and fails
+-- outright. Order is: migrate dev → verify → deploy, and the same for prod.
+--
+-- Beyond that ordering, nothing a student or author sees changes; this is the
+-- database half of the foundation.
 --
 -- NO RLS WORK IS NEEDED AND NONE IS ADDED, ON PURPOSE: `documents` SELECT is
 -- already entitlement-gated, so anything stored on the row inherits that gate

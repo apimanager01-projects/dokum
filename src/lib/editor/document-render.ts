@@ -12,8 +12,17 @@
  * knows every v1.0 block and inline shape, including the field-pill clones and
  * reference resolution), the field resolver, the expression evaluator, the
  * LaTeX normaliser and the German number formatter — so the student sees the
- * same document the author built, resolved by the same code, with no second
- * implementation to keep in parity.
+ * same document the author built, resolved by the same code.
+ *
+ * ⚠ ONE THING IS DUPLICATED, KNOWINGLY: {@link domFieldGraph} mirrors the
+ * controller's DOM adapter (controller.ts, `fieldGraph`/`tokenizeLine`/
+ * `toFieldData`) almost line for line. The two roots differ — the controller
+ * owns a live contenteditable, this owns a read-only container — and folding
+ * them together means editing the shipped editor, whose behaviour is pinned
+ * by parity goldens. It was left duplicated deliberately, but it IS a second
+ * implementation: a change to either adapter must be mirrored in the other,
+ * or the editor and the student view will resolve the same document
+ * differently. Extracting the shared adapter is the right follow-up.
  *
  * Two deliberate properties:
  *

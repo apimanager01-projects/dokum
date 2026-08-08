@@ -160,7 +160,11 @@ src/
 │   │   ├── KursCard.tsx
 │   │   └── UnitCard.tsx
 │   ├── documents/
-│   │   └── DocumentCard.tsx
+│   │   ├── DocumentCard.tsx
+│   │   ├── InteractiveDocument.tsx # Live student render of a published document JSON + PNG fallback (error boundary)
+│   │   ├── DocumentPng.tsx        #   the stored picture: legacy 'image' render AND the interactive fallback
+│   │   ├── Watermark.tsx          #   tiled deterrent overlay (pointer-events:none — must not block selection)
+│   │   └── interactive-document.css #  student typography/pills/formula blocks (scoped to .dokum-document)
 │   ├── consent/
 │   ├── datenschutz/
 │   ├── UnitDetailClient.tsx       # Unit detail page (expandable tasks + documents)
@@ -175,7 +179,10 @@ src/
 │   ├── audit.ts                   # logAdminAction() — fire-and-forget audit log writer
 │   ├── editor/                    # LaTeX editor (PRD #28): imperative core + pure modules
 │   │   ├── controller.ts          # Imperative contenteditable controller (browser-only)
-│   │   ├── document-json.ts       # Versioned Zod schema (v1.0) + ported importer + serializer (draft JSON)
+│   │   ├── document-json.ts       # Versioned Zod schema (discriminated union over `version`) + ported importer + serializer
+│   │   ├── document-version.ts    # Upgrade-on-read: pure vN→vN+1 chain + readDocumentJson (the boundary for stored snapshots) — pure
+│   │   ├── document-render.ts     # Student renderer: document JSON → live DOM, reusing the importer + resolver; MathJax-free — pure
+│   │   ├── publish-plan.ts        # Copy-fresh-then-swap image re-homing plan for publishing (what to copy/rewrite/delete) — pure
 │   │   ├── expression-evaluator.ts # CSP-safe math tokenizer/parser — replaces new Function; errors → NaN
 │   │   ├── latex-normalise.ts     # LaTeX→expression translation + auto-expression extraction
 │   │   ├── field-resolver.ts      # Input/Output field graph: value resolution, cycle → Err, output-as-input rule — pure

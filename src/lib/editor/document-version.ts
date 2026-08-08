@@ -30,7 +30,6 @@
  */
 
 import {
-  DOCUMENT_JSON_VERSIONS,
   DocumentJsonSchema,
   LATEST_DOCUMENT_JSON_VERSION,
   describeDocumentJsonError,
@@ -55,40 +54,66 @@ export const DOCUMENT_JSON_UPGRADES: Record<DocumentJsonVersion, UpgradeStep> = 
   '1.0': (doc) => doc,
 }
 
+/** Anything the chain walker needs to see: a document carrying a version. */
+interface VersionedDocument {
+  version: string
+}
+
 /**
- * Migrates a schema-valid snapshot up to {@link LATEST_DOCUMENT_JSON_VERSION}.
+ * Walks a document up an upgrade ladder until a step declines to advance it.
  *
- * Throws a German `Error` when the version is outside the supported list, or
- * when a step fails to advance the version (a malformed chain — caught here
- * rather than looping forever). Callers reading untrusted storage should use
- * {@link readDocumentJson}, which turns both into an honest `ok: false`.
+ * The identity step is what TERMINATES this loop, which is the point: it is
+ * load-bearing rather than decorative, so the totality of the step record is
+ * checked at runtime on every read, and a version whose step is missing
+ * cannot slip through as "already newest".
+ *
+ * Generic over the document shape and taking its ladder as a parameter, so
+ * the chain can be tested across a real vN→vN+1 hop while only one version
+ * exists in production. {@link upgradeDocumentJson} is the real entry point.
  */
-export function upgradeDocumentJson(doc: EditorDocumentJson): LatestEditorDocumentJson {
-  // Indexed through a widened key on purpose: while the union has a single
-  // member, TypeScript narrows `version` to `never` past the latest-version
-  // check and the record lookup stops being callable. The runtime guard is
-  // the real check regardless — storage can hold any string.
-  const steps: Record<string, UpgradeStep | undefined> = DOCUMENT_JSON_UPGRADES
-
-  let current: EditorDocumentJson = doc
-  // Bounded by the version list: every step must move strictly up the ladder
-  // (enforced below), so the loop can run at most once per version.
-  for (let hops = 0; hops <= DOCUMENT_JSON_VERSIONS.length; hops++) {
-    const version: string = current.version
-    // Sound because the schema ties each `version` literal to its own shape:
-    // a document reporting the newest version parsed as the newest member.
-    if (version === LATEST_DOCUMENT_JSON_VERSION) return current as LatestEditorDocumentJson
-
+export function upgradeThroughChain<T extends VersionedDocument>(
+  doc: T,
+  steps: Record<string, ((doc: T) => T) | undefined>,
+  latest: string
+): T {
+  let current = doc
+  // Every step must move strictly up the ladder, so the loop can run at most
+  // once per version — the bound just turns a malformed chain into an error
+  // instead of a hang.
+  for (let hops = 0; hops <= Object.keys(steps).length; hops++) {
+    const version = current.version
     const step = steps[version]
     if (!step) throw new Error(`Nicht unterstützte Schema-Version: "${version}".`)
 
     const next = step(current)
     if (next.version === version) {
+      // A step that does not advance is the identity step, and identity is
+      // only correct at the top of the ladder.
+      if (version === latest) return next
       throw new Error(`Aktualisierung der Schema-Version "${version}" hat die Version nicht erhöht.`)
     }
     current = next
   }
   throw new Error('Aktualisierung der Schema-Version wurde nicht abgeschlossen.')
+}
+
+/**
+ * Migrates a schema-valid snapshot up to {@link LATEST_DOCUMENT_JSON_VERSION}.
+ *
+ * Throws a German `Error` when the version is outside the supported list, or
+ * when a step fails to advance the version (a malformed chain). Callers
+ * reading untrusted storage should use {@link readDocumentJson}, which turns
+ * both into an honest `ok: false`.
+ */
+export function upgradeDocumentJson(doc: EditorDocumentJson): LatestEditorDocumentJson {
+  const upgraded = upgradeThroughChain<EditorDocumentJson>(
+    doc,
+    DOCUMENT_JSON_UPGRADES,
+    LATEST_DOCUMENT_JSON_VERSION
+  )
+  // Sound because the schema ties each `version` literal to its own shape: a
+  // document reporting the newest version parsed as the newest union member.
+  return upgraded as LatestEditorDocumentJson
 }
 
 /** Outcome of reading a stored snapshot: a usable document, or an honest refusal. */

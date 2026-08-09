@@ -1,11 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
 import type { Task, DocumentWithImages } from '@/types'
 import { DocumentBody } from '@/components/documents/DocumentBody'
+import { DocumentLink } from '@/components/documents/DocumentLink'
 import { documentViewKind } from '@/lib/document-view'
-import { documentUrl } from '@/lib/constants'
 import Lightbox from 'yet-another-react-lightbox'
 import Zoom from 'yet-another-react-lightbox/plugins/zoom'
 import 'yet-another-react-lightbox/styles.css'
@@ -105,12 +104,16 @@ export default function UnitDetailClient({ tasks, openTaskId, watermarkId }: { t
                             {doc.description && (
                               <p className="text-xs text-gray-500">{doc.description}</p>
                             )}
-                            <Link
-                              href={documentUrl(doc.id)}
+                            {/* Opens on top of this Unit page rather than
+                                replacing it (#70) — the accordion, and every
+                                value a student has typed into a document in
+                                it, is still here underneath. */}
+                            <DocumentLink
+                              docId={doc.id}
                               className="mt-0.5 inline-block text-xs text-gray-400 hover:text-brand"
                             >
                               Einzelansicht ↗
-                            </Link>
+                            </DocumentLink>
                           </div>
                         )
                         return (

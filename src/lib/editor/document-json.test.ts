@@ -26,6 +26,7 @@ import {
   describeDocumentJsonError,
   emptyEditorDocumentJson,
   importEditorJson,
+  promoteStrayRunToBlock,
   serializeEditorState,
   serializesAsOwnBlock,
   withDocumentMeta,
@@ -1232,6 +1233,65 @@ describe('block anchors (schema v1.1)', () => {
       'DIV.image-block',
     ])
     expect(emitted).toBe(markable.length + 1)
+    editor.remove()
+  })
+
+  // #93: the first line of an empty document stays a bare text node, so it is
+  // correctly unmarkable — and the author, seeing the caret in it, cannot tell
+  // why. Promotion makes the line markable without changing what is saved.
+  it('promotes the first bare line into the paragraph the serializer would emit', () => {
+    const editor = makeEditor()
+    editor.innerHTML = 'erste Zeile<div>zweite Zeile</div>'
+    const before = serializeEditorState(editor, [])
+
+    const promoted = promoteStrayRunToBlock(editor, editor.firstChild!)!
+    expect(promoted.tagName).toBe('P')
+    expect(promoted.textContent).toBe('erste Zeile')
+    expect(serializesAsOwnBlock(promoted)).toBe(true)
+    // The whole point: the saved document is untouched by the promotion.
+    expect(serializeEditorState(editor, [])).toEqual(before)
+    editor.remove()
+  })
+
+  it('promotes the whole contiguous stray run, not just the node passed in', () => {
+    // The serializer folds a run of strays into ONE paragraph; promoting only
+    // the caret's own node would split it into two and change the document.
+    const editor = makeEditor()
+    editor.innerHTML = 'links<b>fett</b>rechts<p>eigener Block</p>'
+    const before = serializeEditorState(editor, [])
+
+    const promoted = promoteStrayRunToBlock(editor, editor.childNodes[1]!)!
+    expect(promoted.textContent).toBe('linksfettrechts')
+    expect(editor.children.length).toBe(2)
+    expect(serializeEditorState(editor, [])).toEqual(before)
+    editor.remove()
+  })
+
+  it('stops the run at the hidden field store rather than folding it in', () => {
+    // #hiddenFields inside a paragraph would be serialized as visible content
+    // — the one place where following the serializer's own grouping exactly
+    // would be actively wrong.
+    const editor = makeEditor()
+    editor.innerHTML = 'sichtbar<div id="hiddenFields"></div>dahinter'
+
+    const promoted = promoteStrayRunToBlock(editor, editor.firstChild!)!
+    expect(promoted.textContent).toBe('sichtbar')
+    expect(promoted.querySelector('#hiddenFields')).toBeNull()
+    expect(editor.querySelector('#hiddenFields')!.parentElement).toBe(editor)
+    editor.remove()
+  })
+
+  it('refuses anything that is already a block, dropped chrome, or not a child of the editor', () => {
+    const editor = makeEditor()
+    editor.innerHTML =
+      '<p>absatz</p><div id="hiddenFields"></div><div class="drop-indicator"></div>'
+    const [paragraph, hidden, indicator] = Array.from(editor.children)
+    expect(promoteStrayRunToBlock(editor, paragraph!)).toBeNull()
+    expect(promoteStrayRunToBlock(editor, hidden!)).toBeNull()
+    expect(promoteStrayRunToBlock(editor, indicator!)).toBeNull()
+    // A node one level down is not a top-level stray — the caller resolves the
+    // top-level node first.
+    expect(promoteStrayRunToBlock(editor, paragraph!.firstChild!)).toBeNull()
     editor.remove()
   })
 

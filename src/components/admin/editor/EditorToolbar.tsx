@@ -191,7 +191,7 @@ export function EditorToolbar({
             the selectionchange-maintained range instead. */}
         <button
           type="button"
-          title="Diesen Block als Sprungmarke markieren, umbenennen oder die Markierung entfernen"
+          title="Diesen Block als Sprungmarke markieren, umbenennen oder die Markierung entfernen. Formel- und Bildblöcke zuvor mit einem Klick auf ihren Ziehgriff ❚❚ auswählen."
           onClick={() => ctrl()?.markAnchor()}
         >
           ⚓ Sprungmarke

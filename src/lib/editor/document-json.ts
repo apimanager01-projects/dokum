@@ -1115,6 +1115,63 @@ export function serializesAsOwnBlock(el: HTMLElement): boolean {
 }
 
 /**
+ * A top-level node {@link serializeEditorState} folds into a paragraph rather
+ * than emitting as itself: bare text, or an inline element with no block
+ * shape. Dropped elements are NOT stray — they leave the document entirely.
+ */
+function isStrayTopLevel(node: Node): boolean {
+  if (node.nodeType === Node.TEXT_NODE) return true
+  if (node.nodeType !== Node.ELEMENT_NODE) return false
+  const el = node as HTMLElement
+  return !hasBlockShape(el) && !isDroppedTopLevel(el)
+}
+
+/**
+ * Wraps the contiguous run of stray top-level nodes around `node` into the
+ * `<p>` the serializer would have folded them into anyway, and returns it.
+ * `null` when `node` is not a stray top-level child of `editor` — an existing
+ * block, the hidden field store, drag chrome.
+ *
+ * This exists for the first line of an empty document (#93): a contenteditable
+ * leaves it as a bare text node, so it has no element to carry a Sprungmarke
+ * and `serializesAsOwnBlock` rightly refuses it — while the author can plainly
+ * see the caret sitting in it. Promoting is the honest resolution: the run
+ * already serializes as exactly one paragraph, so making that paragraph real
+ * changes the saved document not at all, and the line becomes markable.
+ *
+ * The run is bounded by any non-stray sibling, dropped ones included. That is
+ * marginally stricter than the serializer, which lets a stray run span the
+ * hidden field store — but folding `#hiddenFields` into a paragraph would
+ * publish the hidden fields as visible content, so the run stops there.
+ *
+ * Caller beware: moving a node detaches every live Range boundary inside it
+ * (DOM "remove" steps re-point them at the old parent). Re-establish the caret
+ * from a node/offset pair captured before the call.
+ */
+export function promoteStrayRunToBlock(editor: HTMLElement, node: Node): HTMLElement | null {
+  if (node.parentNode !== editor || !isStrayTopLevel(node)) return null
+
+  let first = node
+  while (first.previousSibling && isStrayTopLevel(first.previousSibling)) {
+    first = first.previousSibling
+  }
+  let last = node
+  while (last.nextSibling && isStrayTopLevel(last.nextSibling)) {
+    last = last.nextSibling
+  }
+
+  const block = (editor.ownerDocument ?? document).createElement('p')
+  editor.insertBefore(block, first)
+  let cursor: Node | null = first
+  while (cursor) {
+    const next: Node | null = cursor === last ? null : cursor.nextSibling
+    block.appendChild(cursor)
+    cursor = next
+  }
+  return block
+}
+
+/**
  * Deterministic variable order: fields with an inline (visible) occurrence
  * first, by first occurrence in content order, then hidden-store-only fields
  * in store order — exactly the order a subsequent import reproduces, which

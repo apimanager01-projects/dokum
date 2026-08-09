@@ -74,6 +74,26 @@ export interface TaskWithDocuments extends Task {
   documents: DocumentWithImages[]
 }
 
+// Exactly what rendering a document's body needs — and deliberately nothing
+// more. No `file_path`, so no storage path travels to the browser for a
+// component that addresses everything through the proxy routes by id. Both
+// student surfaces satisfy it: the accordion passes its full
+// `DocumentWithImages` rows, the full-page route selects only these columns.
+export type RenderableDocument = Pick<Document, 'id' | 'title' | 'file_type' | 'content'> & {
+  document_images: Pick<DocumentImage, 'id'>[]
+}
+
+// A single Document plus the ancestry its full-page route needs (#69):
+// `kurs.published` is what the page enforces access with, and the ids and
+// titles are the way back into the hierarchy for someone who arrived from a
+// bookmark or a shared link with no history behind them.
+export interface DocumentWithAncestry {
+  document: RenderableDocument & Pick<Document, 'description'>
+  task: Pick<Task, 'id' | 'title'>
+  unit: Pick<Unit, 'id' | 'title'>
+  kurs: Pick<Kurs, 'id' | 'title' | 'published'>
+}
+
 export interface UnitWithTasks extends Unit {
   tasks: TaskWithDocuments[]
 }

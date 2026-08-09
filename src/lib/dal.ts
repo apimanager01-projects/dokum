@@ -1,6 +1,9 @@
 import 'server-only'
 import { createClient } from '@/lib/supabase/server'
 import type {
+  Document,
+  DocumentImage,
+  DocumentWithAncestry,
   EditorDocument,
   EditorDocumentListItem,
   EditorTargetKurs,
@@ -221,6 +224,72 @@ export async function getDocumentById(
     .eq('id', docId)
     .single()
   return data ?? null
+}
+
+// Full-page document view (#69). Returns the document TOGETHER WITH the
+// ancestry the page needs — the parent Kurs's `published` flag to enforce
+// access, and the Kurs/Unit/Task ids and titles to render the way back into
+// the hierarchy. One round-trip, because the page cannot show anything until
+// all of it has arrived.
+//
+// Access is enforced by the same two mechanisms as everywhere else, not by
+// new ones. RLS on `documents` already requires an entitlement for the owning
+// Unit (or admin), so an unentitled reader gets no row at all; the `!inner`
+// join up to `kurse` additionally drops the row when the Kurs is unpublished,
+// since the `units` policy gates on it. The caller re-checks `published` in
+// app code with an admin bypass anyway, exactly as /api/file does — the
+// archive must not depend on a join's emptiness alone.
+//
+// `content` IS selected here: this page's whole job is rendering the snapshot.
+// `file_path` is NOT — the renderers address the stored file and every image
+// through the proxy routes by id, so a storage path would cross to the browser
+// for nothing.
+export async function getDocumentWithAncestry(docId: string): Promise<DocumentWithAncestry | null> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('documents')
+    .select(
+      `id, title, description, file_type, content,
+       document_images(id, position, created_at),
+       tasks!inner(
+         id, title,
+         units!inner(
+           id, title,
+           kurse!inner(id, title, published)
+         )
+       )`
+    )
+    .eq('id', docId)
+    .single()
+  if (error || !data) return null
+
+  // Deep nested joins are not inferred without generated types; the `!inner`
+  // joins guarantee the relations exist, and the shape is pinned by the row
+  // type right here — the one cast in this function.
+  const { tasks: task, document_images: images, ...document } = data as unknown as DocumentAncestryRow
+  return {
+    document: { ...document, document_images: sortByPosition(images ?? []) },
+    task: { id: task.id, title: task.title },
+    unit: { id: task.units.id, title: task.units.title },
+    kurs: { id: task.units.kurse.id, title: task.units.kurse.title, published: task.units.kurse.published },
+  }
+}
+
+// The raw PostgREST shape of the query above: the document's own columns plus
+// its embedded images and ancestry, which the function immediately splits
+// apart. `position`/`created_at` ride along on the images only so the DAL can
+// apply the hierarchy's sort here, as it does everywhere else.
+type DocumentAncestryRow = Pick<Document, 'id' | 'title' | 'description' | 'file_type' | 'content'> & {
+  document_images: Pick<DocumentImage, 'id' | 'position' | 'created_at'>[] | null
+  tasks: {
+    id: string
+    title: string
+    units: {
+      id: string
+      title: string
+      kurse: { id: string; title: string; published: boolean }
+    }
+  }
 }
 
 // Used by /api/file/[docId] route

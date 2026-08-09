@@ -28,3 +28,12 @@ export const MIME_TO_EXT: Record<string, string> = {
 export function editorImageUrl(imageId: string): string {
   return `/api/editor-image/${imageId}`
 }
+
+// The addressable URL of a single Dokument (#69) — the thing a student
+// bookmarks or sends to a classmate. Deliberately FLAT: a link stores the
+// target's document id and nothing else (#63 §6), so the URL needs no Kurs or
+// Unit in it, and a top-level segment is also the shape the overlay's
+// intercepting route needs (#70).
+export function documentUrl(docId: string): string {
+  return `/dokumente/${docId}`
+}

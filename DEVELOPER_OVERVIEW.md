@@ -122,6 +122,10 @@ src/
 │   │           ├── page.tsx       # Unit detail (expandable task/document tree)
 │   │           ├── error.tsx
 │   │           └── loading.tsx
+│   ├── dokumente/[docId]/         # Addressable single-Dokument route (#69) — flat by design
+│   │   ├── page.tsx               #   full-page view: RLS entitlement + published re-check → DocumentBody
+│   │   ├── error.tsx
+│   │   └── loading.tsx
 │   ├── admin/
 │   │   ├── page.tsx               # Admin hub (4-card grid)
 │   │   ├── error.tsx
@@ -160,6 +164,7 @@ src/
 │   │   ├── KursCard.tsx
 │   │   └── UnitCard.tsx
 │   ├── documents/
+│   │   ├── DocumentBody.tsx        # A document's body for every file_type — the ONE render path shared by the Unit accordion and the full-page route (callers supply the heading)
 │   │   ├── DocumentCard.tsx
 │   │   ├── InteractiveDocument.tsx # Live student render of a published document JSON + PNG fallback (error boundary); owns only the MathJax half — typesets the formulas each recompute reports as changed, serialised so a fast typist cannot land a stale one
 │   │   ├── DocumentPng.tsx        #   the stored picture: legacy 'image' render AND the interactive fallback
@@ -175,6 +180,7 @@ src/
 ├── lib/
 │   ├── constants.ts               # Centralized config (bucket, file limits, MIME types)
 │   ├── dal.ts                     # Data access layer — all Supabase read queries
+│   ├── document-view.ts           # documentViewKind(): which render path a Document takes (interactive | picture | collection | file) — pure, shared by both student surfaces
 │   ├── schemas.ts                 # Zod schemas for server action input validation
 │   ├── audit.ts                   # logAdminAction() — fire-and-forget audit log writer
 │   ├── editor/                    # LaTeX editor (PRD #28): TWO imperative surfaces (controller.ts for /admin/editor, document-render.ts for the student viewer) + pure modules
@@ -281,6 +287,17 @@ The document routes verify:
 
 Short-lived signed URLs (60s) are generated server-side. The document routes respond with a single 302 redirect to the signed URL (the link dies after 60 s); the editor-image route instead fetches it server-side and **streams** the body, so the browser only ever sees a same-origin response — that is what lets the PNG export (html2canvas) rasterise editor images without CORS handling or canvas tainting. Signed Supabase URLs are never stored, embedded in content, or exposed beyond that one redirect.
 
+### Student Document Routes
+
+A Dokument is addressable at `/dokumente/[docId]` (`documentUrl()`), rendered full-page. The segment is **flat on purpose**: a link stores its target's document id and nothing else, so the URL needs no Kurs or Unit in it, and a top-level segment is the shape the overlay's intercepting route will need.
+
+Access reuses the two mechanisms that already exist and adds none:
+
+1. **Entitlement is RLS's job** — `documents` SELECT requires a purchase for the owning Unit (or admin), so an unentitled visitor's query returns no row.
+2. **`kurse.published` is re-checked in app code**, with an admin bypass, exactly as `/api/file` does — the document policies deliberately dropped the `published` subquery, so this app-level check is what makes an archived Kurs dark.
+
+Every failure — unknown id, no entitlement, archived Kurs — lands on the same `notFound()`; distinguishing them would leak which documents exist to someone who cannot read them.
+
 ### Error & Loading Boundaries
 
 Every major route segment has scoped `error.tsx` and `loading.tsx` files. A failed Supabase query shows a friendly German error UI instead of a white screen.
@@ -328,6 +345,7 @@ All magic values live in `src/lib/constants.ts`:
 | `ALLOWED_FILE_MIMES` | `['application/pdf', ...]` | Accepted file types |
 | `MIME_TO_EXT` | `Record<string, string>` | MIME → file extension map |
 | `editorImageUrl(imageId)` | `` `/api/editor-image/${imageId}` `` | Single source for editor-image browser URLs (controller, JSON importer, proxy route) |
+| `documentUrl(docId)` | `` `/dokumente/${docId}` `` | Single source for the addressable Dokument URL (#69) — the accordion's „Einzelansicht", `DocumentCard`, and every future link chip |
 
 ## Dependencies
 
@@ -376,6 +394,8 @@ npm run test:watch   # watch mode
 ```
 
 Conventions: tests are colocated `*.test.ts` files next to their modules and assert **external behavior only** (inputs → outputs, no internal call structure). The default environment is plain Node; DOM-dependent suites opt into jsdom per file via a `@vitest-environment jsdom` docblock — currently `document-json.test.ts`, whose importer builds real DOM. The editor-module tests under `src/lib/editor/` are golden cases generated from the standalone reference editor (`latexEditor/*.html`) and double as the React port's parity contract — expected values must not be changed without checking the reference behavior first.
+
+Tests are not confined to `src/lib/editor/`: any pure module is a candidate, and `src/lib/document-view.test.ts` pins the render-path rule both student surfaces share. React components have no test seam here (no testing-library, no browser E2E) — component and navigation behaviour is verified by manual QA recorded on the ticket.
 
 ### Two Supabase Projects
 
@@ -442,6 +462,8 @@ Set `published = true/false` in the `kurse` table. The Kurs and its Units appear
 |-------|--------------|-----|
 | Admin page accessible without being admin | Proxy not running | Check `src/proxy.ts` exists at `src/` root (Next.js 16 renamed middleware → proxy) |
 | File proxy returns 403 | Course not published | Set `kurse.published = true` for the parent course |
+| `/dokumente/[docId]` 404s for a user who can see the document in the accordion | Parent Kurs unpublished — the route re-checks `published` in app code (admins bypass) | Set `kurse.published = true`, or confirm the 404 is intended (archived Kurs) |
+| `/dokumente/[docId]` 404s for everyone including admins | No such document id | The route deliberately does not distinguish unknown / unentitled / archived — check the id against `documents` |
 | Zod error on form submit | Field name mismatch | Check form field `name` attributes match schema keys in `schemas.ts` |
 | Audit log not writing | `audit_logs` table missing | Apply `supabase/add_audit_log.sql` migration |
 | PDF won't open in iPhone Safari | Content-Disposition | Route sets `{ download: false }` in signed URL — ensure it stays |
@@ -470,6 +492,7 @@ Set `published = true/false` in the `kurse` table. The Kurs and its Units appear
 | Admin form components | `src/components/admin/{Kurs,Unit,Task,Document}Form.tsx` |
 | Admin tree visualizer | `src/components/admin/AdminTree.tsx` |
 | File proxy routes | `src/app/api/file/[docId]/route.ts`, `src/app/api/image/[imageId]/route.ts`, `src/app/api/editor-image/[imageId]/route.ts` |
+| Student document rendering | `src/lib/document-view.ts`, `src/components/documents/DocumentBody.tsx`, `src/app/dokumente/[docId]/page.tsx` |
 | LaTeX editor core (controller + pure modules) | `src/lib/editor/*` |
 | LaTeX editor UI (page, shell, toolbar, export, drafts) | `src/app/admin/editor/*`, `src/components/admin/editor/*` |
 | Standalone reference editor (parity ground truth) | `latexEditor/*.html` |

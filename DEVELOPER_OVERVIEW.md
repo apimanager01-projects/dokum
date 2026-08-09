@@ -123,9 +123,14 @@ src/
 │   │           ├── error.tsx
 │   │           └── loading.tsx
 │   ├── dokumente/[docId]/         # Addressable single-Dokument route (#69) — flat by design
-│   │   ├── page.tsx               #   full-page view: RLS entitlement + published re-check → DocumentBody
+│   │   ├── page.tsx               #   full-page view: loadDocumentSurface → DocumentArticle
 │   │   ├── error.tsx
 │   │   └── loading.tsx
+│   ├── @modal/                    # Overlay slot (#70) — parallel route on the ROOT layout
+│   │   ├── default.tsx            #   renders null: what every non-intercepted route falls back to (its absence would 404 them)
+│   │   └── (.)dokumente/[docId]/  #   INTERCEPTS the route above on client-side navigation only
+│   │       ├── page.tsx           #     dialog shell outside the Suspense boundary, document streamed into it
+│   │       └── error.tsx          #     failure keeps the dialog, so the close button still works
 │   ├── admin/
 │   │   ├── page.tsx               # Admin hub (4-card grid)
 │   │   ├── error.tsx
@@ -165,6 +170,9 @@ src/
 │   │   └── UnitCard.tsx
 │   ├── documents/
 │   │   ├── DocumentBody.tsx        # A document's body for every file_type — the ONE render path shared by the Unit accordion and the full-page route (callers supply the heading)
+│   │   ├── DocumentArticle.tsx     # Breadcrumb + title + description + body at page scale — shared by the full page and the overlay, which differ only in their chrome
+│   │   ├── DocumentOverlay.tsx     # The overlay shell (#70): native <dialog>.showModal() for the focus trap, Escape and inert background; every dismissal is router.back()
+│   │   ├── DocumentLink.tsx        # The in-app link to a Dokument — carries scroll={false} so opening an overlay cannot discard the source page's reading position
 │   │   ├── DocumentCard.tsx
 │   │   ├── InteractiveDocument.tsx # Live student render of a published document JSON + PNG fallback (error boundary); owns only the MathJax half — typesets the formulas each recompute reports as changed, serialised so a fast typist cannot land a stale one
 │   │   ├── DocumentPng.tsx        #   the stored picture: legacy 'image' render AND the interactive fallback
@@ -181,6 +189,8 @@ src/
 │   ├── constants.ts               # Centralized config (bucket, file limits, MIME types)
 │   ├── dal.ts                     # Data access layer — all Supabase read queries
 │   ├── document-view.ts           # documentViewKind(): which render path a Document takes (interactive | picture | collection | file) — pure, shared by both student surfaces
+│   ├── document-access.ts         # isDocumentReadable(): the one app-level access rule (published re-check + admin bypass, nullable view) — pure, tested
+│   ├── document-surface.ts        # loadDocumentSurface(): auth + DAL read + access rule + watermark, `cache`d — the single read path behind BOTH student document surfaces
 │   ├── schemas.ts                 # Zod schemas for server action input validation
 │   ├── audit.ts                   # logAdminAction() — fire-and-forget audit log writer
 │   ├── editor/                    # LaTeX editor (PRD #28): TWO imperative surfaces (controller.ts for /admin/editor, document-render.ts for the student viewer) + pure modules
@@ -289,18 +299,28 @@ Short-lived signed URLs (60s) are generated server-side. The document routes res
 
 ### Student Document Routes
 
-A Dokument is addressable at `/dokumente/[docId]` (`documentUrl()`), rendered full-page. The segment is **flat on purpose**: a link stores its target's document id and nothing else, so the URL needs no Kurs or Unit in it, and a top-level segment is the shape the overlay's intercepting route will need.
+A Dokument is addressable at `/dokumente/[docId]` (`documentUrl()`). The segment is **flat on purpose**: a link stores its target's document id and nothing else, so the URL needs no Kurs or Unit in it, and a top-level segment is the shape the overlay's intercepting route needs.
 
-Access reuses the two mechanisms that already exist and adds none:
+Access reuses the two mechanisms that already exist and adds none. Both surfaces below read through **`loadDocumentSurface()`** so neither can become the laxer of the two:
 
 1. **Entitlement is RLS's job** — `documents` SELECT requires a purchase for the owning Unit (or admin), so an unentitled visitor's query returns no row.
 2. **`kurse.published` is re-checked in app code**, with an admin bypass, exactly as `/api/file` does — the document policies deliberately dropped the `published` subquery, so this app-level check is what makes an archived Kurs dark.
 
-Every failure — unknown id, no entitlement, archived Kurs — lands on the same `notFound()`; distinguishing them would leak which documents exist to someone who cannot read them.
+Every failure — unknown id, no entitlement, archived Kurs — collapses into one refusal; distinguishing them would leak which documents exist to someone who cannot read them. The full page turns that into `notFound()`, the overlay into a „nicht gefunden" panel inside the dialog.
+
+**One URL, two presentations (#70).** A **hard** navigation — pasted link, bookmark, reload, a mail from a classmate — renders the full page. A **client-side** navigation from inside the app is intercepted by `app/@modal/(.)dokumente/[docId]` and opens the same document as a modal dialog over the current page: centred panel on desktop, full-screen sheet on a phone. Nothing in our code chooses between them; the App Router's interception rule does, and it only fires on soft navigation.
+
+The overlay is not cosmetic. **The viewer holds live student inputs and nothing persists them** — plain navigation would discard whatever the student typed, on the way out and again on the way back. Parallel routing never unmounts the `children` slot, so the source page (accordion state, scroll position, every typed value) is still there underneath and is still there when the overlay closes. Three rules keep that true:
+
+- **Every dismissal is `router.back()`** — close button, Escape and backdrop click all pop the history entry the link pushed, so browser Back and the close button cannot disagree. Escape is intercepted (`onCancel` → `preventDefault`) rather than left to the native close, which would leave the URL pointing at a document no longer on screen.
+- **In-app document links carry `scroll={false}`** (that is all `DocumentLink` is for). Without it the router scrolls to the top of the "page" it is navigating to, silently throwing away the reading position of the page underneath.
+- **The dialog shell renders outside the Suspense boundary.** It costs no database read, so the overlay is on screen while the document is still loading — and it is the *same* dialog element before and after, which is what keeps focus where `showModal()` put it. A `loading.tsx` at that level would open one dialog and swap it for a second, moving focus mid-navigation.
 
 ### Error & Loading Boundaries
 
 Every major route segment has scoped `error.tsx` and `loading.tsx` files. A failed Supabase query shows a friendly German error UI instead of a white screen.
+
+**One deliberate exception:** the overlay slot `app/@modal/(.)dokumente/[docId]` has an `error.tsx` but **no `loading.tsx`** — its page streams the document into a `<Suspense>` inside the dialog it has already opened, and a segment-level loading boundary would open a second dialog and move focus mid-navigation. Both boundaries there render inside `DocumentOverlay` for the same reason: the page underneath is still mounted and the student needs the close button to get back to it.
 
 ## Server Actions
 
@@ -345,7 +365,7 @@ All magic values live in `src/lib/constants.ts`:
 | `ALLOWED_FILE_MIMES` | `['application/pdf', ...]` | Accepted file types |
 | `MIME_TO_EXT` | `Record<string, string>` | MIME → file extension map |
 | `editorImageUrl(imageId)` | `` `/api/editor-image/${imageId}` `` | Single source for editor-image browser URLs (controller, JSON importer, proxy route) |
-| `documentUrl(docId)` | `` `/dokumente/${docId}` `` | Single source for the addressable Dokument URL (#69) — the accordion's „Einzelansicht", `DocumentCard`, and every future link chip |
+| `documentUrl(docId)` | `` `/dokumente/${docId}` `` | Single source for the addressable Dokument URL (#69). In-app links go through `DocumentLink`, which adds the `scroll={false}` the overlay needs (#70) — the accordion's „Einzelansicht", `DocumentCard`, and every future link chip |
 
 ## Dependencies
 
@@ -395,7 +415,7 @@ npm run test:watch   # watch mode
 
 Conventions: tests are colocated `*.test.ts` files next to their modules and assert **external behavior only** (inputs → outputs, no internal call structure). The default environment is plain Node; DOM-dependent suites opt into jsdom per file via a `@vitest-environment jsdom` docblock — currently `document-json.test.ts`, whose importer builds real DOM. The editor-module tests under `src/lib/editor/` are golden cases generated from the standalone reference editor (`latexEditor/*.html`) and double as the React port's parity contract — expected values must not be changed without checking the reference behavior first.
 
-Tests are not confined to `src/lib/editor/`: any pure module is a candidate, and `src/lib/document-view.test.ts` pins the render-path rule both student surfaces share. React components have no test seam here (no testing-library, no browser E2E) — component and navigation behaviour is verified by manual QA recorded on the ticket.
+Tests are not confined to `src/lib/editor/`: any pure module is a candidate. `src/lib/document-view.test.ts` pins the render-path rule both student surfaces share and `src/lib/document-access.test.ts` pins the access rule they share. React components have no test seam here (no testing-library, no browser E2E) — component and navigation behaviour is verified by manual QA recorded on the ticket, which is why the overlay of #70 carries a written checklist rather than a suite.
 
 ### Two Supabase Projects
 
@@ -464,6 +484,9 @@ Set `published = true/false` in the `kurse` table. The Kurs and its Units appear
 | File proxy returns 403 | Course not published | Set `kurse.published = true` for the parent course |
 | `/dokumente/[docId]` 404s for a user who can see the document in the accordion | Parent Kurs unpublished — the route re-checks `published` in app code (admins bypass) | Set `kurse.published = true`, or confirm the 404 is intended (archived Kurs) |
 | `/dokumente/[docId]` 404s for everyone including admins | No such document id | The route deliberately does not distinguish unknown / unentitled / archived — check the id against `documents` |
+| An in-app document link navigates full-page instead of opening the overlay | The link is a plain `<a>` or a `Link` outside `DocumentLink`, or `src/app/@modal/default.tsx` was removed | Interception only fires on client-side navigation through `next/link`; route in-app document links through `DocumentLink` |
+| Every route 404s after touching the root layout | The `@modal` slot lost its `default.tsx` | A parallel slot without a `default` makes every hard navigation that does not match it a 404 — restore `src/app/@modal/default.tsx` |
+| The overlay opens but the source page's typed values are gone | Something unmounted the `children` slot — e.g. a `router.push`/`replace` instead of the intercepted link, or a `key` change on the source tree | Values are held in the renderer's DOM and nothing persists them; the overlay only preserves them by never unmounting the page |
 | Zod error on form submit | Field name mismatch | Check form field `name` attributes match schema keys in `schemas.ts` |
 | Audit log not writing | `audit_logs` table missing | Apply `supabase/add_audit_log.sql` migration |
 | PDF won't open in iPhone Safari | Content-Disposition | Route sets `{ download: false }` in signed URL — ensure it stays |
@@ -493,6 +516,8 @@ Set `published = true/false` in the `kurse` table. The Kurs and its Units appear
 | Admin tree visualizer | `src/components/admin/AdminTree.tsx` |
 | File proxy routes | `src/app/api/file/[docId]/route.ts`, `src/app/api/image/[imageId]/route.ts`, `src/app/api/editor-image/[imageId]/route.ts` |
 | Student document rendering | `src/lib/document-view.ts`, `src/components/documents/DocumentBody.tsx`, `src/app/dokumente/[docId]/page.tsx` |
+| Student document access + shared page-scale view | `src/lib/document-access.ts`, `src/lib/document-surface.ts`, `src/components/documents/DocumentArticle.tsx` |
+| Document overlay navigation | `src/app/@modal/*`, `src/components/documents/DocumentOverlay.tsx`, `src/components/documents/DocumentLink.tsx`, `src/app/layout.tsx` |
 | LaTeX editor core (controller + pure modules) | `src/lib/editor/*` |
 | LaTeX editor UI (page, shell, toolbar, export, drafts) | `src/app/admin/editor/*`, `src/components/admin/editor/*` |
 | Standalone reference editor (parity ground truth) | `latexEditor/*.html` |

@@ -31,6 +31,7 @@ import {
  */
 const MINIMAL_BY_VERSION: Record<DocumentJsonVersion, EditorDocumentJson> = {
   '1.0': { version: '1.0', variables: [], content: [] },
+  '1.1': { version: '1.1', variables: [], content: [] },
 }
 
 const V1_0 = {
@@ -107,12 +108,50 @@ describe('upgradeDocumentJson', () => {
   })
 })
 
+// ── The real v1.0 → v1.1 hop (#71) ──────────────────────────────────────────
+//
+// v1.1 added the optional block-level anchor and nothing else, so the step is
+// a version bump over an untouched body. That is exactly what has to be
+// pinned: a v1.0 snapshot has no anchors, and the upgrade must not invent any.
+
+describe('the v1.0 → v1.1 step', () => {
+  it('bumps the version and leaves the body byte-identical', () => {
+    const upgraded = upgradeDocumentJson(V1_0)
+    expect(upgraded.version).toBe('1.1')
+    expect(JSON.stringify({ ...upgraded, version: '1.0' })).toBe(JSON.stringify(V1_0))
+  })
+
+  it('keeps `version` first in the key order', () => {
+    // The published snapshot is stored as this parsed object; the serializer's
+    // fixed key order has to survive the upgrade hop too.
+    expect(Object.keys(upgradeDocumentJson(V1_0))[0]).toBe('version')
+  })
+
+  it('adds no anchors to a v1.0 document', () => {
+    for (const block of upgradeDocumentJson(V1_0).content) {
+      expect(block.anchor).toBeUndefined()
+    }
+  })
+
+  it('carries a v1.1 document’s anchors through untouched', () => {
+    const anchored = {
+      version: '1.1',
+      variables: [],
+      content: [
+        { type: 'heading', level: 1, children: [{ text: 'Kapitel' }], anchor: { id: 'anc_a', label: 'Kapitel 1' } },
+      ],
+    } satisfies EditorDocumentJson
+    const result = readDocumentJson(anchored)
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.doc.content[0]?.anchor).toEqual({ id: 'anc_a', label: 'Kapitel 1' })
+  })
+})
+
 // ── The ladder itself, across real version hops ─────────────────────────────
 //
-// Only v1.0 exists in production, so the multi-version behaviour is exercised
-// against a synthetic ladder. This is what makes the chain a chain rather than
-// an assertion about a single entry — when v1.1 lands, these are the semantics
-// it inherits.
+// The production ladder is short, so the general multi-rung behaviour is
+// exercised against a synthetic one. This is what makes the chain a chain
+// rather than an assertion about a single entry.
 
 describe('upgradeThroughChain', () => {
   interface Fixture {
@@ -189,7 +228,9 @@ describe('readDocumentJson', () => {
     const result = readDocumentJson({ ...V1_0, version: '2.0' })
     expect(result.ok).toBe(false)
     if (!result.ok) {
-      expect(result.error).toBe('Nicht unterstützte Schema-Version — erwartet wird "1.0".')
+      expect(result.error).toBe(
+        'Nicht unterstützte Schema-Version — erwartet wird "1.0" oder "1.1".'
+      )
     }
   })
 

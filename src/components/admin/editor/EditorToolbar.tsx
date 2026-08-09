@@ -184,6 +184,18 @@ export function EditorToolbar({
         <button type="button" onClick={() => ctrl()?.insertOutputField()}>
           ☑ Output
         </button>
+        {/* #71: marks the block at the cursor as a link target. Deliberately
+            NOT preceded by saveSelection() (unlike „Bild einfügen"): the button
+            takes focus before its handler runs, and saveSelection() would then
+            null out the very range the controller needs. The controller reads
+            the selectionchange-maintained range instead. */}
+        <button
+          type="button"
+          title="Diesen Block als Sprungmarke markieren, umbenennen oder die Markierung entfernen"
+          onClick={() => ctrl()?.markAnchor()}
+        >
+          ⚓ Sprungmarke
+        </button>
         <button type="button" onClick={() => ctrl()?.resetEditor()}>
           Editor zurücksetzen
         </button>

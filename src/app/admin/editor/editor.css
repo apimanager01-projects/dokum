@@ -468,7 +468,44 @@
   border-color: #fca5a5;
 }
 
+/* ------------------------------------------------- Sprungmarken (#71) */
+/* Editor-Chrome, rein visuell: das Badge ist ein Pseudo-Element, also für den
+   Serializer unsichtbar (er liest nur data-anchor-id/-label) und ohne
+   Auswirkung auf die contenteditable-Bearbeitung. */
+
+.latex-editor #editor [data-anchor-id] {
+  position: relative;
+}
+
+.latex-editor #editor [data-anchor-id]::after {
+  content: '⚓ ' attr(data-anchor-label);
+  position: absolute;
+  top: -2px;
+  right: -6px;
+  transform: translateY(-50%);
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  padding: 1px 7px;
+  border: 1px solid #c7d2fe;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
 /* Exportmodus: Felder als normaler Text rendern (slice 10) */
+/* Das Sprungmarken-Badge ist Editor-Chrome und darf nicht ins PNG (wie die
+   drag-handles und das Bild-Lösch-✕, die png-export.ts ausblendet). */
+.latex-editor .exporting [data-anchor-id]::after {
+  display: none !important;
+}
+
 .latex-editor .exporting .formula-block {
   padding-left: 22px !important;
 }

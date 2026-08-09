@@ -5,7 +5,11 @@
  * Three parts:
  *
  * 1. `DocumentJsonSchema` — the versioned Zod schema: a DISCRIMINATED UNION
- *    over `version` (#64), currently the single member v1.0. It doubles as
+ *    over `version` (#64), members v1.0 and v1.1. v1.1 (#71) adds the optional
+ *    block-level `anchor` — a Sprungmarke another document can link to — and
+ *    changes nothing else; v1.0 snapshots reach it through the upgrade chain,
+ *    and a v1.0 snapshot carrying an anchor is refused rather than read as a
+ *    shape its version does not describe. It doubles as
  *    the server-action validation for draft saves (operator story
  *    34: malformed content is rejected at the boundary). Reading a stored
  *    snapshot goes through `readDocumentJson` (document-version.ts), which
@@ -68,8 +72,9 @@
  */
 
 import { z } from 'zod'
+import { AnchorSchema, readBlockAnchor, writeBlockAnchor, type DocumentAnchor } from './anchors'
 
-// ── Schema (version 1.0) ────────────────────────────────────────────────────
+// ── Schema (versions 1.0 and 1.1) ───────────────────────────────────────────
 
 const StyleSchema = z.strictObject({
   color: z.string().optional(),
@@ -198,13 +203,36 @@ const ImageBlockSchema = z.strictObject({
   style: StyleSchema.optional(),
 })
 
-const BlockSchema = z.discriminatedUnion('type', [
+/** The v1.0 block union — the six block types, none of them anchorable. */
+const BlockSchemaV1_0 = z.discriminatedUnion('type', [
   ParagraphBlockSchema,
   HeadingBlockSchema,
   ListBlockSchema,
   FormulaBlockSchema,
   CodeBlockSchema,
   ImageBlockSchema,
+])
+
+/**
+ * The one thing v1.1 adds: a Sprungmarke (#71) — the opaque id another
+ * document's link stores, plus the author-written label. Defined in
+ * anchors.ts, which also owns its DOM contract.
+ *
+ * Appended LAST in every block's shape, matching the position the serializer
+ * emits it in — parse order and emit order have to agree for the
+ * byte-stability contract to survive a publish, which stores the PARSED
+ * snapshot.
+ */
+const AnchorExtension = { anchor: AnchorSchema.optional() }
+
+/** The v1.1 block union — v1.0 plus the optional block-level anchor. */
+const BlockSchemaV1_1 = z.discriminatedUnion('type', [
+  ParagraphBlockSchema.extend(AnchorExtension),
+  HeadingBlockSchema.extend(AnchorExtension),
+  ListBlockSchema.extend(AnchorExtension),
+  FormulaBlockSchema.extend(AnchorExtension),
+  CodeBlockSchema.extend(AnchorExtension),
+  ImageBlockSchema.extend(AnchorExtension),
 ])
 
 const VariableSchema = z.strictObject({
@@ -241,12 +269,12 @@ const VariableSchema = z.strictObject({
  * document-version.ts. The upgrade chain is a total record over this list, so
  * a half-done addition fails to compile.
  */
-export const DOCUMENT_JSON_VERSIONS = ['1.0'] as const
+export const DOCUMENT_JSON_VERSIONS = ['1.0', '1.1'] as const
 
 export type DocumentJsonVersion = (typeof DOCUMENT_JSON_VERSIONS)[number]
 
 /** The version `serializeEditorState` emits and the renderer understands. */
-export const LATEST_DOCUMENT_JSON_VERSION = '1.0' satisfies DocumentJsonVersion
+export const LATEST_DOCUMENT_JSON_VERSION = '1.1' satisfies DocumentJsonVersion
 
 /** German enumeration of the supported versions — `"1.0"`, `"1.0" oder "1.1"`, … */
 function supportedVersionList(): string {
@@ -255,46 +283,67 @@ function supportedVersionList(): string {
   return quoted.slice(0, -1).join(', ') + ' oder ' + quoted[quoted.length - 1]
 }
 
+/**
+ * Save-time metadata. `term` is the ExportBar's free Term field (slice 10,
+ * #38): the React shell injects it via `withDocumentMeta` right before the
+ * save — `serializeEditorState` itself stays meta-free (its export→import→
+ * export byte-stability contract must keep holding), and the importer
+ * deliberately ignores meta, so a JSON-modal import never changes the Term
+ * field (accepted limitation; the Term reloads only with the draft).
+ * `title` is reference-compat only — the draft title lives in the DB
+ * column (single source of truth, decision D11).
+ */
+const MetaSchema = z.strictObject({
+  title: z.string().optional(),
+  term: z.string().optional(),
+})
+
+const VariablesSchema = z.array(VariableSchema).superRefine((vars, ctx) => {
+  // Mirrors the importer's validateUniqueImportedVariables (reference L2410)
+  // so duplicates are already rejected at the server boundary.
+  const seen = new Set<string>()
+  for (const v of vars) {
+    const name = strictText(v.name).trim()
+    if (!name) continue
+    const key = name.toLowerCase()
+    if (seen.has(key)) {
+      ctx.addIssue({
+        code: 'custom',
+        message:
+          'Doppelter Variablenname im JSON: "' + name + '". Variablennamen müssen eindeutig sein.',
+      })
+      return
+    }
+    seen.add(key)
+  }
+})
+
+/** Slice-7 extension: the full ordered formula-library LaTeX list (authoritative when present). */
+const LibrarySchema = z.array(z.string())
+
 const DocumentJsonV1_0Schema = z.strictObject({
   version: z.literal('1.0'),
-  /**
-   * Save-time metadata. `term` is the ExportBar's free Term field (slice 10,
-   * #38): the React shell injects it via `withDocumentMeta` right before the
-   * save — `serializeEditorState` itself stays meta-free (its export→import→
-   * export byte-stability contract must keep holding), and the importer
-   * deliberately ignores meta, so a JSON-modal import never changes the Term
-   * field (accepted limitation; the Term reloads only with the draft).
-   * `title` is reference-compat only — the draft title lives in the DB
-   * column (single source of truth, decision D11).
-   */
-  meta: z
-    .strictObject({
-      title: z.string().optional(),
-      term: z.string().optional(),
-    })
-    .optional(),
-  variables: z.array(VariableSchema).superRefine((vars, ctx) => {
-    // Mirrors the importer's validateUniqueImportedVariables (reference L2410)
-    // so duplicates are already rejected at the server boundary.
-    const seen = new Set<string>()
-    for (const v of vars) {
-      const name = strictText(v.name).trim()
-      if (!name) continue
-      const key = name.toLowerCase()
-      if (seen.has(key)) {
-        ctx.addIssue({
-          code: 'custom',
-          message:
-            'Doppelter Variablenname im JSON: "' + name + '". Variablennamen müssen eindeutig sein.',
-        })
-        return
-      }
-      seen.add(key)
-    }
-  }),
-  content: z.array(BlockSchema),
-  /** Slice-7 extension: the full ordered formula-library LaTeX list (authoritative when present). */
-  library: z.array(z.string()).optional(),
+  meta: MetaSchema.optional(),
+  variables: VariablesSchema,
+  content: z.array(BlockSchemaV1_0),
+  library: LibrarySchema.optional(),
+})
+
+/**
+ * v1.1 (#71) — identical to v1.0 except that blocks may carry a Sprungmarke.
+ * The version is what keeps that honest in both directions: a v1.1 snapshot
+ * may have anchors, and a v1.0 snapshot claiming one is refused rather than
+ * quietly read as something its version does not describe.
+ *
+ * The key order mirrors v1.0 exactly — publishing stores this parsed object,
+ * so the shape order here is the stored order.
+ */
+const DocumentJsonV1_1Schema = z.strictObject({
+  version: z.literal('1.1'),
+  meta: MetaSchema.optional(),
+  variables: VariablesSchema,
+  content: z.array(BlockSchemaV1_1),
+  library: LibrarySchema.optional(),
 })
 
 /**
@@ -303,7 +352,10 @@ const DocumentJsonV1_0Schema = z.strictObject({
  * lets {@link describeDocumentJsonError} refuse it with a clear German
  * message instead of letting it fail as an unreadable shape mismatch.
  */
-export const DocumentJsonSchema = z.discriminatedUnion('version', [DocumentJsonV1_0Schema])
+export const DocumentJsonSchema = z.discriminatedUnion('version', [
+  DocumentJsonV1_0Schema,
+  DocumentJsonV1_1Schema,
+])
 
 /** A snapshot at ANY version this build can read — what the schema parses. */
 export type EditorDocumentJson = z.infer<typeof DocumentJsonSchema>
@@ -313,9 +365,10 @@ export type EditorDocumentJson = z.infer<typeof DocumentJsonSchema>
  * this type through `upgradeDocumentJson` (document-version.ts), never by
  * being passed straight through.
  */
-export type LatestEditorDocumentJson = z.infer<typeof DocumentJsonV1_0Schema>
+export type LatestEditorDocumentJson = z.infer<typeof DocumentJsonV1_1Schema>
 export type EditorDocumentVariable = z.infer<typeof VariableSchema>
-export type EditorDocumentBlock = z.infer<typeof BlockSchema>
+/** A block at the NEWEST version — what the serializer emits, anchor included. */
+export type EditorDocumentBlock = z.infer<typeof BlockSchemaV1_1>
 
 // ── JSON import modal boundary helpers (slice 9, #37) ───────────────────────
 
@@ -323,6 +376,10 @@ export type EditorDocumentBlock = z.infer<typeof BlockSchema>
  * The reference file's `JSON_IMPORT_EXAMPLE` (L2310–2328), verbatim — the
  * modal's „Beispiel laden" fills the textarea with this document. The test
  * suite guards it against drift from the reference golden copy.
+ *
+ * Still a v1.0 document, deliberately: it is a verbatim reference copy, and
+ * leaving it there keeps „Beispiel laden" exercising the upgrade-on-read hop
+ * the modal performs for every pasted snapshot.
  */
 export const JSON_IMPORT_EXAMPLE = {
   version: '1.0',
@@ -357,7 +414,7 @@ export const JSON_IMPORT_EXAMPLE = {
       children: [{ text: 'Result: ', style: { bold: true } }, { field: 'EBIT' }],
     },
   ],
-} satisfies LatestEditorDocumentJson
+} satisfies EditorDocumentJson
 
 /** `content[2].children[0]`-style dot/bracket path of a Zod issue. */
 function formatIssuePath(path: ReadonlyArray<PropertyKey>): string {
@@ -779,6 +836,9 @@ function createBlock(
     if (!el.childNodes.length) el.appendChild(docEl.createElement('br'))
   }
   applyStyle(el, block.style)
+  // Sprungmarke (v1.1, #71): the id has to survive the DOM round-trip, so it
+  // rides in the block element's dataset — copied verbatim, never re-derived.
+  if (block.anchor) writeBlockAnchor(el, block.anchor)
   return el
 }
 
@@ -958,16 +1018,25 @@ function appendInlineNode(node: Node, out: InlineNode[]): void {
   out.push(group)
 }
 
-function withBlockStyle<T extends EditorDocumentBlock>(block: T, el: HTMLElement): T {
+/**
+ * Attaches the two things every block type carries the same way — its style
+ * and its Sprungmarke — in that FIXED order, so `style` and `anchor` always
+ * land last and always in that sequence. Key order is part of the
+ * byte-stability contract, and the v1.1 schema declares `anchor` in the same
+ * final position.
+ */
+function withBlockMeta<T extends EditorDocumentBlock>(block: T, el: HTMLElement): T {
   const style = extractStyle(el)
   if (hasKeys(style)) (block as { style?: EditorTextStyle }).style = style
+  const anchor = readBlockAnchor(el)
+  if (anchor) (block as { anchor?: DocumentAnchor }).anchor = anchor
   return block
 }
 
 function serializeBlockElement(el: HTMLElement): EditorDocumentBlock {
   const tag = el.tagName
   if (tag === 'H1' || tag === 'H2') {
-    return withBlockStyle(
+    return withBlockMeta(
       { type: 'heading', level: tag === 'H1' ? 1 : 2, children: serializeInlineChildren(el) },
       el
     )
@@ -976,10 +1045,10 @@ function serializeBlockElement(el: HTMLElement): EditorDocumentBlock {
     const items = Array.from(el.children)
       .filter((li) => li.tagName === 'LI')
       .map((li) => serializeInlineChildren(li as HTMLElement))
-    return withBlockStyle({ type: 'list', ordered: tag === 'OL', items }, el)
+    return withBlockMeta({ type: 'list', ordered: tag === 'OL', items }, el)
   }
   if (tag === 'PRE') {
-    return withBlockStyle({ type: 'code', text: el.textContent ?? '' }, el)
+    return withBlockMeta({ type: 'code', text: el.textContent ?? '' }, el)
   }
   if (el.classList.contains('formula-block')) {
     const target = el.querySelector<HTMLElement>('.render-target')
@@ -987,7 +1056,7 @@ function serializeBlockElement(el: HTMLElement): EditorDocumentBlock {
     const block: Extract<EditorDocumentBlock, { type: 'formula' }> = { type: 'formula', latex }
     const cap = el.querySelector<HTMLElement>('.block-caption')
     if (cap) block.caption = { children: serializeInlineChildren(cap) }
-    return withBlockStyle(block, el)
+    return withBlockMeta(block, el)
   }
   if (el.classList.contains('image-block')) {
     // Only data-image-id is read — the src (proxy URL or transient blob:
@@ -1000,13 +1069,50 @@ function serializeBlockElement(el: HTMLElement): EditorDocumentBlock {
     }
     const alt = img?.getAttribute('alt') ?? ''
     if (alt) block.alt = alt
-    return withBlockStyle(block, el)
+    return withBlockMeta(block, el)
   }
   // <p>, generic <div> lines and anything unknown → paragraph.
-  return withBlockStyle({ type: 'paragraph', children: serializeInlineChildren(el) }, el)
+  return withBlockMeta({ type: 'paragraph', children: serializeInlineChildren(el) }, el)
 }
 
 const BLOCK_TAGS = new Set(['H1', 'H2', 'UL', 'OL', 'PRE', 'P', 'DIV', 'BLOCKQUOTE'])
+
+/**
+ * Top-level elements {@link serializeEditorState} drops entirely: the hidden
+ * field store, transient drag chrome, and an image block that has no storage
+ * reference yet.
+ */
+function isDroppedTopLevel(el: HTMLElement): boolean {
+  if (el.id === 'hiddenFields') return true
+  if (el.classList.contains('drop-indicator') || el.classList.contains('inline-drop-caret')) {
+    return true
+  }
+  // Image block still uploading (blob: preview, no data-image-id yet) — it has
+  // no storage reference to persist. Saves are blocked while uploads are in
+  // flight (slice-8 decision), so this only covers the failed-upload window
+  // before the block is removed. Must be tested before the block-tag branch:
+  // the block is a DIV.
+  return el.classList.contains('image-block') && !el.querySelector('img[data-image-id]')
+}
+
+/** Tag/class test for "this element is a block", ignoring the drop rules above. */
+function hasBlockShape(el: HTMLElement): boolean {
+  return BLOCK_TAGS.has(el.tagName) || el.classList.contains('formula-block')
+}
+
+/**
+ * Whether a top-level editor element ends up in the JSON as a block of its
+ * own — the complete test, drop rules included.
+ *
+ * Exported because a Sprungmarke may only be stamped on something that
+ * survives a save (#71). Stamping one on a stray inline element, or on an
+ * image block whose upload has not landed, would put an anchor in the DOM that
+ * the very next serialization discards — the author would see a mark that
+ * quietly does not exist.
+ */
+export function serializesAsOwnBlock(el: HTMLElement): boolean {
+  return !isDroppedTopLevel(el) && hasBlockShape(el)
+}
 
 /**
  * Deterministic variable order: fields with an inline (visible) occurrence
@@ -1080,19 +1186,8 @@ export function serializeEditorState(
     }
     if (node.nodeType !== Node.ELEMENT_NODE) continue
     const el = node as HTMLElement
-    if (el.id === 'hiddenFields') continue
-    if (el.classList.contains('drop-indicator') || el.classList.contains('inline-drop-caret')) {
-      continue
-    }
-    // Image block still uploading (blob: preview, no data-image-id yet) — it
-    // has no storage reference to persist. Saves are blocked while uploads
-    // are in flight (slice-8 decision), so this guard only covers the
-    // failed-upload window before the block is removed. Must run before the
-    // BLOCK_TAGS branch: the block is a DIV.
-    if (el.classList.contains('image-block') && !el.querySelector('img[data-image-id]')) {
-      continue
-    }
-    if (BLOCK_TAGS.has(el.tagName) || el.classList.contains('formula-block')) {
+    if (isDroppedTopLevel(el)) continue
+    if (hasBlockShape(el)) {
       flushInline()
       content.push(serializeBlockElement(el))
       continue

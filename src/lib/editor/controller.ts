@@ -77,9 +77,16 @@ import {
   type LineToken,
 } from './field-resolver'
 import {
+  createAnchorRegistry,
+  clearBlockAnchor,
+  readBlockAnchor,
+  writeBlockAnchor,
+} from './anchors'
+import {
   JSON_IMPORT_EXAMPLE,
   createImageRemoveButton,
   importEditorJson,
+  serializesAsOwnBlock,
   serializeEditorState,
   type LatestEditorDocumentJson,
 } from './document-json'
@@ -163,6 +170,15 @@ export interface EditorController {
   insertInputField(): void
   /** „Output"-Toolbar-Button — blue computed pill; same modal flow as insertInputField(). */
   insertOutputField(): void
+  /**
+   * „Sprungmarke"-Toolbar-Button (#71): marks the block the cursor sits in as
+   * a jump target other documents can link to, asking for its name.
+   *
+   * On an already-marked block the prompt is pre-filled with the current name
+   * and doubles as rename (the opaque id is KEPT — links pointing here must
+   * survive a rename) and as unmark (an emptied name removes the mark).
+   */
+  markAnchor(): void
   /** „Editor zurücksetzen" — clears all content after a confirm dialog. */
   resetEditor(): void
   /**
@@ -396,6 +412,18 @@ export function createEditorController(
   let pendingLatexFieldInsert = false
   // Cursor-Position in der Textarea vor Öffnung des Feld-Modals
   let savedLatexTextareaPos: { start: number; end: number } | null = null
+
+  // --- Sprungmarken (#71) ---
+  // Opaque anchor ids, minted exactly like field ids so a fresh mount can
+  // never re-issue an id an already-loaded document is using.
+  let anchorCounter = 0
+  function nextAnchorId(): string {
+    return 'anc_' + Date.now().toString(36) + '_' + ++anchorCounter
+  }
+  // The uniqueness guard: ordinary editing (paste, block drop, a
+  // contenteditable Enter that splits a block) duplicates a marked block's id,
+  // and two blocks answering to one link is a silently wrong document.
+  const anchorRegistry = createAnchorRegistry(editor, nextAnchorId)
 
   // Warm-up: the reference file loaded MathJax at page load (CDN <script> in
   // <head>); the port starts the bundled dynamic import when the editor
@@ -1604,7 +1632,17 @@ export function createEditorController(
 
   // Bei Tippen im Editor: Auto-Outputs (ohne manuelle Expression) neu
   // berechnen (reference L1958) — Pillen aktualisieren live beim Tippen.
-  const onEditorInput = () => {
+  const onEditorInput = (e: Event) => {
+    // Sprungmarken (#71): every editing path that can clone a marked block —
+    // paste above all, but also a contenteditable Enter that splits one —
+    // funnels through `input`. The sweep is a no-op walk over the anchored
+    // blocks (usually none), so it can afford to run on every keystroke.
+    //
+    // Enter is the one duplication the author did not ask for: the browser
+    // clones the block's attributes into the new half, and re-stamping would
+    // mint a second Sprungmarke under the same name. Strip it instead.
+    const splitBlock = e instanceof InputEvent && e.inputType === 'insertParagraph'
+    anchorRegistry.sweep(splitBlock ? 'unmark' : 'restamp')
     let needUpdate = false
     editor.querySelectorAll<HTMLElement>('.output-field').forEach((el) => {
       if (!el.dataset['expr'] || !el.dataset['expr'].trim()) needUpdate = true
@@ -1615,7 +1653,72 @@ export function createEditorController(
   function resetEditor() {
     if (window.confirm('Editor wirklich zurücksetzen? Alle Inhalte gehen verloren.')) {
       editor.innerHTML = ''
+      anchorRegistry.forget()
     }
+  }
+
+  // --- Sprungmarken (#71) ---
+
+  /**
+   * The block a Sprungmarke would be placed on: the top-level element holding
+   * the cursor, provided it is one the serializer actually emits.
+   *
+   * The live selection is consulted first, then `state.savedRange` — a toolbar
+   * button takes focus before its click handler runs, which in some browsers
+   * collapses the editor's selection, and the selectionchange-maintained range
+   * is what survives that (the same reason `insertBlockAtCursor` reads it).
+   */
+  function anchorTargetBlock(): HTMLElement | null {
+    const sel = window.getSelection()
+    const live =
+      sel && sel.rangeCount > 0 && editor.contains(sel.anchorNode)
+        ? sel.getRangeAt(0).startContainer
+        : null
+    const topLevel = getTopLevelBlock(live ?? state.savedRange?.startContainer ?? null)
+    if (!topLevel || topLevel.nodeType !== Node.ELEMENT_NODE) return null
+    const el = topLevel as HTMLElement
+    // Only a block that survives serialization may carry a mark — otherwise
+    // the author would place a Sprungmarke the next save silently discards.
+    return serializesAsOwnBlock(el) ? el : null
+  }
+
+  function markAnchor() {
+    const block = anchorTargetBlock()
+    if (!block) {
+      window.alert(
+        'Bitte zuerst den Cursor in den Block setzen, der die Sprungmarke erhalten soll.'
+      )
+      return
+    }
+    const current = readBlockAnchor(block)
+    const entered = window.prompt(
+      current
+        ? 'Sprungmarke umbenennen (leeres Feld entfernt die Marke):'
+        : 'Name der Sprungmarke:',
+      current?.label ?? ''
+    )
+    if (entered === null) return // Abbrechen — nichts ändern
+    const label = entered.trim()
+    if (!label) {
+      if (current) clearBlockAnchor(block)
+    } else {
+      // A rename KEEPS the id: every link already pointing at this Sprungmarke
+      // stores that id, and re-minting it would orphan all of them.
+      writeBlockAnchor(block, { id: current?.id ?? nextAnchorId(), label })
+      // Adopts the id as this block's, so a later copy of it is the one that
+      // gets re-stamped.
+      anchorRegistry.sweep()
+    }
+    restoreEditorSelection()
+  }
+
+  /** Puts the caret back where it was before a modal/prompt stole the focus. */
+  function restoreEditorSelection() {
+    editor.focus()
+    const sel = window.getSelection()
+    if (!sel || !state.savedRange) return
+    sel.removeAllRanges()
+    sel.addRange(state.savedRange)
   }
 
   // --- Draft persistence (slice 7, #35) + JSON import (slice 9, #37) ---
@@ -1655,12 +1758,21 @@ export function createEditorController(
     doc: LatestEditorDocumentJson,
     options: { replaceExisting: boolean }
   ): Promise<void> {
+    // A replace throws the old document away, and with it any claim its blocks
+    // had on an anchor id — the incoming ids must be adopted as they are.
+    if (options.replaceExisting) anchorRegistry.forget()
+
     const result = importEditorJson(
       doc,
       editor,
       { nextFieldId, resolvePlaceholders: resolveForDisplay, imageUrl: editorImageUrl },
       options
     )
+
+    // Merge mode can drop a second copy of an already-marked block into the
+    // document, and a stored snapshot could carry a collision from before this
+    // guard existed. Either way the document leaves the import unambiguous.
+    anchorRegistry.sweep()
 
     // Library restore — replace clears first (reference L2578–2582, empty
     // text ← L2581); merge keeps existing entries. The document's own list
@@ -2122,6 +2234,10 @@ export function createEditorController(
       } else {
         editor.insertBefore(dragEl, afterEl)
       }
+      // A block reorder fires no `input` event, so the anchor sweep has to be
+      // invoked here too. Moving a marked block is not duplicating it — the
+      // registry recognises the same element and leaves its id alone.
+      anchorRegistry.sweep()
       return
     }
     if (!e.dataTransfer) return
@@ -2293,6 +2409,7 @@ export function createEditorController(
     openLatexModal,
     insertInputField: () => insertField('input'),
     insertOutputField: () => insertField('output'),
+    markAnchor,
     resetEditor,
     insertImageFromFile: (file: File, alt?: string) => {
       void insertImageFromFile(file, alt)

@@ -195,8 +195,9 @@ src/
 │   ├── audit.ts                   # logAdminAction() — fire-and-forget audit log writer
 │   ├── editor/                    # LaTeX editor (PRD #28): TWO imperative surfaces (controller.ts for /admin/editor, document-render.ts for the student viewer) + pure modules
 │   │   ├── controller.ts          # Imperative contenteditable controller (browser-only)
-│   │   ├── document-json.ts       # Versioned Zod schema (discriminated union over `version`) + ported importer + serializer
+│   │   ├── document-json.ts       # Versioned Zod schema (discriminated union over `version`: v1.0, v1.1) + ported importer + serializer
 │   │   ├── document-version.ts    # Upgrade-on-read: pure vN→vN+1 chain + readDocumentJson (the boundary for stored snapshots) — pure
+│   │   ├── anchors.ts             # Sprungmarken (#71): the anchor's Zod shape + its block-dataset contract + the registry that resolves ids duplicated by copy/paste. DOM-only (no MathJax, no server), so jsdom-testable — but it WRITES block datasets and remembers who owns which id, so not pure
 │   │   ├── document-render.ts     # Student renderer: document JSON → live DOM, reusing the importer + resolver; MathJax-free. Owns the student-editable inputs and the recompute they trigger, so it is imperative (owns its DOM, binds listeners) — React must not reconcile inside its container
 │   │   ├── publish-plan.ts        # Copy-fresh-then-swap image re-homing plan for publishing (what to copy/rewrite/delete) — pure
 │   │   ├── expression-evaluator.ts # CSP-safe math tokenizer/parser — replaces new Function; errors → NaN
@@ -500,6 +501,9 @@ Set `published = true/false` in the `kurse` table. The Kurs and its Units appear
 | Color in LaTeX shows an error box | Formula uses the legacy `\textcolor[HTML]{…}` syntax | MathJax v3 has no HTML color model — re-apply color via the toolbar (emits `\textcolor{#HEX}{…}` / `\colorbox{#HEX}{$…$}`) |
 | Publish rejected: PNG too large | 2×-rendered PNG exceeds the 4 MB limit | The size guard offers a reduced 1× export; beyond that the document must be shortened or split (Vercel body ceiling — the limit cannot be raised) |
 | Typed `[input:x]` stays plain text | Conversion is a 1-second interval sweep | Wait a second; if it still doesn't convert, check the placeholder syntax for typos |
+| „Sprungmarke" alerts instead of marking | No cursor in a serializable block | The mark needs a top-level block that survives a save — click into the block first. Stray inline text and an image block whose upload hasn't landed are deliberately not markable (`serializesAsOwnBlock`) |
+| A pasted block's ⚓ badge keeps the name but the link goes elsewhere | By design (#71) | Copying a marked block re-stamps the copy with a **fresh** id and keeps the label — two blocks may never answer to one link. Rename the copy to tell them apart |
+| The ⚓ badge vanishes from the half after an Enter | By design (#71) | A contenteditable Enter clones the block's attributes; the new half is unmarked rather than given a second Sprungmarke under the same name |
 
 ## File Reference Guide
 

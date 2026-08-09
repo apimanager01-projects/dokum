@@ -524,6 +524,40 @@ describe('renderDocumentJson — live recompute', () => {
     expect(pillText(host, 'v_ertrag')).toBe('0')
   })
 
+  it('settles the STORED value too, so the formulas agree with the box', () => {
+    const { host } = render(WORKED_EXAMPLE)
+    const kap = inputsFor(host, 'v_kap')[0]!
+    kap.focus()
+    type(kap, '')
+    kap.blur()
+    // A settled box shows „0"; an empty STORED value is unparseable and would
+    // resolve to \text{Err} in the formula quoting it — the box and the
+    // document contradicting each other on the same screen.
+    expect(kap.dataset['value']).toBe('0')
+    expect(host.querySelector<HTMLElement>('.render-target')?.dataset['latex']).not.toContain('Err')
+    // And it lands where typing the same value by hand lands.
+    const { host: typed } = render(WORKED_EXAMPLE)
+    type(inputsFor(typed, 'v_kap')[0]!, '0')
+    expect(visibleState(host)).toEqual(visibleState(typed))
+  })
+
+  it('leaves an already-settled box untouched on blur', () => {
+    const changed: HTMLElement[][] = []
+    const host = mount()
+    renderDocumentJson(WORKED_EXAMPLE, host, {
+      imageUrl: (id) => `/api/image/${id}`,
+      onRecompute: (targets) => changed.push(targets),
+    })
+    const kap = inputsFor(host, 'v_kap')[0]!
+    kap.focus()
+    type(kap, '2000')
+    const afterTyping = changed.length
+    kap.blur()
+    // Nothing to reconcile, so no second resolution pass and no re-typeset.
+    expect(changed.length).toBe(afterTyping)
+    expect(kap.value).toBe('2000')
+  })
+
   it('does not overwrite what the student is still typing', () => {
     const { host } = render(WORKED_EXAMPLE)
     const kap = inputsFor(host, 'v_kap')[0]!

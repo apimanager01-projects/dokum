@@ -270,20 +270,30 @@ function makeInputsEditable(
     // Per-element rather than delegated: the controls are rebuilt whenever the
     // container is re-rendered, so their listeners die with them and there is
     // no handle to dispose of.
-    control.addEventListener('input', () => {
-      writeValueToClones(container, fieldId, control.value)
+    const applyEdit = (raw: string): void => {
+      writeValueToClones(container, fieldId, raw)
       const changed = resolveDocument(container, graph, renderTargets, {
         writeFormulaText: false,
       })
       adapters.onRecompute?.(changed)
-    })
+    }
+    control.addEventListener('input', () => applyEdit(control.value))
     // Leaving the box settles it on the value the rest of the document is
     // actually computing with. Without this, a student who clears a box and
     // clicks away is left staring at an empty control while every dependent
     // value reads 0 — the two disagree, and nothing would reconcile them until
     // some other field happened to be edited.
     control.addEventListener('blur', () => {
-      showInControl(control, formatGermanEntry(fieldDisplay(graph, fieldId).text))
+      const settled = fieldDisplay(graph, fieldId).text
+      showInControl(control, formatGermanEntry(settled))
+      // Settling STORES the value, it does not merely show it. `fieldDisplay`
+      // reads an empty static input as '0', but the stored '' stays
+      // unparseable — so a cleared box would show „0" while every formula
+      // quoting it rendered `\text{Err}`, the control and the document
+      // disagreeing in the one place this handler exists to reconcile. A box
+      // holding anything already settled is left alone, so the common blur
+      // costs nothing.
+      if (control.dataset['value'] !== settled) applyEdit(settled)
     })
   }
 }

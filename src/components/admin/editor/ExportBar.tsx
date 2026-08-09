@@ -41,7 +41,12 @@ import type { EditorTargetKurs } from '@/types'
  * Publish (slice 11, #39 — no reference counterpart): „Als Dokument
  * speichern" sends the same 2×-rendered PNG to publishEditorDraft, targeting
  * the LIVE Kurs → Unit → Task selection. The filename (minus `.png`) seeds
- * the Document title (PRD story 27 — no separate title input). When the
+ * the Document title on the CREATE paths only (PRD story 27 — no separate
+ * title input); an update-in-place leaves the existing title alone, because
+ * this field is not persisted with the draft and resets on reload, so
+ * applying it would silently rename live content (#85). The title still
+ * travels with every request: `mode: 'update'` falls back to creating when
+ * the link is dead, and that path needs it. When the
  * draft is linked, the primary button relabels to „Dokument aktualisieren"
  * (update-in-place default; same Document entry for students, story 32) and
  * a secondary „Als neues Dokument" creates + re-links instead. Size guard:
@@ -242,7 +247,10 @@ export function ExportBar({
       setPublishedDocId(result.data.documentId)
       setPublishStatus({
         kind: 'success',
-        text: result.data.mode === 'created' ? 'Dokument erstellt.' : 'Dokument aktualisiert.',
+        text:
+          result.data.mode === 'created'
+            ? 'Dokument erstellt.'
+            : 'Dokument aktualisiert (Titel unverändert).',
         documentId: result.data.documentId,
       })
       router.refresh() // page props + draft list pick up the fresh link

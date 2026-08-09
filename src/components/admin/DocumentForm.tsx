@@ -13,12 +13,15 @@ const initialState: FormState = null
 
 type TaskWithUnit = Task & { units: Unit & { kurse: Pick<Kurs, 'title'> } }
 
+/** The kinds this form can actually upload — `interactive` is authored in the editor. */
+type UploadableType = 'pdf' | 'image' | 'image_collection'
+
 type DefaultValues = {
   title: string
   description: string | null
   position: number
   file_path?: string | null
-  file_type?: 'pdf' | 'image' | 'image_collection'
+  file_type?: UploadableType | 'interactive'
 }
 
 export function DocumentForm({
@@ -36,8 +39,11 @@ export function DocumentForm({
 }) {
   const router = useRouter()
   const [fileError, setFileError] = useState<string | null>(null)
-  const [docType, setDocType] = useState<'pdf' | 'image' | 'image_collection'>(
-    defaultValues?.file_type ?? 'pdf'
+  // Only ever read on the create path (the type selector and file input are
+  // hidden while editing a metadata-only kind), so an `interactive` default
+  // just falls back to the same 'pdf' the create form starts on.
+  const [docType, setDocType] = useState<UploadableType>(
+    defaultValues?.file_type === 'interactive' ? 'pdf' : (defaultValues?.file_type ?? 'pdf')
   )
   const [state, action, pending] = useActionState(
     async (_prev: FormState, formData: FormData): Promise<FormState> => {
@@ -61,7 +67,16 @@ export function DocumentForm({
     setFileError(null)
   }
 
-  const isEditingCollection = editId && defaultValues?.file_type === 'image_collection'
+  // Kinds whose file `updateDocument` refuses to replace — the form must not
+  // offer an upload the action silently discards while reporting success
+  // (#86). `image_collection` because its pages are uploaded as a set;
+  // `interactive` because its file IS the published PNG of an editor draft,
+  // and replacing it would flip file_type away while the content JSON and the
+  // re-homed document_images stayed behind. Mirrors the server-side branch in
+  // actions/admin/documents.ts — keep the two lists in step.
+  const editingFileType = editId ? defaultValues?.file_type : undefined
+  const isMetadataOnly =
+    editingFileType === 'image_collection' || editingFileType === 'interactive'
 
   return (
     <form action={action} className="flex flex-col gap-5">
@@ -158,9 +173,11 @@ export function DocumentForm({
       )}
 
       {/* File input */}
-      {isEditingCollection ? (
+      {isMetadataOnly ? (
         <p className="text-xs text-gray-400 rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
-          Bildsammlungen können derzeit nicht bearbeitet werden. Nur Titel, Beschreibung und Position sind änderbar.
+          {editingFileType === 'interactive'
+            ? 'Interaktive Dokumente werden im LaTeX-Editor bearbeitet und dort erneut veröffentlicht. Hier sind nur Titel, Beschreibung und Position änderbar.'
+            : 'Bildsammlungen können derzeit nicht bearbeitet werden. Nur Titel, Beschreibung und Position sind änderbar.'}
         </p>
       ) : docType === 'image_collection' ? (
         <div className="flex flex-col gap-1">

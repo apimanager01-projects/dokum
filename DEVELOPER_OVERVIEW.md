@@ -161,10 +161,10 @@ src/
 │   │   └── UnitCard.tsx
 │   ├── documents/
 │   │   ├── DocumentCard.tsx
-│   │   ├── InteractiveDocument.tsx # Live student render of a published document JSON + PNG fallback (error boundary)
+│   │   ├── InteractiveDocument.tsx # Live student render of a published document JSON + PNG fallback (error boundary); owns only the MathJax half — typesets the formulas each recompute reports as changed, serialised so a fast typist cannot land a stale one
 │   │   ├── DocumentPng.tsx        #   the stored picture: legacy 'image' render AND the interactive fallback
 │   │   ├── Watermark.tsx          #   tiled deterrent overlay (pointer-events:none — must not block selection)
-│   │   └── interactive-document.css #  student typography/pills/formula blocks (scoped to .dokum-document)
+│   │   └── interactive-document.css #  student typography/pills/formula blocks + the editable input control (scoped to .dokum-document)
 │   ├── consent/
 │   ├── datenschutz/
 │   ├── UnitDetailClient.tsx       # Unit detail page (expandable tasks + documents)
@@ -177,18 +177,18 @@ src/
 │   ├── dal.ts                     # Data access layer — all Supabase read queries
 │   ├── schemas.ts                 # Zod schemas for server action input validation
 │   ├── audit.ts                   # logAdminAction() — fire-and-forget audit log writer
-│   ├── editor/                    # LaTeX editor (PRD #28): imperative core + pure modules
+│   ├── editor/                    # LaTeX editor (PRD #28): TWO imperative surfaces (controller.ts for /admin/editor, document-render.ts for the student viewer) + pure modules
 │   │   ├── controller.ts          # Imperative contenteditable controller (browser-only)
 │   │   ├── document-json.ts       # Versioned Zod schema (discriminated union over `version`) + ported importer + serializer
 │   │   ├── document-version.ts    # Upgrade-on-read: pure vN→vN+1 chain + readDocumentJson (the boundary for stored snapshots) — pure
-│   │   ├── document-render.ts     # Student renderer: document JSON → live DOM, reusing the importer + resolver; MathJax-free — pure
+│   │   ├── document-render.ts     # Student renderer: document JSON → live DOM, reusing the importer + resolver; MathJax-free. Owns the student-editable inputs and the recompute they trigger, so it is imperative (owns its DOM, binds listeners) — React must not reconcile inside its container
 │   │   ├── publish-plan.ts        # Copy-fresh-then-swap image re-homing plan for publishing (what to copy/rewrite/delete) — pure
 │   │   ├── expression-evaluator.ts # CSP-safe math tokenizer/parser — replaces new Function; errors → NaN
 │   │   ├── latex-normalise.ts     # LaTeX→expression translation + auto-expression extraction
 │   │   ├── field-resolver.ts      # Input/Output field graph: value resolution, cycle → Err, output-as-input rule — pure
 │   │   ├── latex-display.ts       # LaTeX display cleanup (cleanupLatex, `*` → `\,\cdot\,`) — pure
 │   │   ├── library-sync.ts        # Formula-library entry sync after formula edits — pure
-│   │   ├── number-format.ts       # German display formatting (formatValue)
+│   │   ├── number-format.ts       # German display formatting (formatValue) + the lossless entry pair a student's input box round-trips through (parseGermanEntry / formatGermanEntry) — pure
 │   │   ├── export-filename.ts     # PNG filename builder (Term + 1-based tree ordinals) + Document-title seed — pure
 │   │   ├── png-export.ts          # PNG export pipeline → Blob (SVG raster at 2×, html2canvas; browser-only)
 │   │   ├── mathjax-loader.ts      # Bundled MathJax loader — config set BEFORE the dynamic tex-svg-full import (full build: color macros need it; browser-only)

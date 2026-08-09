@@ -24,7 +24,7 @@
  * or the editor and the student view will resolve the same document
  * differently. Extracting the shared adapter is the right follow-up.
  *
- * Two deliberate properties:
+ * Three deliberate properties:
  *
  * 1. **MathJax-free, therefore jsdom-testable.** Like document-json.ts, this
  *    module builds DOM and stops. The formula elements come back in
@@ -38,11 +38,27 @@
  *    the two paths cannot drift — a new affordance added to the importer is
  *    removed here by class, not by having remembered to.
  *
- * The hidden field store the importer creates is KEPT (it is `display:none`):
- * it holds the field masters the resolver reads, and it is what the
- * student-editable inputs of #68 will recompute against.
+ * 3. **The document is interactive, not merely live** (#68). Visible static
+ *    inputs become controls the student can type into, and every dependent
+ *    value re-resolves through {@link resolveDocument} — the same single pass
+ *    the first render uses, so an edit lands on exactly the document a fresh
+ *    render of that value would have produced. Nothing a student types is
+ *    persisted anywhere: this module writes to the rendered DOM and to nothing
+ *    else, and the snapshot it was handed is never touched.
  *
- * Pure module: no MathJax, no server imports, no mutation of the snapshot.
+ * The hidden field store the importer creates is KEPT (it is `display:none`):
+ * it holds the field masters the resolver reads, and it is what those controls
+ * recompute against.
+ *
+ * ⚠ This module is therefore the SECOND imperative surface in the codebase.
+ * `/admin/editor` was the first and CLAUDE.md's editor invariant is written
+ * about it, but the same rule binds here for the same reason: React mounts the
+ * host and must never reconcile inside it, because the DOM below holds the
+ * student's own typing and the resolved state of every value that depends on
+ * it. The React layer's only job is to typeset what {@link
+ * DocumentRenderAdapters.onRecompute} hands back.
+ *
+ * Otherwise pure: no MathJax, no server imports, no mutation of the snapshot.
  * DOM is created through the container's `ownerDocument`, so it runs in the
  * browser and in jsdom alike.
  */
@@ -52,10 +68,11 @@ import {
   fieldDisplay,
   resolveFieldPlaceholders,
   type FieldData,
+  type FieldDisplay,
   type FieldGraph,
   type LineToken,
 } from './field-resolver'
-import { formatValue } from './number-format'
+import { formatGermanEntry, formatValue, parseGermanEntry } from './number-format'
 
 export interface DocumentRenderAdapters {
   /**
@@ -65,6 +82,16 @@ export interface DocumentRenderAdapters {
    * needed.
    */
   imageUrl(imageId: string): string
+  /**
+   * Called after a student edit has been resolved through the whole document
+   * (#68), with the formula elements whose LaTeX actually changed — usually a
+   * subset, often empty. The caller re-typesets exactly those.
+   *
+   * Only CHANGED targets are reported, mirroring the editor's
+   * `reRenderFormulasWithPlaceholders`: a formula that does not quote the
+   * edited variable must not flicker through a re-typeset on every keystroke.
+   */
+  onRecompute?(changedTargets: HTMLElement[]): void
 }
 
 export interface DocumentRenderResult {
@@ -100,21 +127,53 @@ export function renderDocumentJson(
     imageUrl: adapters.imageUrl,
   })
 
-  // Resolve in document order so a later formula sees an earlier one's
-  // `[output:x]` write-back, then refresh every pill from the settled graph —
-  // the same two-step the controller performs after an import.
-  for (const target of renderTargets) {
-    const raw = target.dataset['rawLatex'] ?? ''
-    if (!raw) continue
-    const resolved = resolveFieldPlaceholders(graph, raw)
-    target.dataset['latex'] = resolved
-    target.textContent = resolved
-  }
-  refreshFields(container, graph)
+  // Swap in the student controls BEFORE the first resolution, so the initial
+  // render and every later recompute travel the exact same path. Safe at this
+  // point because a field pill is opaque to resolution: `tokenizeLine` matches
+  // it by class and never descends into it, and the graph reads only its
+  // dataset — so span or input makes no difference to any resolved value.
+  makeInputsEditable(container, graph, renderTargets, adapters)
+
+  resolveDocument(container, graph, renderTargets, { writeFormulaText: true })
 
   stripEditorChrome(container)
 
   return { renderTargets }
+}
+
+/**
+ * Resolves the whole document against the current field values: every formula
+ * in document order (so a later one sees an earlier one's `[output:x]`
+ * write-back), then every pill from the settled graph. The same two-step the
+ * controller performs after an import — and the ONLY path by which values
+ * change, which is what makes a student's edit land on exactly the document a
+ * fresh render of that value would have produced.
+ *
+ * Returns the formula elements whose resolved LaTeX actually changed.
+ *
+ * `writeFormulaText` puts the resolved source into the element as text. True on
+ * the first render, where nothing is typeset yet and the source is what the
+ * student would see if MathJax never arrives. False on a recompute, where the
+ * element already holds typeset SVG and overwriting it would flash raw LaTeX
+ * on every keystroke — the caller swaps in the new SVG instead.
+ */
+function resolveDocument(
+  container: HTMLElement,
+  graph: FieldGraph,
+  renderTargets: HTMLElement[],
+  { writeFormulaText }: { writeFormulaText: boolean }
+): HTMLElement[] {
+  const changed: HTMLElement[] = []
+  for (const target of renderTargets) {
+    const raw = target.dataset['rawLatex'] ?? ''
+    if (!raw) continue
+    const resolved = resolveFieldPlaceholders(graph, raw)
+    if (target.dataset['latex'] !== resolved) changed.push(target)
+    target.dataset['latex'] = resolved
+    if (writeFormulaText) target.textContent = resolved
+  }
+  refreshFields(container, graph)
+  return changed
 }
 
 /** Applies the resolved display state to every field pill in the container. */
@@ -122,11 +181,29 @@ function refreshFields(container: HTMLElement, graph: FieldGraph): void {
   for (const el of Array.from(container.querySelectorAll<HTMLElement>(FIELD_SELECTOR))) {
     const id = el.dataset['fieldId'] ?? ''
     if (!id) continue
-    const display = fieldDisplay(graph, id)
-    el.textContent = display.text
-    el.classList.toggle('is-error', display.isError)
-    el.classList.toggle('is-ref', display.isRef)
+    applyFieldDisplay(el, fieldDisplay(graph, id))
   }
+}
+
+/**
+ * Shows a resolved value on a field, whichever shape that field has: a pill
+ * shows it as text, a student control as its editable content.
+ *
+ * The one asymmetry is deliberate — the control the student is CURRENTLY IN
+ * keeps its own text. Its resolved display is `value || '0'`, so refilling it
+ * would put a „0" under the caret the moment the box is cleared to type a new
+ * number. Every other clone of the same variable does follow along, and so
+ * does this one as soon as the student leaves it.
+ */
+function applyFieldDisplay(el: HTMLElement, display: FieldDisplay): void {
+  if (isStudentControl(el)) {
+    const beingTyped = el.ownerDocument.activeElement === el
+    showInControl(el, beingTyped ? el.value : formatGermanEntry(display.text))
+    return // A static input is never a reference and never resolves to an error.
+  }
+  el.textContent = display.text
+  el.classList.toggle('is-error', display.isError)
+  el.classList.toggle('is-ref', display.isRef)
 }
 
 /**
@@ -148,6 +225,157 @@ function stripEditorChrome(container: HTMLElement): void {
   for (const el of Array.from(container.querySelectorAll('[contenteditable]'))) {
     el.removeAttribute('contenteditable')
   }
+}
+
+// ── Student-editable inputs (#68) ───────────────────────────────────────────
+
+/**
+ * Turns every visible STATIC input pill into a control the student can type
+ * into. This is the whole of "interactive": the recompute graph was already
+ * pure and live, what was missing was any way for a student to reach it —
+ * values were set through an admin-only modal students never see.
+ *
+ * What stays read-only, and why it is a property of the data rather than of a
+ * flag somebody has to remember to set:
+ * - **outputs** are computed, so there is nothing to type;
+ * - **reference inputs** (`refType: 'ref'`, including the drag-created output
+ *   references) read another field's value, so typing into one would be a lie;
+ * - **the hidden field masters** are `display:none` — a student cannot edit
+ *   what they cannot see, and a variable with no visible clone is simply not
+ *   offered.
+ *
+ * Everything else in the document — text, structure, formulas, images — is
+ * already fixed by {@link stripEditorChrome}, so these controls end up the
+ * only editable nodes in the whole surface.
+ */
+function makeInputsEditable(
+  container: HTMLElement,
+  graph: FieldGraph,
+  renderTargets: HTMLElement[],
+  adapters: DocumentRenderAdapters
+): void {
+  for (const pill of Array.from(container.querySelectorAll<HTMLElement>('.input-field'))) {
+    if (pill.dataset['type'] !== 'input') continue
+    if (pill.dataset['refType'] === 'ref') continue
+    // `closest`, not a scoped `#hiddenFields` query: the id is unique per
+    // rendered document, not per page, and a scoped id lookup resolves against
+    // the whole document — it finds nothing the moment a second document is
+    // mounted. Walking ancestors has no such trap.
+    if (pill.closest('#hiddenFields')) continue
+    // A field the graph cannot address is a field an edit could not resolve.
+    const fieldId = pill.dataset['fieldId'] ?? ''
+    if (!fieldId) continue
+
+    const control = replaceWithControl(pill)
+    // Per-element rather than delegated: the controls are rebuilt whenever the
+    // container is re-rendered, so their listeners die with them and there is
+    // no handle to dispose of.
+    control.addEventListener('input', () => {
+      writeValueToClones(container, fieldId, control.value)
+      const changed = resolveDocument(container, graph, renderTargets, {
+        writeFormulaText: false,
+      })
+      adapters.onRecompute?.(changed)
+    })
+    // Leaving the box settles it on the value the rest of the document is
+    // actually computing with. Without this, a student who clears a box and
+    // clicks away is left staring at an empty control while every dependent
+    // value reads 0 — the two disagree, and nothing would reconcile them until
+    // some other field happened to be edited.
+    control.addEventListener('blur', () => {
+      showInControl(control, formatGermanEntry(fieldDisplay(graph, fieldId).text))
+    })
+  }
+}
+
+/** Swaps a pill for an input carrying the same identity and configuration. */
+function replaceWithControl(pill: HTMLElement): HTMLInputElement {
+  const control = pill.ownerDocument.createElement('input')
+  // Copy the dataset wholesale rather than field by field: the graph reads the
+  // pill's dataset, and a variable property added later must travel with it.
+  for (const attr of Array.from(pill.attributes)) control.setAttribute(attr.name, attr.value)
+  control.classList.add('student-input')
+  // Free text, not `type="number"`: the resolver's contract is `parseFloat` on
+  // whatever string is stored, spinners are wrong for a value inside a
+  // sentence, and a half-typed number must not be rejected by the browser.
+  control.type = 'text'
+  // ⚠ iOS shows no minus key on the decimal pad, so a negative value has to be
+  // pasted there. Taken deliberately: every input in these documents gets a
+  // numeric keypad, and a quantity in a worked example is very rarely negative.
+  control.inputMode = 'decimal'
+  control.autocomplete = 'off'
+  control.spellcheck = false
+  const name = pill.dataset['name']?.trim()
+  control.setAttribute('aria-label', name ? `Eingabewert ${name}` : 'Eingabewert')
+  showInControl(control, formatGermanEntry(pill.dataset['value'] || '0'))
+  pill.replaceWith(control)
+  return control
+}
+
+/**
+ * Puts text in a control and re-marks it: width to fit, and whether what it
+ * now holds reads as a number at all.
+ *
+ * The error mark is the same `is-error` the resolver's pills use, because it
+ * means the same thing — this does not resolve. It is the only signal a
+ * student gets that their own typing is the problem: an unparseable value
+ * substitutes as `(0)` inside an expression by the resolver's documented
+ * rules, so without it the document would just quietly compute with zero. An
+ * EMPTY box is not marked — that is a box mid-edit, not a mistake.
+ */
+function showInControl(control: HTMLInputElement, text: string): void {
+  control.value = text
+  control.size = controlSize(text)
+  const trimmed = text.trim()
+  // A lone sign or separator is a number halfway typed, not a wrong one.
+  const midEntry = /^[+-]?[.,]?$/.test(trimmed)
+  // `parseFloat`, deliberately: the mark must agree with what the document is
+  // actually computing with, and `parseFloat` is the resolver's contract for
+  // reading a stored value — including its leniency about trailing rubbish.
+  const unparseable =
+    trimmed !== '' && !midEntry && !Number.isFinite(parseFloat(parseGermanEntry(text)))
+  control.classList.toggle('is-error', unparseable)
+  if (unparseable) control.setAttribute('aria-invalid', 'true')
+  else control.removeAttribute('aria-invalid')
+}
+
+/**
+ * Writes a student's value onto every clone of the variable — the read-only
+ * mirror of the editor's `syncFieldClones`. Required, not cosmetic: the graph
+ * resolves a field through the FIRST element carrying its id, which is rarely
+ * the one being typed into.
+ *
+ * The typed text is normalised the German way first, because every number the
+ * document itself displays is German-formatted: a student reading „1 050" and
+ * „7,5" would otherwise have „7,5" silently truncated to 7 by `parseFloat`.
+ * Only student input is normalised — an authored value stored in the snapshot
+ * is left exactly as the author wrote it.
+ */
+function writeValueToClones(container: HTMLElement, fieldId: string, raw: string): void {
+  if (!fieldId) return
+  const value = parseGermanEntry(raw)
+  // Plain interpolation is safe here for the same reason it is in
+  // `domFieldGraph`: every id passed through the importer's `safeFieldId`.
+  for (const el of Array.from(
+    container.querySelectorAll<HTMLElement>(`[data-field-id="${fieldId}"]`)
+  )) {
+    el.dataset['value'] = value
+  }
+}
+
+/**
+ * Width in characters, so a control sits in a sentence at the size of its
+ * value instead of at the browser's 20-character default. `size` must be at
+ * least 1 — browsers throw on 0 — and a floor of 3 keeps an emptied box a
+ * usable tap target.
+ */
+function controlSize(value: string): number {
+  return Math.max(3, value.length)
+}
+
+/** A field rendered as the student's editable control rather than as a pill. */
+function isStudentControl(el: HTMLElement): el is HTMLInputElement {
+  return el.tagName === 'INPUT' && el.classList.contains('student-input')
 }
 
 // ── Field graph over the rendered DOM ───────────────────────────────────────

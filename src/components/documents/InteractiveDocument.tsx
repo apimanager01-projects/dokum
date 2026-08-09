@@ -9,7 +9,13 @@ import { Watermark } from './Watermark'
 import './interactive-document.css'
 
 /**
- * A published interactive document, rendered live for students (#67).
+ * A published interactive document, rendered live for students (#67) and
+ * editable where the author put an input (#68).
+ *
+ * React mounts the host and never reconciles inside it — the renderer owns
+ * that DOM, including the student's controls and everything a keystroke
+ * re-resolves. This component's remaining job is the browser half: typesetting
+ * the formulas the renderer reports as changed.
  *
  * The PNG is a REAL PER-DOCUMENT RUNTIME FALLBACK, not a feature flag. If this
  * document cannot be rendered — a snapshot newer than this build, a failed
@@ -76,11 +82,31 @@ function LiveDocument({
     if (!host) return
     let cancelled = false
 
+    // Typesetting runs are SERIALISED. A student holding a key down fires a
+    // recompute per keystroke, and MathJax is async: two overlapping runs over
+    // the same formula could otherwise settle in the wrong order and leave a
+    // stale picture. Chaining them also makes each run read the LaTeX that is
+    // current when it executes, so a burst collapses onto the final value.
+    let queue: Promise<void> = Promise.resolve()
+    const typeset = (targets: HTMLElement[]) => {
+      if (!targets.length) return
+      queue = queue
+        .then(() => typesetFormulas(targets, () => cancelled))
+        // A rejected link would swallow every run queued behind it, and the
+        // document would silently stop typesetting for the rest of the session.
+        .catch((err) => {
+          console.error('[InteractiveDocument] Formelsatz fehlgeschlagen:', err)
+        })
+    }
+
     try {
       const { renderTargets } = renderDocumentJson(snapshot.doc, host, {
         imageUrl: (imageId) => `/api/image/${imageId}`,
+        // Only the formulas whose value actually moved — an untouched formula
+        // must not re-typeset, and re-typesetting is what this costs.
+        onRecompute: typeset,
       })
-      void typesetFormulas(renderTargets, () => cancelled)
+      typeset(renderTargets)
     } catch (err) {
       // Leave nothing half-drawn behind before handing over to the picture.
       host.replaceChildren()
@@ -112,6 +138,10 @@ function LiveDocument({
  * Typesets each formula with the BUNDLED MathJax — no CDN, no `eval`, and so
  * no CSP change. The renderer deliberately stops at the resolved LaTeX so it
  * stays pure and jsdom-testable; this is the browser half.
+ *
+ * Each target's LaTeX is read here rather than captured by the caller, and
+ * what was last typeset is remembered on the element — so a run that arrives
+ * after a newer edit does no work instead of painting a stale formula.
  */
 async function typesetFormulas(
   targets: HTMLElement[],
@@ -121,23 +151,29 @@ async function typesetFormulas(
   try {
     mathJax = await loadMathJax()
   } catch (err) {
-    // The resolved LaTeX source is already in the element — readable, if ugly.
     console.error('[InteractiveDocument] MathJax konnte nicht geladen werden:', err)
+    // Without MathJax the resolved source IS the formula the student reads, so
+    // it has to keep up with their edits — on the first render it is already
+    // there, on a recompute it is not.
+    for (const target of targets) target.textContent = target.dataset['latex'] ?? ''
     return
   }
 
   for (const target of targets) {
     if (isCancelled()) return
     const latex = target.dataset['latex'] ?? ''
+    if (target.dataset['typesetLatex'] === latex) continue
     try {
       const svg = await mathJax.tex2svgPromise(latex, { display: true })
       if (isCancelled()) return
       target.replaceChildren(svg)
+      target.dataset['typesetLatex'] = latex
     } catch {
       const box = target.ownerDocument.createElement('div')
       box.className = 'formula-error'
       box.textContent = latex
       target.replaceChildren(box)
+      target.dataset['typesetLatex'] = latex
     }
   }
 }

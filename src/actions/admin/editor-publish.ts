@@ -36,10 +36,19 @@ import { getAdminUser, parseForm, revalidateAdminPages, sanitise, removeStorageO
  * executes them.
  *
  * `mode: 'update'` (default) updates the linked Document in place when a live
- * link exists — task_id/description/position stay untouched ("in place" =
- * same place; relocation is „Als neues Dokument" + manual delete). Students
+ * link exists — task_id/description/position/TITLE stay untouched ("in place"
+ * = same place; relocation is „Als neues Dokument" + manual delete). Students
  * keep the same Document entry (story 32) and the id never changes, so
- * bookmarks and future links to it stay valid. When the link is dead
+ * bookmarks and future links to it stay valid.
+ *
+ * The title is deliberately excluded from the in-place update (#85). It is
+ * derived from the ExportBar's „Dateiname" field, which is NOT persisted with
+ * the draft and resets to its default on every reload — so re-publishing after
+ * a reload (fix a typo → reopen the draft → update, i.e. the normal editing
+ * loop) silently renamed live student-facing content. First publish still
+ * seeds the title from the filename (story 27, no separate title input);
+ * renaming afterwards goes through `updateDocument`, which #82 keeps expressly
+ * as the rename path for interactive documents. When the link is dead
  * (Document deleted → FK SET NULL, or lost in a race) the same call falls
  * back to creating a new Document. `mode: 'new'` („Als neues Dokument")
  * always creates and RE-LINKS the draft.
@@ -98,11 +107,11 @@ export async function publishEditorDraft(
   }
 
   // ── Resolve the target: update in place, or create ────────────────────────
-  let target: { id: string; file_path: string | null } | null = null
+  let target: { id: string; file_path: string | null; title: string } | null = null
   if (mode === 'update' && draft.published_document_id) {
     const { data: linkedDoc, error: linkedErr } = await supabase
       .from('documents')
-      .select('id, file_path')
+      .select('id, file_path, title')
       .eq('id', draft.published_document_id)
       .single()
 
@@ -174,10 +183,12 @@ export async function publishEditorDraft(
       return { ok: false, error: `Bilder konnten nicht gespeichert werden: ${insertErr}` }
     }
 
-    // Step 4: THE SWAP — content and file path in one statement.
+    // Step 4: THE SWAP — content and file path in one statement. `title` is
+    // deliberately NOT in this update (#85, see the header): the existing
+    // document keeps the name students already see.
     const { error: dbErr } = await supabase
       .from('documents')
-      .update({ title, file_path: pngPath, file_type: 'interactive', content: plan.content })
+      .update({ file_path: pngPath, file_type: 'interactive', content: plan.content })
       .eq('id', target.id)
     if (dbErr) {
       await deleteImageRows(supabase, plan.inserts.map((r) => r.id), 'publishEditorDraft swap rollback')
@@ -199,7 +210,8 @@ export async function publishEditorDraft(
       action: 'update',
       entityType: 'document',
       entityId: target.id,
-      entityTitle: title,
+      // The document's OWN title — the submitted one only named the upload.
+      entityTitle: target.title,
       metadata: {
         editor_document_id: draft_id,
         published_in_place: true,

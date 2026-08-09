@@ -13,15 +13,17 @@ export default async function NewDocumentPage({
 
   let defaultTaskId = taskId ?? ''
   // 'interactive' is produced by publishing an editor draft (#66), never
-  // uploaded through this form — an interactive document opened here keeps
-  // its metadata fields and simply offers no file kind.
+  // uploaded through this form. It MUST reach the form as itself (#85/#86):
+  // erasing it to undefined made the form fall back to its 'pdf' default and
+  // render a working file picker whose upload `updateDocument` then discarded,
+  // reporting success. The form gates the file input on this value.
   let editDefaults:
     | {
         title: string
         description: string | null
         position: number
         file_path: string | null
-        file_type?: Exclude<DocumentRow['file_type'], 'interactive'>
+        file_type?: DocumentRow['file_type']
       }
     | undefined
   if (editId) {
@@ -32,7 +34,7 @@ export default async function NewDocumentPage({
         description: data.description,
         position: data.position,
         file_path: data.file_path,
-        file_type: data.file_type === 'interactive' ? undefined : data.file_type,
+        file_type: data.file_type,
       }
       defaultTaskId = data.task_id
     }

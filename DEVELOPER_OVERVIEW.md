@@ -25,8 +25,8 @@ Kurs (Course)
 ```
 
 **Key Rules:**
-- Only `kurse` has a `published` boolean — units inherit visibility from it
-- **Tasks / Documents / DocumentImages require an `entitlements` row** (or admin role) — not just the parent Kurs being published
+- Only `kurse` has a `published` boolean — `units` inherit visibility from it, and **nothing below Unit does**
+- **Tasks / Documents / DocumentImages / `pdfs` storage objects gate on an `entitlements` row alone** (or admin role). `add_entitlements.sql` *dropped* the `published` subquery from those four policies, so at the DB level they stay readable to an entitled user even when the parent Kurs is unpublished. The `/api/file` and `/api/image` proxies independently re-check `kurse.published` in app code, so **files** are still blocked — only row metadata (title/description/position) is exposed. Closing that gap is a decided-but-unimplemented change (map issue #60): re-add the `published` conjunct so the policies read *entitled AND published*.
 - All levels support `position` ordering (non-unique integers; ties broken by `created_at ASC`)
 - Sorting is applied inside the DAL (`src/lib/dal.ts`) — no manual sorting in page components
 - `ON DELETE CASCADE` at every foreign key level
@@ -432,7 +432,9 @@ LIMIT 50;
 
 ### Enable/Disable a Kurs
 
-Set `published = true/false` in the `kurse` table. All child items inherit visibility via RLS instantly.
+Set `published = true/false` in the `kurse` table. The Kurs and its Units appear/disappear instantly via RLS, and `/api/file` + `/api/image` immediately 403 non-admins for everything beneath it.
+
+⚠ Per the Key Rules above, this hides the **navigation path and the files** — not the rows. `tasks`/`documents`/`document_images` rows stay readable to a user holding an `entitlements` row for the Unit, since their policies no longer check `published`. Admins keep full access to both rows and files, which is what makes an unpublished Kurs usable as an archive.
 
 ## Debugging Tips
 

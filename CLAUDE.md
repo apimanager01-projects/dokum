@@ -30,7 +30,7 @@ npm run lint     # ESLint (eslint-config-next 16)
 npm test         # Vitest (dev-only) — colocated *.test.ts unit tests
 ```
 
-Tests run via Vitest ([vitest.config.ts](vitest.config.ts)): colocated `*.test.ts` files next to their modules, currently the editor modules in [src/lib/editor/](src/lib/editor/). Default environment is plain Node; DOM-dependent suites opt into jsdom per file via a `@vitest-environment jsdom` docblock (currently `document-json.test.ts`). The editor-module tests are golden cases derived from the standalone reference editor ([latexEditor/](latexEditor/)) and act as the port's parity contract — don't "fix" expected values without checking the reference behavior.
+Tests run via Vitest ([vitest.config.ts](vitest.config.ts)): colocated `*.test.ts` files next to their modules — the editor modules in [src/lib/editor/](src/lib/editor/), plus any other pure module (e.g. [src/lib/document-view.ts](src/lib/document-view.ts)). There is no component or E2E seam; UI behaviour is verified by manual QA on the ticket. Default environment is plain Node; DOM-dependent suites opt into jsdom per file via a `@vitest-environment jsdom` docblock (currently `document-json.test.ts`). The editor-module tests are golden cases derived from the standalone reference editor ([latexEditor/](latexEditor/)) and act as the port's parity contract — don't "fix" expected values without checking the reference behavior.
 
 ## Stack
 

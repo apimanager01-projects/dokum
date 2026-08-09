@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import type { Task, DocumentWithImages } from '@/types'
-import { DocumentPng } from '@/components/documents/DocumentPng'
-import { InteractiveDocument } from '@/components/documents/InteractiveDocument'
-import { Watermark } from '@/components/documents/Watermark'
+import { DocumentBody } from '@/components/documents/DocumentBody'
+import { documentViewKind } from '@/lib/document-view'
+import { documentUrl } from '@/lib/constants'
 import Lightbox from 'yet-another-react-lightbox'
 import Zoom from 'yet-another-react-lightbox/plugins/zoom'
 import 'yet-another-react-lightbox/styles.css'
@@ -93,86 +94,49 @@ export default function UnitDetailClient({ tasks, openTaskId, watermarkId }: { t
                     <p className="px-3 text-xs text-gray-400">No documents yet.</p>
                   ) : (
                     <ul className="space-y-1">
-                      {task.documents.map((doc) => (
-                        <li
-                          key={doc.id}
-                          className="rounded-md border border-gray-100 bg-gray-50 px-3 py-2"
-                        >
-                          {doc.file_type === 'image_collection' ? (
-                            <div>
-                              <p className="text-sm font-medium text-gray-800">{doc.title}</p>
-                              {doc.description && (
-                                <p className="text-xs text-gray-500">{doc.description}</p>
-                              )}
-                              <div className="mt-2 grid grid-cols-1 gap-2">
-                                {(doc.document_images ?? []).map((img) => (
-                                  <div key={img.id} className="mt-1 flex w-full justify-center">
-                                    <div
-                                      className="relative inline-block rounded-md overflow-hidden max-w-full"
-                                      onContextMenu={(e) => e.preventDefault()}
-                                    >
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img
-                                      src={`/api/image/${img.id}`}
-                                      alt={doc.title}
-                                      className="block max-w-full max-h-[400px] select-none"
-                                      style={{ pointerEvents: 'none', userSelect: 'none', WebkitUserDrag: 'none' } as React.CSSProperties}
-                                      draggable={false}
-                                    />
-                                    <Watermark id={watermarkId} />
-                                    </div>
-                                  </div>
-                                ))}
+                      {task.documents.map((doc) => {
+                        // The body of every document kind lives in
+                        // DocumentBody, shared with the full-page route (#69).
+                        // Only the layout around it differs here: a PDF puts
+                        // its button beside the title, everything else stacks.
+                        const heading = (
+                          <div>
+                            <p className="text-sm font-medium text-gray-800">{doc.title}</p>
+                            {doc.description && (
+                              <p className="text-xs text-gray-500">{doc.description}</p>
+                            )}
+                            <Link
+                              href={documentUrl(doc.id)}
+                              className="mt-0.5 inline-block text-xs text-gray-400 hover:text-brand"
+                            >
+                              Einzelansicht ↗
+                            </Link>
+                          </div>
+                        )
+                        return (
+                          <li
+                            key={doc.id}
+                            className="rounded-md border border-gray-100 bg-gray-50 px-3 py-2"
+                          >
+                            {documentViewKind(doc) === 'file' ? (
+                              <div className="flex items-center justify-between gap-4">
+                                {heading}
+                                {/* The accordion's scale, applied by the
+                                    accordion: the button inherits text-xs and
+                                    the wrapper keeps it from being squeezed. */}
+                                <div className="shrink-0 text-xs">
+                                  <DocumentBody doc={doc} watermarkId={watermarkId} />
+                                </div>
                               </div>
-                            </div>
-                          ) : doc.file_type === 'interactive' && doc.content != null ? (
-                            // A published editor document renders LIVE (#67):
-                            // real text, typeset formulas, resolved values.
-                            // The dual-written PNG stays as the per-document
-                            // fallback, handled inside InteractiveDocument.
-                            <div>
-                              <p className="text-sm font-medium text-gray-800">{doc.title}</p>
-                              {doc.description && (
-                                <p className="text-xs text-gray-500">{doc.description}</p>
-                              )}
-                              <InteractiveDocument
-                                docId={doc.id}
-                                title={doc.title}
-                                content={doc.content}
-                                watermarkId={watermarkId}
-                              />
-                            </div>
-                          ) : doc.file_type === 'image' || doc.file_type === 'interactive' ? (
-                            // A legacy image document, and an interactive one
-                            // whose snapshot was never stored — both are just
-                            // the picture, exactly as they render today.
-                            <div>
-                              <p className="text-sm font-medium text-gray-800">{doc.title}</p>
-                              {doc.description && (
-                                <p className="text-xs text-gray-500">{doc.description}</p>
-                              )}
-                              <DocumentPng docId={doc.id} title={doc.title} watermarkId={watermarkId} />
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-between gap-4">
+                            ) : (
                               <div>
-                                <p className="text-sm font-medium text-gray-800">{doc.title}</p>
-                                {doc.description && (
-                                  <p className="text-xs text-gray-500">{doc.description}</p>
-                                )}
+                                {heading}
+                                <DocumentBody doc={doc} watermarkId={watermarkId} />
                               </div>
-                              <a
-                                href={`/api/file/${doc.id}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="shrink-0 rounded-md border border-brand px-3 py-1.5 text-xs font-medium text-brand hover:bg-brand/5 transition-colors btn-brand"
-                              >
-                                Open PDF ↗
-                              </a>
-                            </div>
-                          )}
-                        </li>
-                      ))}
+                            )}
+                          </li>
+                        )
+                      })}
                     </ul>
                   )}
                 </div>

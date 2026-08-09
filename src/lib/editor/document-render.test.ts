@@ -116,8 +116,10 @@ describe('renderDocumentJson — editor chrome is stripped', () => {
 describe('renderDocumentJson — field values', () => {
   it('shows a static input’s own value', () => {
     const { host } = render(DOC)
-    const rev = host.querySelector('.input-field[data-field-id="v_rev"]')
-    expect(rev?.textContent).toBe('1200')
+    // Since #68 a static input IS the student's editable control, so its value
+    // lives on the control rather than in a text node.
+    const rev = host.querySelector<HTMLInputElement>('input.input-field[data-field-id="v_rev"]')
+    expect(rev?.value).toBe('1200')
   })
 
   it('shows an output’s computed value, German-formatted', () => {
@@ -209,5 +211,367 @@ describe('renderDocumentJson — purity', () => {
     const { host } = render(DOC)
     expect(host.childNodes.length).toBeGreaterThan(0)
     expect(other.childNodes.length).toBe(0)
+  })
+})
+
+// ── Student-editable inputs (#68) ───────────────────────────────────────────
+
+/**
+ * A worked example of the kind #68 exists for: a capital sum and an interest
+ * rate the student may move, an output derived from both, a chained output
+ * derived from that one, a reference pill reading the first output, a formula
+ * whose placeholders quote the inputs, and a second clone of one input to
+ * prove clones stay in step.
+ */
+const WORKED_EXAMPLE: LatestEditorDocumentJson = {
+  version: '1.0',
+  variables: [
+    { id: 'v_kap', type: 'input', name: 'Kapital', refType: 'static', value: 1000 },
+    { id: 'v_zins', type: 'input', name: 'Zins', refType: 'static', value: 5 },
+    { id: 'v_ertrag', type: 'output', name: 'Ertrag', expr: 'Kapital * Zins / 100' },
+    { id: 'v_gesamt', type: 'output', name: 'Gesamt', expr: 'Kapital + Ertrag' },
+    { id: 'v_ref', type: 'input', refType: 'ref', refId: 'v_ertrag', referenceClone: true },
+  ],
+  content: [
+    {
+      type: 'paragraph',
+      children: [
+        { text: 'Kapital: ' },
+        { fieldId: 'v_kap' },
+        { text: ' zu ' },
+        { fieldId: 'v_zins' },
+        { text: ' %' },
+      ],
+    },
+    { type: 'formula', latex: 'E = [input:Kapital] \\cdot [input:Zins] / 100' },
+    {
+      type: 'paragraph',
+      children: [
+        { text: 'Ertrag: ' },
+        { fieldId: 'v_ertrag' },
+        { text: ' — Referenz: ' },
+        { fieldId: 'v_ref' },
+      ],
+    },
+    {
+      type: 'paragraph',
+      children: [
+        { text: 'Gesamt: ' },
+        { fieldId: 'v_gesamt' },
+        { text: ' bei erneut ' },
+        { fieldId: 'v_kap' },
+      ],
+    },
+  ],
+  library: [],
+}
+
+function inputsFor(host: HTMLElement, fieldId: string): HTMLInputElement[] {
+  return Array.from(host.querySelectorAll<HTMLInputElement>(`input[data-field-id="${fieldId}"]`))
+}
+
+function pillText(host: HTMLElement, fieldId: string): string {
+  return host.querySelector(`.output-field[data-field-id="${fieldId}"]`)?.textContent ?? ''
+}
+
+/** Types `value` into a control the way a student would. */
+function type(input: HTMLInputElement, value: string): void {
+  input.value = value
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
+/** Everything the student can see resolved, for whole-document comparisons. */
+function visibleState(host: HTMLElement): string[] {
+  const fields = Array.from(
+    host.querySelectorAll<HTMLElement>('.input-field, .output-field')
+  ).map((el) => {
+    const shown = el.tagName === 'INPUT' ? (el as HTMLInputElement).value : el.textContent
+    return `${el.dataset['fieldId']}=${shown}`
+  })
+  const latex = Array.from(host.querySelectorAll<HTMLElement>('.render-target')).map(
+    (el) => `latex:${el.dataset['latex']}`
+  )
+  return [...fields, ...latex]
+}
+
+describe('renderDocumentJson — which parts a student may touch', () => {
+  it('gives every visible static input an editable control', () => {
+    const { host } = render(WORKED_EXAMPLE)
+    expect(inputsFor(host, 'v_kap').length).toBe(2) // both clones
+    expect(inputsFor(host, 'v_zins').length).toBe(1)
+    for (const input of inputsFor(host, 'v_kap')) {
+      expect(input.disabled).toBe(false)
+      expect(input.readOnly).toBe(false)
+    }
+  })
+
+  it('marks the editable controls so they stand out from static text', () => {
+    const { host } = render(WORKED_EXAMPLE)
+    const kap = inputsFor(host, 'v_kap')[0]
+    expect(kap?.classList.contains('student-input')).toBe(true)
+    expect(kap?.classList.contains('input-field')).toBe(true)
+  })
+
+  it('offers a numeric keyboard and a name a screen reader can announce', () => {
+    const { host } = render(WORKED_EXAMPLE)
+    const kap = inputsFor(host, 'v_kap')[0]
+    expect(kap?.getAttribute('inputmode')).toBe('decimal')
+    // Free text, not type=number: parseFloat semantics and no spinner.
+    expect(kap?.getAttribute('type')).toBe('text')
+    expect(kap?.getAttribute('aria-label')).toContain('Kapital')
+  })
+
+  it('leaves outputs and reference inputs read-only', () => {
+    const { host } = render(WORKED_EXAMPLE)
+    expect(inputsFor(host, 'v_ertrag').length).toBe(0)
+    expect(inputsFor(host, 'v_gesamt').length).toBe(0)
+    expect(inputsFor(host, 'v_ref').length).toBe(0)
+    expect(host.querySelector('.input-field[data-field-id="v_ref"]')?.tagName).toBe('SPAN')
+  })
+
+  it('leaves the document text and structure read-only', () => {
+    const { host } = render(WORKED_EXAMPLE)
+    expect(host.querySelector('[contenteditable]')).toBeNull()
+    // The only editable nodes in the whole document are the input controls.
+    const editable = Array.from(host.querySelectorAll('input, textarea, [contenteditable="true"]'))
+    expect(editable.every((el) => el.classList.contains('student-input'))).toBe(true)
+  })
+
+  it('does not turn the invisible field masters into controls', () => {
+    const { host } = render(WORKED_EXAMPLE)
+    const store = host.querySelector('[id="hiddenFields"]')
+    expect(store?.querySelector('input')).toBeNull()
+  })
+})
+
+describe('renderDocumentJson — live recompute', () => {
+  it('recomputes every dependent output when the student changes an input', () => {
+    const { host } = render(WORKED_EXAMPLE)
+    expect(pillText(host, 'v_ertrag')).toBe('50')
+    expect(pillText(host, 'v_gesamt')).toBe('1 050')
+
+    const kap = inputsFor(host, 'v_kap')[0]!
+    type(kap, '2000')
+
+    expect(pillText(host, 'v_ertrag')).toBe('100')
+    // Chained: Gesamt depends on Kapital *and* on the recomputed Ertrag.
+    expect(pillText(host, 'v_gesamt')).toBe('2 100')
+  })
+
+  it('recomputes reference pills that read a changed output', () => {
+    const { host } = render(WORKED_EXAMPLE)
+    expect(host.querySelector('[data-field-id="v_ref"]')?.textContent).toBe('50')
+    type(inputsFor(host, 'v_zins')[0]!, '10')
+    expect(host.querySelector('[data-field-id="v_ref"]')?.textContent).toBe('100')
+  })
+
+  it('re-resolves formula placeholders and reports only the formulas that changed', () => {
+    const changed: HTMLElement[][] = []
+    const host = mount()
+    const { renderTargets } = renderDocumentJson(WORKED_EXAMPLE, host, {
+      imageUrl: (id) => `/api/image/${id}`,
+      onRecompute: (targets) => changed.push(targets),
+    })
+    expect(renderTargets[0]?.dataset['latex']).toContain('1 000')
+
+    type(inputsFor(host, 'v_kap')[0]!, '2000')
+
+    expect(renderTargets[0]?.dataset['latex']).toContain('2 000')
+    expect(changed.length).toBe(1)
+    expect(changed[0]?.length).toBe(1)
+    expect(changed[0]?.[0]).toBe(renderTargets[0])
+  })
+
+  it('reports no formula when the edit changes nothing a formula quotes', () => {
+    const doc: LatestEditorDocumentJson = {
+      ...WORKED_EXAMPLE,
+      variables: [
+        ...WORKED_EXAMPLE.variables,
+        { id: 'v_unbeteiligt', type: 'input', name: 'Egal', refType: 'static', value: 1 },
+      ],
+      content: [
+        ...WORKED_EXAMPLE.content,
+        { type: 'paragraph', children: [{ text: 'Egal: ' }, { fieldId: 'v_unbeteiligt' }] },
+      ],
+    }
+    const changed: HTMLElement[][] = []
+    const host = mount()
+    renderDocumentJson(doc, host, {
+      imageUrl: (id) => `/api/image/${id}`,
+      onRecompute: (targets) => changed.push(targets),
+    })
+    type(inputsFor(host, 'v_unbeteiligt')[0]!, '7')
+    expect(changed.length).toBe(1)
+    expect(changed[0]).toEqual([])
+  })
+
+  it('keeps every clone of the edited variable in step', () => {
+    const { host } = render(WORKED_EXAMPLE)
+    const [first, second] = inputsFor(host, 'v_kap')
+    type(first!, '2000')
+    expect(second?.value).toBe('2000')
+    // The invisible master is what the resolver reads — it must move too.
+    const master = host.querySelector<HTMLElement>('[id="hiddenFields"] [data-field-id="v_kap"]')
+    expect(master?.dataset['value']).toBe('2000')
+  })
+
+  it('lands on exactly the document a fresh render of that value would produce', () => {
+    const edited = mount()
+    render(WORKED_EXAMPLE, edited)
+    type(inputsFor(edited, 'v_kap')[0]!, '2500')
+
+    const fresh = mount()
+    render(
+      {
+        ...WORKED_EXAMPLE,
+        variables: WORKED_EXAMPLE.variables.map((v) =>
+          v.id === 'v_kap' ? { ...v, value: 2500 } : v
+        ),
+      },
+      fresh
+    )
+
+    expect(visibleState(edited)).toEqual(visibleState(fresh))
+  })
+
+  it('survives unparseable input by the existing resolution rules, and recovers', () => {
+    const { host } = render(WORKED_EXAMPLE)
+    expect(() => type(inputsFor(host, 'v_kap')[0]!, 'keine Zahl')).not.toThrow()
+    // Not „Err": an unresolvable name substitutes as (0) inside an expression,
+    // which is the resolver's documented behaviour and stays untouched here.
+    expect(pillText(host, 'v_ertrag')).toBe('0')
+    type(inputsFor(host, 'v_kap')[0]!, '1000')
+    expect(pillText(host, 'v_ertrag')).toBe('50')
+  })
+
+  it('shows the existing „Err" display when a recompute makes an output non-finite', () => {
+    const doc: LatestEditorDocumentJson = {
+      version: '1.0',
+      variables: [
+        { id: 'v_n', type: 'input', name: 'Teiler', refType: 'static', value: 4 },
+        { id: 'v_q', type: 'output', name: 'Quotient', expr: '100 / Teiler' },
+      ],
+      content: [
+        { type: 'paragraph', children: [{ fieldId: 'v_n' }, { text: ' → ' }, { fieldId: 'v_q' }] },
+      ],
+      library: [],
+    }
+    const { host } = render(doc)
+    expect(pillText(host, 'v_q')).toBe('25')
+
+    type(inputsFor(host, 'v_n')[0]!, '0')
+    expect(pillText(host, 'v_q')).toBe('Err')
+    expect(host.querySelector('[data-field-id="v_q"]')?.classList.contains('is-error')).toBe(true)
+
+    type(inputsFor(host, 'v_n')[0]!, '5')
+    expect(pillText(host, 'v_q')).toBe('20')
+    expect(host.querySelector('[data-field-id="v_q"]')?.classList.contains('is-error')).toBe(false)
+  })
+
+  it('reads a decimal comma the German way', () => {
+    const { host } = render(WORKED_EXAMPLE)
+    type(inputsFor(host, 'v_zins')[0]!, '7,5')
+    expect(pillText(host, 'v_ertrag')).toBe('75')
+  })
+
+  it('reads back what a student copies out of the document', () => {
+    // Every number the document shows is space-grouped with a decimal comma;
+    // pasting one back in must mean what it says.
+    const { host } = render(WORKED_EXAMPLE)
+    type(inputsFor(host, 'v_kap')[0]!, '1 234,5')
+    expect(pillText(host, 'v_ertrag')).toBe('61,73') // 1234.5 · 5 / 100
+  })
+
+  it('shows the value back in German, losslessly', () => {
+    const { host } = render(WORKED_EXAMPLE)
+    const zins = inputsFor(host, 'v_zins')[0]!
+    type(zins, '7,5')
+    // A refresh the student did not cause must not turn their comma into a
+    // point — nor round it, which formatValue would.
+    type(inputsFor(host, 'v_kap')[0]!, '1234.5678')
+    expect(zins.value).toBe('7,5')
+    expect(inputsFor(host, 'v_kap')[1]?.value).toBe('1234,5678')
+  })
+
+  it('marks a control the student has made unreadable, and clears the mark', () => {
+    const { host } = render(WORKED_EXAMPLE)
+    const kap = inputsFor(host, 'v_kap')[0]!
+    type(kap, 'keine Zahl')
+    expect(kap.classList.contains('is-error')).toBe(true)
+    expect(kap.getAttribute('aria-invalid')).toBe('true')
+
+    type(kap, '12')
+    expect(kap.classList.contains('is-error')).toBe(false)
+    expect(kap.getAttribute('aria-invalid')).toBeNull()
+  })
+
+  it('does not call an empty box a mistake — it is a box mid-edit', () => {
+    const { host } = render(WORKED_EXAMPLE)
+    const kap = inputsFor(host, 'v_kap')[0]!
+    kap.focus()
+    type(kap, '')
+    expect(kap.classList.contains('is-error')).toBe(false)
+  })
+
+  it('settles an emptied box on the value the document is computing with', () => {
+    const { host } = render(WORKED_EXAMPLE)
+    const kap = inputsFor(host, 'v_kap')[0]!
+    kap.focus()
+    type(kap, '')
+    kap.blur()
+    // Leaving it empty would show nothing while every dependent value reads 0.
+    expect(kap.value).toBe('0')
+    expect(pillText(host, 'v_ertrag')).toBe('0')
+  })
+
+  it('settles the STORED value too, so the formulas agree with the box', () => {
+    const { host } = render(WORKED_EXAMPLE)
+    const kap = inputsFor(host, 'v_kap')[0]!
+    kap.focus()
+    type(kap, '')
+    kap.blur()
+    // A settled box shows „0"; an empty STORED value is unparseable and would
+    // resolve to \text{Err} in the formula quoting it — the box and the
+    // document contradicting each other on the same screen.
+    expect(kap.dataset['value']).toBe('0')
+    expect(host.querySelector<HTMLElement>('.render-target')?.dataset['latex']).not.toContain('Err')
+    // And it lands where typing the same value by hand lands.
+    const { host: typed } = render(WORKED_EXAMPLE)
+    type(inputsFor(typed, 'v_kap')[0]!, '0')
+    expect(visibleState(host)).toEqual(visibleState(typed))
+  })
+
+  it('leaves an already-settled box untouched on blur', () => {
+    const changed: HTMLElement[][] = []
+    const host = mount()
+    renderDocumentJson(WORKED_EXAMPLE, host, {
+      imageUrl: (id) => `/api/image/${id}`,
+      onRecompute: (targets) => changed.push(targets),
+    })
+    const kap = inputsFor(host, 'v_kap')[0]!
+    kap.focus()
+    type(kap, '2000')
+    const afterTyping = changed.length
+    kap.blur()
+    // Nothing to reconcile, so no second resolution pass and no re-typeset.
+    expect(changed.length).toBe(afterTyping)
+    expect(kap.value).toBe('2000')
+  })
+
+  it('does not overwrite what the student is still typing', () => {
+    const { host } = render(WORKED_EXAMPLE)
+    const kap = inputsFor(host, 'v_kap')[0]!
+    kap.focus()
+    type(kap, '') // mid-edit: the box is momentarily empty
+    expect(kap.value).toBe('')
+    // The clone the student is NOT in falls back to the resolved display.
+    expect(inputsFor(host, 'v_kap')[1]?.value).toBe('0')
+  })
+
+  it('does not mutate the snapshot when the student edits', () => {
+    const before = JSON.stringify(WORKED_EXAMPLE)
+    const { host } = render(WORKED_EXAMPLE)
+    type(inputsFor(host, 'v_kap')[0]!, '9999')
+    expect(JSON.stringify(WORKED_EXAMPLE)).toBe(before)
   })
 })

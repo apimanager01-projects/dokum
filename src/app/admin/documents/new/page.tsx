@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { getDocumentById, getAllKurseDeep } from '@/lib/dal'
 import { DocumentPageClient } from '@/components/admin/DocumentPageClient'
 import { AdminSubpageNav } from '@/components/admin/AdminSubpageNav'
+import type { Document as DocumentRow } from '@/types'
 
 export default async function NewDocumentPage({
   searchParams,
@@ -11,11 +12,28 @@ export default async function NewDocumentPage({
   const { taskId, editId } = await searchParams
 
   let defaultTaskId = taskId ?? ''
-  let editDefaults: { title: string; description: string | null; position: number; file_path: string | null; file_type: 'pdf' | 'image' | 'image_collection' } | undefined
+  // 'interactive' is produced by publishing an editor draft (#66), never
+  // uploaded through this form — an interactive document opened here keeps
+  // its metadata fields and simply offers no file kind.
+  let editDefaults:
+    | {
+        title: string
+        description: string | null
+        position: number
+        file_path: string | null
+        file_type?: Exclude<DocumentRow['file_type'], 'interactive'>
+      }
+    | undefined
   if (editId) {
     const data = await getDocumentById(editId)
     if (data) {
-      editDefaults = { title: data.title, description: data.description, position: data.position, file_path: data.file_path, file_type: data.file_type }
+      editDefaults = {
+        title: data.title,
+        description: data.description,
+        position: data.position,
+        file_path: data.file_path,
+        file_type: data.file_type === 'interactive' ? undefined : data.file_type,
+      }
       defaultTaskId = data.task_id
     }
   }

@@ -1,0 +1,174 @@
+/*
+ * Student-facing styling for a live interactive document (#67).
+ *
+ * Scoped to `.dokum-document`, deliberately NOT a reuse of the admin editor's
+ * stylesheet: that one styles an editing surface (hover affordances, drag
+ * handles, caption placeholders, a fixed-width page) and the student surface
+ * has none of that and has to work on a phone. What IS shared is the visual
+ * language — the same accent-bar formula block and the same input/output pill
+ * colours — so a student recognises the document the author built.
+ *
+ * Tailwind preflight zeroes the element margins and list styles this content
+ * relies on, so the block defaults are restored explicitly, exactly as the
+ * editor stylesheet does for its own surface.
+ */
+
+.dokum-document {
+  font-size: 17px;
+  line-height: 1.55;
+  color: #111827;
+  /* Real, selectable, copyable text is a deliberate product choice for
+     interactive documents; the watermark is a deterrent, not a lock. */
+  user-select: text;
+  overflow-wrap: break-word;
+}
+
+.dokum-document h1 {
+  font-size: 1.6em;
+  font-weight: 700;
+  color: var(--brand, #00338d);
+  margin: 0 0 0.5em;
+}
+
+.dokum-document h2 {
+  font-size: 1.3em;
+  font-weight: 700;
+  color: var(--brand, #00338d);
+  margin: 1em 0 0.4em;
+}
+
+.dokum-document p {
+  margin: 0.8em 0;
+}
+
+.dokum-document ul {
+  list-style: disc;
+  margin: 0.8em 0;
+  padding-left: 1.6em;
+}
+
+.dokum-document ol {
+  list-style: decimal;
+  margin: 0.8em 0;
+  padding-left: 1.6em;
+}
+
+.dokum-document pre {
+  background: #f1f4f8;
+  border: 1px solid #d7dce2;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 0.8em 0;
+  font-family: Consolas, monospace;
+  font-size: 0.85em;
+  overflow-x: auto;
+}
+
+/* The hidden field masters the resolver reads — never shown. */
+.dokum-document #hiddenFields {
+  display: none;
+}
+
+/* ---------------------------------------------------- formula/image blocks */
+
+.dokum-document .formula-block,
+.dokum-document .image-block {
+  margin: 1em 0;
+  padding: 14px 16px;
+  border-left: 4px solid var(--brand, #00338d);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #fbfdff, #f5f8fc);
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06);
+}
+
+/* A dense derivation must not widen the page on a phone — it scrolls itself. */
+.dokum-document .render-target {
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-align: center;
+}
+
+.dokum-document .render-target svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.dokum-document .image-block {
+  text-align: center;
+}
+
+.dokum-document .image-block img {
+  display: inline-block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+.dokum-document .block-caption {
+  margin-top: 10px;
+  font-size: 0.9em;
+  color: #374151;
+  text-align: left;
+}
+
+/* A formula MathJax could not typeset keeps its source visible rather than
+   collapsing to nothing — the document is still readable around it. */
+.dokum-document .formula-error {
+  color: #991b1b;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: Consolas, monospace;
+  font-size: 0.8em;
+  white-space: pre-wrap;
+  text-align: left;
+}
+
+/* ------------------------------------------------------ input/output pills */
+
+.dokum-document .input-field,
+.dokum-document .output-field {
+  display: inline-block;
+  padding: 1px 7px;
+  margin: 0 2px;
+  border-radius: 999px;
+  font-weight: 500;
+  font-size: 0.92em;
+  /* Read-only in this ticket — the editable control arrives with #68. */
+  user-select: text;
+}
+
+.dokum-document .input-field {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fbbf24;
+}
+
+.dokum-document .input-field.is-ref {
+  border-style: dashed;
+}
+
+.dokum-document .output-field {
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #60a5fa;
+}
+
+.dokum-document .output-field.is-error {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fca5a5;
+}
+
+@media (max-width: 640px) {
+  .dokum-document {
+    font-size: 16px;
+  }
+
+  .dokum-document .formula-block,
+  .dokum-document .image-block {
+    padding: 12px;
+    border-radius: 10px;
+  }
+}

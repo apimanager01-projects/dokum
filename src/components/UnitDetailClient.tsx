@@ -2,6 +2,9 @@
 
 import { useState } from 'react'
 import type { Task, DocumentWithImages } from '@/types'
+import { DocumentPng } from '@/components/documents/DocumentPng'
+import { InteractiveDocument } from '@/components/documents/InteractiveDocument'
+import { Watermark } from '@/components/documents/Watermark'
 import Lightbox from 'yet-another-react-lightbox'
 import Zoom from 'yet-another-react-lightbox/plugins/zoom'
 import 'yet-another-react-lightbox/styles.css'
@@ -21,39 +24,6 @@ function trackMiniCase(docId: string) {
   const ids = raw ? decodeURIComponent(raw).split(',').filter(Boolean) : []
   const next = [docId, ...ids.filter((id) => id !== docId)].slice(0, 4)
   document.cookie = `recent_minicases=${encodeURIComponent(next.join(','))}; path=/; max-age=${60 * 60 * 24 * 30}`
-}
-
-function Watermark({ id }: { id: string }) {
-  return (
-    <div
-      aria-hidden="true"
-      style={{
-        position: 'absolute', inset: 0,
-        overflow: 'hidden', userSelect: 'none',
-        cursor: 'default',
-      }}
-    >
-      {Array.from({ length: 24 }, (_, i) => (
-        <span
-          key={i}
-          style={{
-            position: 'absolute',
-            top: `${(Math.floor(i / 4) * 22) + 5}%`,
-            left: `${((i % 4) * 28) - 8}%`,
-            transform: 'rotate(-35deg)',
-            fontFamily: 'monospace',
-            fontSize: '13px',
-            fontWeight: 'bold',
-            color: 'rgba(0,0,0,0.08)',
-            whiteSpace: 'nowrap',
-            mixBlendMode: 'multiply',
-          }}
-        >
-          {id}
-        </span>
-      ))}
-    </div>
-  )
 }
 
 export default function UnitDetailClient({ tasks, openTaskId, watermarkId }: { tasks: TaskWithDocs[]; openTaskId?: string; watermarkId: string }) {
@@ -155,28 +125,33 @@ export default function UnitDetailClient({ tasks, openTaskId, watermarkId }: { t
                                 ))}
                               </div>
                             </div>
-                          ) : doc.file_type === 'image' ? (
+                          ) : doc.file_type === 'interactive' && doc.content != null ? (
+                            // A published editor document renders LIVE (#67):
+                            // real text, typeset formulas, resolved values.
+                            // The dual-written PNG stays as the per-document
+                            // fallback, handled inside InteractiveDocument.
                             <div>
                               <p className="text-sm font-medium text-gray-800">{doc.title}</p>
                               {doc.description && (
                                 <p className="text-xs text-gray-500">{doc.description}</p>
                               )}
-                              <div className="mt-2 flex w-full justify-center">
-                                <div
-                                  className="relative inline-block max-w-full overflow-hidden rounded-md"
-                                  onContextMenu={(e) => e.preventDefault()}
-                                >
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    src={`/api/file/${doc.id}`}
-                                    alt={doc.title}
-                                    className="block max-w-full max-h-[600px] select-none"
-                                    style={{ pointerEvents: 'none', userSelect: 'none', WebkitUserDrag: 'none' } as React.CSSProperties}
-                                    draggable={false}
-                                  />
-                                  <Watermark id={watermarkId} />
-                                </div>
-                              </div>
+                              <InteractiveDocument
+                                docId={doc.id}
+                                title={doc.title}
+                                content={doc.content}
+                                watermarkId={watermarkId}
+                              />
+                            </div>
+                          ) : doc.file_type === 'image' || doc.file_type === 'interactive' ? (
+                            // A legacy image document, and an interactive one
+                            // whose snapshot was never stored — both are just
+                            // the picture, exactly as they render today.
+                            <div>
+                              <p className="text-sm font-medium text-gray-800">{doc.title}</p>
+                              {doc.description && (
+                                <p className="text-xs text-gray-500">{doc.description}</p>
+                              )}
+                              <DocumentPng docId={doc.id} title={doc.title} watermarkId={watermarkId} />
                             </div>
                           ) : (
                             <div className="flex items-center justify-between gap-4">

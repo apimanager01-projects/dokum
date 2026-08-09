@@ -67,16 +67,19 @@ The dev project is a free playground — break it freely. The prod project has r
 
 ## Database changes
 
-Migrations are plain SQL in [supabase/](supabase/) — apply via the Supabase SQL editor or CLI. Order matters: `migration.sql`, then `add_audit_log.sql`, then `add_entitlements.sql`, then `add_editor_documents.sql`, then `add_editor_images.sql`. There is no migration runner; new migrations must be applied manually.
+Migrations are plain SQL in [supabase/](supabase/) — apply via the Supabase SQL editor or CLI. Order matters: `migration.sql`, then `add_audit_log.sql`, then `add_entitlements.sql`, then `add_editor_documents.sql`, then `add_editor_images.sql`, then `add_document_content.sql`. There is no migration runner; new migrations must be applied manually.
 
-**Workflow for a new migration:** apply to **dev first** via `mcp__supabase__apply_migration`, verify with `get_advisors` and a quick read, then have the user apply the same migration to prod manually (MCP cannot reach prod — see below).
+**Workflow for a new migration:** pre-flight any new CHECK against the existing rows (`SELECT DISTINCT col FROM …`) so a constraint failure surfaces before the DDL, apply to **dev first** via `mcp__supabase__apply_migration`, verify by reading the catalog back (see below — `get_advisors` is not available), then have the user apply the same migration to prod manually (MCP cannot reach prod — see below).
 
 ## Supabase MCP
 
 A Supabase MCP server is configured (`mcp__supabase__*` tools — see [.mcp.json](.mcp.json)) and is **pinned to the dev project only** via `--project-ref=elnupcpwhvfbmbpcbwrc`. Prod is intentionally unreachable through MCP; any prod change must be made by the user via the Supabase dashboard or CLI. Auth uses `SUPABASE_ACCESS_TOKEN` from the environment.
 
-Use the MCP to inspect and modify the dev project instead of asking the user to run SQL by hand: `list_tables`, `execute_sql`, `apply_migration`, `list_migrations`, `get_advisors`, `generate_typescript_types`, `get_logs`, plus edge function and branch management.
+Use the MCP to inspect and modify the dev project instead of asking the user to run SQL by hand. The server runs with `--features=database,docs`, so the tool set is exactly: `list_tables`, `list_extensions`, `list_migrations`, `apply_migration`, `execute_sql`, `search_docs`.
+
+**Nothing else exists.** In particular there is no `get_advisors`, no `generate_typescript_types`, no `get_logs`, and no edge-function or branch management — don't reach for them and don't plan a step around them. Widening `--features` in [.mcp.json](.mcp.json) is the only way to get them.
 
 - Prefer `apply_migration` over `execute_sql` for schema changes so the change is tracked.
-- Run `get_advisors` after schema changes to catch missing RLS or index issues.
-- After schema changes, regenerate types with `generate_typescript_types` and update [src/types/index.ts](src/types/index.ts) if the shape changed.
+- **Instead of `get_advisors`,** verify a schema change by querying the catalog: `information_schema.columns` for the column's type and nullability, `pg_get_constraintdef(oid)` for a constraint's actual text, `pg_constraint.convalidated` (a CHECK added `NOT VALID` silently skips existing rows — this proves it didn't), and `pg_class.relrowsecurity` + `pg_policies` to confirm RLS and its policies survived. Then run the real query the app will issue.
+- **Instead of `generate_typescript_types`,** hand-check [src/types/index.ts](src/types/index.ts) against the migration. Where a TS union mirrors a DB CHECK — `Document['file_type']` and `documents_file_type_check` — the two must list the same values, and nothing enforces that but this step.
+- Auth is `SUPABASE_ACCESS_TOKEN`, a user-scope env var interpolated at server **launch**. A stale token shows up as `Unauthorized` on every call; confirm by hitting `https://api.supabase.com/v1/projects/<ref>` with a bearer header. A freshly-set token requires restarting Claude Code — it never reaches the running server process.

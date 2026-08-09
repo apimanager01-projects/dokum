@@ -18,6 +18,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
+  DOCUMENT_JSON_VERSIONS,
   DocumentJsonSchema,
   JSON_IMPORT_EXAMPLE,
   collectReferencedImageIds,
@@ -214,6 +215,48 @@ describe('DocumentJsonSchema', () => {
       library: ['a+b'],
     }
     expect(DocumentJsonSchema.safeParse(doc).success).toBe(true)
+  })
+})
+
+// ── Versioned family (#64) ──────────────────────────────────────────────────
+
+describe('DocumentJsonSchema — versioned family', () => {
+  it('discriminates on version: every supported version parses its own shape', () => {
+    for (const version of DOCUMENT_JSON_VERSIONS) {
+      const result = DocumentJsonSchema.safeParse({ version, variables: [], content: [] })
+      expect(result.success).toBe(true)
+      if (result.success) expect(result.data.version).toBe(version)
+    }
+  })
+
+  it('reports an unsupported version on the version path, not as a shape failure', () => {
+    // What keeps the German boundary message addressable — describeDocumentJsonError
+    // branches on path[0] === 'version'.
+    const result = DocumentJsonSchema.safeParse({ ...REFERENCE_EXAMPLE, version: '0.9' })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues.some((i) => i.path[0] === 'version')).toBe(true)
+    }
+  })
+
+  it('names every supported version in the unsupported-version message', () => {
+    const result = DocumentJsonSchema.safeParse({ ...REFERENCE_EXAMPLE, version: '0.9' })
+    expect(result.success).toBe(false)
+    if (result.success) return
+    const message = describeDocumentJsonError(result.error, { ...REFERENCE_EXAMPLE, version: '0.9' })
+    for (const version of DOCUMENT_JSON_VERSIONS) expect(message).toContain(`"${version}"`)
+  })
+
+  it('keeps per-version strictness: a valid version does not relax unknown keys', () => {
+    for (const version of DOCUMENT_JSON_VERSIONS) {
+      const result = DocumentJsonSchema.safeParse({
+        version,
+        variables: [],
+        content: [],
+        schmuggelware: true,
+      })
+      expect(result.success).toBe(false)
+    }
   })
 })
 

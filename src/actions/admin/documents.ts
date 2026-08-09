@@ -105,8 +105,16 @@ export async function updateDocument(docId: string, formData: FormData): Promise
     .single()
   if (fetchErr || !currentDoc) return { ok: false, error: 'Document not found.' }
 
-  // image_collection: only metadata editable (no file replacement)
-  if (currentDoc.file_type === 'image_collection') {
+  // Metadata-only kinds — no file replacement.
+  //
+  // `image_collection` because its pages are uploaded as a set, and (since
+  // #66) `interactive` because its file IS the published PNG of a draft:
+  // replacing it here would flip file_type away from 'interactive' while
+  // leaving the content JSON and the re-homed document_images behind, i.e. a
+  // document whose row disagrees with itself. Re-publishing the draft is the
+  // only way to change an interactive document's file. This is also the
+  // shape update-document collapses to entirely under #82.
+  if (currentDoc.file_type === 'image_collection' || currentDoc.file_type === 'interactive') {
     const { error } = await supabase.from('documents').update({ title, description, position }).eq('id', docId)
     if (error) return { ok: false, error: error.message }
     await logAdminAction({ actorId: user.id, action: 'update', entityType: 'document', entityId: docId, entityTitle: title })

@@ -77,9 +77,17 @@ import {
   type LineToken,
 } from './field-resolver'
 import {
+  createAnchorRegistry,
+  clearBlockAnchor,
+  readBlockAnchor,
+  writeBlockAnchor,
+} from './anchors'
+import {
   JSON_IMPORT_EXAMPLE,
   createImageRemoveButton,
   importEditorJson,
+  promoteStrayRunToBlock,
+  serializesAsOwnBlock,
   serializeEditorState,
   type LatestEditorDocumentJson,
 } from './document-json'
@@ -163,6 +171,15 @@ export interface EditorController {
   insertInputField(): void
   /** „Output"-Toolbar-Button — blue computed pill; same modal flow as insertInputField(). */
   insertOutputField(): void
+  /**
+   * „Sprungmarke"-Toolbar-Button (#71): marks the block the cursor sits in as
+   * a jump target other documents can link to, asking for its name.
+   *
+   * On an already-marked block the prompt is pre-filled with the current name
+   * and doubles as rename (the opaque id is KEPT — links pointing here must
+   * survive a rename) and as unmark (an emptied name removes the mark).
+   */
+  markAnchor(): void
   /** „Editor zurücksetzen" — clears all content after a confirm dialog. */
   resetEditor(): void
   /**
@@ -396,6 +413,38 @@ export function createEditorController(
   let pendingLatexFieldInsert = false
   // Cursor-Position in der Textarea vor Öffnung des Feld-Modals
   let savedLatexTextareaPos: { start: number; end: number } | null = null
+
+  // --- Sprungmarken (#71) ---
+  // Opaque anchor ids, minted exactly like field ids so a fresh mount can
+  // never re-issue an id an already-loaded document is using.
+  let anchorCounter = 0
+  function nextAnchorId(): string {
+    return 'anc_' + Date.now().toString(36) + '_' + ++anchorCounter
+  }
+  // The uniqueness guard: ordinary editing (paste, block drop, a
+  // contenteditable Enter that splits a block) duplicates a marked block's id,
+  // and two blocks answering to one link is a silently wrong document.
+  const anchorRegistry = createAnchorRegistry(editor, nextAnchorId)
+
+  // #92: a formula or image block holds no caret. Its content is
+  // contenteditable="false", so clicking it opens the „Formel bearbeiten"-Modal
+  // instead of placing a cursor, and ArrowDown steps straight over it — which
+  // left the ⚓ button with no way to reach the two block kinds another document
+  // most wants to link to. A click (as opposed to a drag) on the block's ❚❚
+  // handle selects the block, and the selection is what ⚓ then acts on.
+  //
+  // Selecting is deliberately not a browser selection: putting a Range around
+  // an uneditable block would make the next keystroke replace it. This is a
+  // plain marker class the ⚓ button reads, cleared by the next caret move,
+  // keystroke or Escape.
+  let selectedBlock: HTMLElement | null = null
+
+  function selectBlock(block: HTMLElement | null) {
+    if (selectedBlock === block) return
+    selectedBlock?.classList.remove('block-selected')
+    selectedBlock = block
+    block?.classList.add('block-selected')
+  }
 
   // Warm-up: the reference file loaded MathJax at page load (CDN <script> in
   // <head>); the port starts the bundled dynamic import when the editor
@@ -1604,7 +1653,17 @@ export function createEditorController(
 
   // Bei Tippen im Editor: Auto-Outputs (ohne manuelle Expression) neu
   // berechnen (reference L1958) — Pillen aktualisieren live beim Tippen.
-  const onEditorInput = () => {
+  const onEditorInput = (e: Event) => {
+    // Sprungmarken (#71): every editing path that can clone a marked block —
+    // paste above all, but also a contenteditable Enter that splits one —
+    // funnels through `input`. The sweep is a no-op walk over the anchored
+    // blocks (usually none), so it can afford to run on every keystroke.
+    //
+    // Enter is the one duplication the author did not ask for: the browser
+    // clones the block's attributes into the new half, and re-stamping would
+    // mint a second Sprungmarke under the same name. Strip it instead.
+    const splitBlock = e instanceof InputEvent && e.inputType === 'insertParagraph'
+    anchorRegistry.sweep(splitBlock ? 'unmark' : 'restamp')
     let needUpdate = false
     editor.querySelectorAll<HTMLElement>('.output-field').forEach((el) => {
       if (!el.dataset['expr'] || !el.dataset['expr'].trim()) needUpdate = true
@@ -1615,7 +1674,127 @@ export function createEditorController(
   function resetEditor() {
     if (window.confirm('Editor wirklich zurücksetzen? Alle Inhalte gehen verloren.')) {
       editor.innerHTML = ''
+      selectBlock(null)
+      anchorRegistry.forget()
     }
+  }
+
+  // --- Sprungmarken (#71) ---
+
+  /**
+   * Where a Sprungmarke would go, or why it cannot go anywhere.
+   *
+   * The two refusals read completely differently to an author, so they do not
+   * share a message (#93): `'no-target'` means nothing is pointed at, while
+   * `'unmarkable'` means the thing pointed at is real but will not survive a
+   * save — a distinction the author cannot make from the editor alone.
+   */
+  type AnchorTarget =
+    | { ok: true; block: HTMLElement }
+    | { ok: false; reason: 'no-target' | 'unmarkable' }
+
+  /**
+   * The block a Sprungmarke would be placed on: the block selected by its ❚❚
+   * handle if there is one, otherwise the top-level element holding the cursor
+   * — provided it is one the serializer actually emits.
+   *
+   * The live selection is consulted first, then `state.savedRange` — a toolbar
+   * button takes focus before its click handler runs, which in some browsers
+   * collapses the editor's selection, and the selectionchange-maintained range
+   * is what survives that (the same reason `insertBlockAtCursor` reads it).
+   */
+  function anchorTargetBlock(): AnchorTarget {
+    // A handle-selected block wins over the caret (#92): the caret is parked in
+    // some neighbouring paragraph by definition — a formula or image block
+    // cannot hold one — so acting on it would mark the wrong block. An
+    // unmarkable selection (an image whose upload is still in flight) refuses
+    // rather than falling through, for the same reason.
+    if (selectedBlock && editor.contains(selectedBlock)) {
+      return serializesAsOwnBlock(selectedBlock)
+        ? { ok: true, block: selectedBlock }
+        : { ok: false, reason: 'unmarkable' }
+    }
+
+    const sel = window.getSelection()
+    const liveRange =
+      sel && sel.rangeCount > 0 && editor.contains(sel.anchorNode) ? sel.getRangeAt(0) : null
+    const caret = liveRange ?? state.savedRange
+    const topLevel = getTopLevelBlock(caret?.startContainer ?? null)
+    if (!topLevel) return { ok: false, reason: 'no-target' }
+
+    // Only a block that survives serialization may carry a mark — otherwise
+    // the author would place a Sprungmarke the next save silently discards.
+    if (topLevel.nodeType === Node.ELEMENT_NODE && serializesAsOwnBlock(topLevel as HTMLElement)) {
+      return { ok: true, block: topLevel as HTMLElement }
+    }
+
+    // The first line typed into an empty document stays a bare text node, and
+    // the author sees the caret sitting in it — so refusing reads as a bug
+    // (#93). Promote the stray run into the paragraph the serializer would
+    // have folded it into anyway; the saved document is unchanged and the line
+    // becomes markable.
+    const caretNode = caret?.startContainer ?? null
+    const caretOffset = caret?.startOffset ?? 0
+    const promoted = promoteStrayRunToBlock(editor, topLevel)
+    if (!promoted) return { ok: false, reason: 'unmarkable' }
+    // Moving the run detached the caret (the DOM re-points a Range whose
+    // boundary sits inside a removed node at that node's old parent), so put it
+    // back where the author left it — restoreEditorSelection() replays this.
+    if (caretNode && promoted.contains(caretNode)) {
+      const restored = document.createRange()
+      restored.setStart(caretNode, caretOffset)
+      restored.collapse(true)
+      state.savedRange = restored
+    }
+    return { ok: true, block: promoted }
+  }
+
+  function markAnchor() {
+    const target = anchorTargetBlock()
+    if (!target.ok) {
+      window.alert(
+        target.reason === 'unmarkable'
+          ? 'Dieser Block kann keine Sprungmarke tragen — er wird beim Speichern nicht als eigener Block abgelegt (etwa ein Bild, dessen Upload noch läuft). Bitte einen anderen Block wählen.'
+          : 'Bitte zuerst den Cursor in den Block setzen, der die Sprungmarke erhalten soll. Formel- und Bildblöcke wählst du mit einem Klick auf ihren Ziehgriff ❚❚ aus.'
+      )
+      return
+    }
+    const block = target.block
+    const current = readBlockAnchor(block)
+    const entered = window.prompt(
+      current
+        ? 'Sprungmarke umbenennen (leeres Feld entfernt die Marke):'
+        : 'Name der Sprungmarke:',
+      current?.label ?? ''
+    )
+    if (entered === null) {
+      // Abbrechen — keine Marke setzen. Der Cursor muss trotzdem zurück: der
+      // Zielaufruf oben kann die erste Zeile zu einem <p> befördert haben
+      // (#93), und das Verschieben löst die lebende Selektion aus dem Knoten.
+      restoreEditorSelection()
+      return
+    }
+    const label = entered.trim()
+    if (!label) {
+      if (current) clearBlockAnchor(block)
+    } else {
+      // A rename KEEPS the id: every link already pointing at this Sprungmarke
+      // stores that id, and re-minting it would orphan all of them.
+      writeBlockAnchor(block, { id: current?.id ?? nextAnchorId(), label })
+      // Adopts the id as this block's, so a later copy of it is the one that
+      // gets re-stamped.
+      anchorRegistry.sweep()
+    }
+    restoreEditorSelection()
+  }
+
+  /** Puts the caret back where it was before a modal/prompt stole the focus. */
+  function restoreEditorSelection() {
+    editor.focus()
+    const sel = window.getSelection()
+    if (!sel || !state.savedRange) return
+    sel.removeAllRanges()
+    sel.addRange(state.savedRange)
   }
 
   // --- Draft persistence (slice 7, #35) + JSON import (slice 9, #37) ---
@@ -1655,12 +1834,25 @@ export function createEditorController(
     doc: LatestEditorDocumentJson,
     options: { replaceExisting: boolean }
   ): Promise<void> {
+    // A replace throws the old document away, and with it any claim its blocks
+    // had on an anchor id — the incoming ids must be adopted as they are, and
+    // the block the author had selected (#92) is about to stop existing.
+    if (options.replaceExisting) {
+      selectBlock(null)
+      anchorRegistry.forget()
+    }
+
     const result = importEditorJson(
       doc,
       editor,
       { nextFieldId, resolvePlaceholders: resolveForDisplay, imageUrl: editorImageUrl },
       options
     )
+
+    // Merge mode can drop a second copy of an already-marked block into the
+    // document, and a stored snapshot could carry a collision from before this
+    // guard existed. Either way the document leaves the import unambiguous.
+    anchorRegistry.sweep()
 
     // Library restore — replace clears first (reference L2578–2582, empty
     // text ← L2581); merge keeps existing entries. The document's own list
@@ -1773,6 +1965,11 @@ export function createEditorController(
   }
 
   const onKeyDown = (e: KeyboardEvent) => {
+    // #92: Escape gibt eine per Ziehgriff ausgewählte Formel/Bild wieder frei.
+    if (e.key === 'Escape') {
+      selectBlock(null)
+      return
+    }
     if (e.key !== 'Tab') return
     e.preventDefault()
 
@@ -1923,6 +2120,13 @@ export function createEditorController(
     const sel = window.getSelection()
     if (sel && sel.rangeCount > 0 && editor.contains(sel.anchorNode)) {
       state.savedRange = sel.getRangeAt(0).cloneRange()
+      // #92: der Cursor im Editor ist die jüngere Zielangabe — die
+      // Blockauswahl per Ziehgriff verfällt. Der Guard oben ist der Grund,
+      // warum ein Klick auf die ⚓-Schaltfläche sie NICHT verwirft: dabei
+      // wandert die Selektion aus dem Editor heraus. Der Ziehgriff-Klick
+      // selbst ist ebenfalls sicher — selectionchange läuft beim mousedown,
+      // also vor dem click-Handler, der die Auswahl setzt.
+      selectBlock(null)
       callbacks.onSelectionFontSize?.(currentSelectionFontSize())
     }
   }
@@ -1935,6 +2139,17 @@ export function createEditorController(
   // editing (copy/paste), which are click-dead in the reference.
   const onEditorClick = (e: MouseEvent) => {
     const clicked = e.target instanceof Element ? e.target : null
+    // #92: ein Klick (kein Zug) auf den Ziehgriff wählt den Block aus, damit
+    // die ⚓-Schaltfläche bei Formel- und Bildblöcken ein Ziel hat. Ein
+    // abgeschlossener HTML5-Drag löst gar kein click-Event aus — Umsortieren
+    // wählt also nie versehentlich aus.
+    const handle = clicked?.closest<HTMLElement>('.drag-handle')
+    if (handle && editor.contains(handle)) {
+      e.preventDefault()
+      e.stopPropagation()
+      selectBlock(handle.closest<HTMLElement>('.formula-block, .image-block'))
+      return
+    }
     // Lösch-✕ eines Bildblocks (#44): ganzen .image-block entfernen. Delegiert
     // wie die Pillen unten — greift auch für vom Browser geklonte Buttons.
     const removeBtn = clicked?.closest<HTMLElement>('.img-remove')
@@ -2122,6 +2337,10 @@ export function createEditorController(
       } else {
         editor.insertBefore(dragEl, afterEl)
       }
+      // A block reorder fires no `input` event, so the anchor sweep has to be
+      // invoked here too. Moving a marked block is not duplicating it — the
+      // registry recognises the same element and leaves its id alone.
+      anchorRegistry.sweep()
       return
     }
     if (!e.dataTransfer) return
@@ -2276,6 +2495,7 @@ export function createEditorController(
     }
     for (const url of pendingObjectUrls) URL.revokeObjectURL(url)
     pendingObjectUrls.clear()
+    selectedBlock = null
     dragEl = null
     dropIndicator = null
     inlineDropCaret = null
@@ -2293,6 +2513,7 @@ export function createEditorController(
     openLatexModal,
     insertInputField: () => insertField('input'),
     insertOutputField: () => insertField('output'),
+    markAnchor,
     resetEditor,
     insertImageFromFile: (file: File, alt?: string) => {
       void insertImageFromFile(file, alt)

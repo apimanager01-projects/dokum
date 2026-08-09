@@ -28,7 +28,7 @@ function fixtures() {
 
 function docWithImages(...imageIds: string[]): LatestEditorDocumentJson {
   return {
-    version: '1.0',
+    version: '1.1',
     variables: [],
     content: [
       { type: 'paragraph', children: [{ text: 'Vor dem Bild' }] },
@@ -181,7 +181,7 @@ describe('planPublish — image re-homing', () => {
 
   it('preserves the other image-block keys and their order (byte stability)', () => {
     const content: LatestEditorDocumentJson = {
-      version: '1.0',
+      version: '1.1',
       variables: [],
       content: [{ type: 'image', imageId: DRAFT_IMG_A, alt: 'Diagramm', style: { align: 'center' } }],
       library: [],
@@ -268,5 +268,59 @@ describe('planPublish — refusal', () => {
   it('carries no plan on the failure branch', () => {
     const result = planFor({ content: docWithImages(DRAFT_IMG_A), draftImages: [] })
     expect('plan' in result).toBe(false)
+  })
+})
+
+// ── Sprungmarken (v1.1, #71) ────────────────────────────────────────────────
+//
+// The stability contract: an anchor id is minted once in the editor and copied
+// verbatim from then on. Publishing is the only step that rewrites a snapshot,
+// so it is the one place where "verbatim" could quietly stop being true.
+
+describe('planPublish — block anchors', () => {
+  const anchored = (imageId: string): LatestEditorDocumentJson => ({
+    version: '1.1',
+    variables: [],
+    content: [
+      { type: 'heading', level: 1, children: [{ text: 'Kapitel' }], anchor: { id: 'anc_h', label: 'Kapitel 1' } },
+      { type: 'image', imageId, anchor: { id: 'anc_i', label: 'Abbildung 1' } },
+      { type: 'paragraph', children: [{ text: 'ohne Marke' }] },
+    ],
+    library: [],
+  })
+
+  it('copies every anchor verbatim rather than deriving or regenerating it', () => {
+    const result = planFor({
+      content: anchored(DRAFT_IMG_A),
+      draftImages: [{ id: DRAFT_IMG_A, file_path: 'editor-images/d1/a.png' }],
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.plan.content.content.map((b) => b.anchor ?? null)).toEqual([
+      { id: 'anc_h', label: 'Kapitel 1' },
+      { id: 'anc_i', label: 'Abbildung 1' },
+      null,
+    ])
+  })
+
+  it('keeps the anchor on an image block whose imageId IS rewritten', () => {
+    // The re-homing rewrite is the one place a block object is rebuilt — the
+    // anchor has to survive it, and stay in its fixed key position.
+    const result = planFor({
+      content: anchored(DRAFT_IMG_A),
+      draftImages: [{ id: DRAFT_IMG_A, file_path: 'editor-images/d1/a.png' }],
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const image = result.plan.content.content[1]!
+    expect(image).toEqual({ type: 'image', imageId: 'new-id-1', anchor: { id: 'anc_i', label: 'Abbildung 1' } })
+    expect(Object.keys(image)).toEqual(['type', 'imageId', 'anchor'])
+  })
+
+  it('does not mutate the draft snapshot it was handed', () => {
+    const content = anchored(DRAFT_IMG_A)
+    const before = JSON.stringify(content)
+    planFor({ content, draftImages: [{ id: DRAFT_IMG_A, file_path: 'editor-images/d1/a.png' }] })
+    expect(JSON.stringify(content)).toBe(before)
   })
 })

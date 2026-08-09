@@ -468,7 +468,75 @@
   border-color: #fca5a5;
 }
 
+/* ------------------------------------------------- Sprungmarken (#71) */
+/* Editor-Chrome, rein visuell: das Badge ist ein Pseudo-Element, also für den
+   Serializer unsichtbar (er liest nur data-anchor-id/-label) und ohne
+   Auswirkung auf die contenteditable-Bearbeitung. */
+
+.latex-editor #editor [data-anchor-id] {
+  position: relative;
+}
+
+/* #94: das Badge sitzt INNERHALB der Oberkante seines Blocks. Zuvor stand es
+   mittig auf der Grenze zum Block darüber (top: -2px + translateY(-50%)) —
+   bei zwei markierten Blöcken nacheinander war nicht mehr erkennbar, welches
+   Badge zu welchem Block gehört. Horizontal ragt es weiter über den rechten
+   Rand hinaus, damit es den Text der ersten Zeile nicht überdeckt; der Editor
+   hat dort 42px Innenabstand. */
+.latex-editor #editor [data-anchor-id]::after {
+  content: '⚓ ' attr(data-anchor-label);
+  position: absolute;
+  top: 2px;
+  right: -6px;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+  padding: 1px 7px;
+  border: 1px solid #c7d2fe;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+/* Formel- und Bildblöcke scrollen horizontal (overflow-x: auto) und schneiden
+   deshalb alles ab, was über ihren Rand hinausragt — dort muss das Badge nach
+   innen. Im Bildblock sitzt oben rechts zusätzlich das Lösch-✕ (24px bei
+   right: 8px), an dem es vorbeirücken muss. */
+.latex-editor #editor .formula-block[data-anchor-id]::after {
+  right: 6px;
+}
+
+.latex-editor #editor .image-block[data-anchor-id]::after {
+  right: 38px;
+}
+
+/* #92: per Klick auf den Ziehgriff ausgewählter Block. Formel- und Bildblöcke
+   tragen keinen Cursor, also braucht die ⚓-Schaltfläche eine sichtbare
+   Auswahl, auf die sie wirken kann. `outline` statt `border`: es verändert das
+   Layout nicht und stört damit weder Drag & Drop noch den PNG-Export. */
+.latex-editor #editor .block-selected {
+  outline: 2px solid var(--editor-accent);
+  outline-offset: 2px;
+}
+
 /* Exportmodus: Felder als normaler Text rendern (slice 10) */
+/* Das Sprungmarken-Badge ist Editor-Chrome und darf nicht ins PNG (wie die
+   drag-handles und das Bild-Lösch-✕, die png-export.ts ausblendet). */
+.latex-editor .exporting [data-anchor-id]::after {
+  display: none !important;
+}
+
+/* Ebenso die Blockauswahl (#92) — reine Editor-Chrome. */
+.latex-editor .exporting .block-selected {
+  outline: none !important;
+}
+
 .latex-editor .exporting .formula-block {
   padding-left: 22px !important;
 }

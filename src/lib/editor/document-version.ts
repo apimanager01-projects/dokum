@@ -50,8 +50,17 @@ type UpgradeStep = (doc: EditorDocumentJson) => EditorDocumentJson
  * relies on that to keep the caller's document intact.
  */
 export const DOCUMENT_JSON_UPGRADES: Record<DocumentJsonVersion, UpgradeStep> = {
-  /** Identity — 1.0 is the newest version this build understands. */
-  '1.0': (doc) => doc,
+  /**
+   * 1.0 → 1.1 (#71): v1.1 only ADDED the optional block-level anchor, so a
+   * v1.0 document is already a valid v1.1 document — the step is a version
+   * bump over an untouched body, and it deliberately invents no anchors.
+   *
+   * Spread-then-override rather than a rebuild, so `version` keeps its leading
+   * position in the key order: publishing stores this very object.
+   */
+  '1.0': (doc) => ({ ...doc, version: '1.1' }),
+  /** Identity — 1.1 is the newest version this build understands. */
+  '1.1': (doc) => doc,
 }
 
 /** Anything the chain walker needs to see: a document carrying a version. */

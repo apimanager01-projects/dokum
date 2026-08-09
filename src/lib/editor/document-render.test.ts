@@ -29,9 +29,9 @@ function render(doc: LatestEditorDocumentJson, host = mount()) {
   return { host, result }
 }
 
-/** A document exercising every v1.0 block type plus the field graph. */
+/** A document exercising every v1.1 block type plus the field graph. */
 const DOC: LatestEditorDocumentJson = {
-  version: '1.0',
+  version: '1.1',
   variables: [
     { id: 'v_rev', type: 'input', name: 'Revenue', refType: 'static', value: 1200 },
     { id: 'v_mar', type: 'input', name: 'Margin', refType: 'static', value: 0.2534 },
@@ -130,7 +130,7 @@ describe('renderDocumentJson — field values', () => {
 
   it('marks a non-resolvable output as an error rather than blank', () => {
     const doc: LatestEditorDocumentJson = {
-      version: '1.0',
+      version: '1.1',
       variables: [{ id: 'v_bad', type: 'output', name: 'Kaputt', expr: 'Unbekannt * 2' }],
       content: [{ type: 'paragraph', children: [{ fieldId: 'v_bad' }] }],
       library: [],
@@ -143,7 +143,7 @@ describe('renderDocumentJson — field values', () => {
 
   it('resolves a reference input to the value it points at', () => {
     const doc: LatestEditorDocumentJson = {
-      version: '1.0',
+      version: '1.1',
       variables: [
         { id: 'v_a', type: 'input', name: 'A', refType: 'static', value: 2500 },
         { id: 'v_out', type: 'output', name: 'Doppelt', expr: 'A * 2' },
@@ -162,7 +162,7 @@ describe('renderDocumentJson — field values', () => {
 describe('renderDocumentJson — formulas', () => {
   it('returns a render target per formula, in document order', () => {
     const doc: LatestEditorDocumentJson = {
-      version: '1.0',
+      version: '1.1',
       variables: [],
       content: [
         { type: 'formula', latex: 'a+b' },
@@ -187,7 +187,7 @@ describe('renderDocumentJson — formulas', () => {
 
   it('leaves an unknown placeholder name visible rather than silently blank', () => {
     const doc: LatestEditorDocumentJson = {
-      version: '1.0',
+      version: '1.1',
       variables: [],
       content: [{ type: 'formula', latex: 'x = [input:GibtEsNicht]' }],
       library: [],
@@ -224,7 +224,7 @@ describe('renderDocumentJson — purity', () => {
  * prove clones stay in step.
  */
 const WORKED_EXAMPLE: LatestEditorDocumentJson = {
-  version: '1.0',
+  version: '1.1',
   variables: [
     { id: 'v_kap', type: 'input', name: 'Kapital', refType: 'static', value: 1000 },
     { id: 'v_zins', type: 'input', name: 'Zins', refType: 'static', value: 5 },
@@ -446,7 +446,7 @@ describe('renderDocumentJson — live recompute', () => {
 
   it('shows the existing „Err" display when a recompute makes an output non-finite', () => {
     const doc: LatestEditorDocumentJson = {
-      version: '1.0',
+      version: '1.1',
       variables: [
         { id: 'v_n', type: 'input', name: 'Teiler', refType: 'static', value: 4 },
         { id: 'v_q', type: 'output', name: 'Quotient', expr: '100 / Teiler' },

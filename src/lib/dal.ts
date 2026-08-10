@@ -238,11 +238,12 @@ export async function getDocumentById(
 //
 // Access is enforced by the same two mechanisms as everywhere else, not by
 // new ones. RLS on `documents` already requires an entitlement for the owning
-// Unit (or admin), so an unentitled reader gets no row at all; the `!inner`
-// join up to `kurse` additionally drops the row when the Kurs is unpublished,
-// since the `units` policy gates on it. The caller re-checks `published` in
-// app code with an admin bypass anyway, exactly as /api/file does — the
-// archive must not depend on a join's emptiness alone.
+// Unit and a published parent Kurs (or admin), so neither an unentitled reader
+// nor a reader of an archived Kurs gets a row at all; the `!inner` join up to
+// `kurse` drops it a second time, since the `units` policy gates on published
+// too. The caller re-checks `published` in app code with an admin bypass
+// anyway, exactly as /api/file does — the archive must not depend on a join's
+// emptiness alone.
 //
 // `content` IS selected here: this page's whole job is rendering the snapshot.
 // `file_path` is NOT — the renderers address the stored file and every image

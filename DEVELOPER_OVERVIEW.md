@@ -25,8 +25,8 @@ Kurs (Course)
 ```
 
 **Key Rules:**
-- Only `kurse` has a `published` boolean — `units` inherit visibility from it, and **nothing below Unit does**
-- **Tasks / Documents / DocumentImages / `pdfs` storage objects gate on an `entitlements` row alone** (or admin role). `add_entitlements.sql` *dropped* the `published` subquery from those four policies, so at the DB level they stay readable to an entitled user even when the parent Kurs is unpublished. The `/api/file` and `/api/image` proxies independently re-check `kurse.published` in app code, so **files** are still blocked — only row metadata (title/description/position) is exposed. Closing that gap is a decided-but-unimplemented change (map issue #60): re-add the `published` conjunct so the policies read *entitled AND published*.
+- Only `kurse` has a `published` boolean — everything below it inherits visibility from that one flag
+- **Tasks / Documents / DocumentImages / `pdfs` storage objects gate on *entitled AND published*** (or admin role). `add_entitlements.sql` had *dropped* the `published` subquery from those four policies, leaving the rows readable to an entitled user under an archived Kurs; `add_rls_published_conjunct.sql` (#80) put it back as a conjunct inside the same policy — never as a second policy, since permissive SELECT policies are OR'd and a separate one would *grant* access. The app-level re-checks in `/api/file`, `/api/image` and `/dokumente/[docId]` stay as defence in depth, but the archive no longer depends on them.
 - All levels support `position` ordering (non-unique integers; ties broken by `created_at ASC`)
 - Sorting is applied inside the DAL (`src/lib/dal.ts`) — no manual sorting in page components
 - `ON DELETE CASCADE` at every foreign key level
@@ -35,7 +35,7 @@ Kurs (Course)
 
 - **Model:** each `Unit` is bought once for a flat €3 (test mode price `price_1TWLu0CbBje0sCsEadcen6py`). Lifetime entitlement, no subscription.
 - **`entitlements` table:** `(user_id, unit_id, granted_at, source: 'purchase'|'admin', stripe_session_id)`. UNIQUE on `(user_id, unit_id)`; partial UNIQUE on `stripe_session_id` for webhook idempotency.
-- **RLS:** SELECT on tasks/documents/document_images and storage.objects (bucket `pdfs`) requires `EXISTS` in `entitlements` for the ancestor `unit_id`, OR admin role.
+- **RLS:** SELECT on tasks/documents/document_images and storage.objects (bucket `pdfs`) requires `EXISTS` in `entitlements` for the ancestor `unit_id` **and** the ancestor `kurse.published` — OR admin role.
 - **Flow:** user clicks "Freischalten – €3" → form posts to `/api/checkout/[unitId]` → server creates Checkout Session and redirects → user pays on Stripe → Stripe redirects to `/api/checkout/success?session_id=…` which eager-inserts the entitlement using the service-role client (idempotent on `stripe_session_id`) → `/api/stripe/webhook` covers the case where the user closes the tab.
 - **Admin grants:** insert directly into `entitlements` with `source = 'admin'` (via Supabase dashboard or a future admin action) — audit-log with `action='grant', entity_type='entitlement'`.
 - **Env requirements:** `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_UNIT_PRICE_ID`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `NEXT_PUBLIC_SITE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
@@ -78,10 +78,10 @@ Kurs (Course)
 | `profiles` | SELECT where `id = auth.uid()` | Users see only their own profile |
 | `kurse` | SELECT where `published = TRUE` (auth); INSERT/UPDATE/DELETE where role = admin | Published courses visible to all; admins manage |
 | `units` | SELECT via subquery to `kurse.published`; INSERT/UPDATE/DELETE where role = admin | Units stay browseable for non-purchasers (so they can see what to buy) |
-| `tasks/documents` | SELECT via subquery to `entitlements` + admin override; INSERT/UPDATE/DELETE where role = admin | Content gated by purchase |
-| `document_images` | SELECT via join to `entitlements` + admin override; INSERT/DELETE where role = admin | Content gated by purchase |
+| `tasks/documents` | SELECT via subquery to `entitlements` **joined up to `kurse.published`** + admin override; INSERT/UPDATE/DELETE where role = admin | Content gated by purchase *and* by the Kurs still being published |
+| `document_images` | SELECT via join to `entitlements` **and `kurse.published`** + admin override; INSERT/DELETE where role = admin | Same gate, one level deeper |
 | `entitlements` | SELECT own rows or admin; INSERT/DELETE where role = admin (webhook inserts via service-role) | Users see their grants; admins manage |
-| `storage.objects` (`pdfs` bucket) | INSERT/DELETE where bucket = `pdfs` and role = admin; SELECT requires entitlement for the unit owning the path | File access matches in-DB access |
+| `storage.objects` (`pdfs` bucket) | INSERT/DELETE where bucket = `pdfs` and role = admin; **SELECT via two OR'd policies** — an unconditional admin one, and one requiring an entitlement for the unit owning the path **and** a published Kurs | File access matches in-DB access; admins keep archived files |
 | `audit_logs` | SELECT/INSERT where role = admin; no UPDATE/DELETE | Immutable audit trail; admin-readable only |
 | `editor_documents` | SELECT/INSERT/UPDATE/DELETE where role = admin (not filtered by `created_by`) | Drafts are admin-only; both admins see and edit all drafts |
 | `editor_images` | SELECT/INSERT/DELETE where role = admin (no UPDATE — rows are immutable) | Editor images admin-only; the bucket-wide admin storage policies cover their objects (entitlement SELECT never matches these paths) |
@@ -319,8 +319,8 @@ A Dokument is addressable at `/dokumente/[docId]` (`documentUrl()`). The segment
 
 Access reuses the two mechanisms that already exist and adds none. Both surfaces below read through **`loadDocumentSurface()`** so neither can become the laxer of the two:
 
-1. **Entitlement is RLS's job** — `documents` SELECT requires a purchase for the owning Unit (or admin), so an unentitled visitor's query returns no row.
-2. **`kurse.published` is re-checked in app code**, with an admin bypass, exactly as `/api/file` does — the document policies deliberately dropped the `published` subquery, so this app-level check is what makes an archived Kurs dark.
+1. **Entitlement is RLS's job** — `documents` SELECT requires a purchase for the owning Unit *and* a published parent Kurs (or admin), so both an unentitled visitor and a reader of an archived Kurs get no row.
+2. **`kurse.published` is re-checked in app code**, with an admin bypass, exactly as `/api/file` does. Since #80 the policy checks it too, so this is now defence in depth rather than the only gate — keep it: it is what lets an *admin* read the row and still be refused the student surface, and the refusal it produces is the one that stays uniform across all three failure modes.
 
 Every failure — unknown id, no entitlement, archived Kurs — collapses into one refusal; distinguishing them would leak which documents exist to someone who cannot read them. The full page turns that into `notFound()`, the overlay into a „nicht gefunden" panel inside the dialog.
 
@@ -508,6 +508,13 @@ Migrations live in `supabase/`. Apply them in order — first to dev (Supabase S
 | `add_editor_documents.sql` | `editor_documents` drafts table (admin-only RLS, `updated_at` trigger) + audit `entity_type` extension |
 | `add_editor_images.sql` | `editor_images` table (admin-only RLS, cascade with draft) + audit `entity_type` extension (`editor_image`); no storage-policy changes needed |
 | `add_document_content.sql` | `documents.content` JSONB (published document snapshot, NULL for legacy rows) + `documents_file_type_check` CHECK adding `interactive`; no RLS changes needed — the row is already entitlement-gated |
+| `add_rls_published_conjunct.sql` | Re-adds the `published` conjunct to the four child SELECT policies (tasks, documents, document_images, `pdfs` storage objects) so an archived Kurs goes dark in the database, not only in app code (#80). No-op for published Kurse; admins unaffected |
+
+**Verification checks** live in `supabase/checks/` — SQL scripts that prove a guarantee against a real database, for guarantees no Vitest seam can reach. Each one runs inside a transaction that ends in `ROLLBACK`. Run them against **dev**, after applying the migration they belong to:
+
+| File | Proves |
+|------|--------|
+| `rls_published_conjunct_check.sql` | An unpublished Kurs is unreadable to an entitled non-admin and to anonymous, fully readable to an admin, and unchanged for a published Kurs (#80). Fails before `add_rls_published_conjunct.sql`, passes after |
 
 ## Common Tasks
 
@@ -540,9 +547,19 @@ LIMIT 50;
 
 ### Enable/Disable a Kurs
 
-Set `published = true/false` in the `kurse` table. The Kurs and its Units appear/disappear instantly via RLS, and `/api/file` + `/api/image` immediately 403 non-admins for everything beneath it.
+Set `published = true/false` in the `kurse` table. Everything beneath it appears/disappears instantly via RLS — Units, Aufgaben, Dokumente, Dokumentbilder and the `pdfs` storage objects alike — and `/api/file` + `/api/image` immediately 403 non-admins.
 
-⚠ Per the Key Rules above, this hides the **navigation path and the files** — not the rows. `tasks`/`documents`/`document_images` rows stay readable to a user holding an `entitlements` row for the Unit, since their policies no longer check `published`. Admins keep full access to both rows and files, which is what makes an unpublished Kurs usable as an archive.
+Since #80 this hides the **rows too**, not only the navigation path and the files: the four child policies read *entitled AND published*, so a user holding an `entitlements` row for a Unit under an archived Kurs reads nothing at all. Admins keep full access to rows and files, which is what makes an unpublished Kurs usable as an archive.
+
+⚠ Unpublishing therefore **revokes reading for people who already paid** for a Unit underneath. That is the intended archive semantics, not a bug — but before flipping a Kurs dark in prod, look at exactly whose view changes:
+
+```sql
+SELECT e.user_id, k.title AS kurs, u.title AS einheit
+FROM public.entitlements e
+JOIN public.units u ON u.id = e.unit_id
+JOIN public.kurse k ON k.id = u.kurs_id
+WHERE k.id = '<the kurs about to be archived>';
+```
 
 ## Debugging Tips
 
@@ -550,7 +567,8 @@ Set `published = true/false` in the `kurse` table. The Kurs and its Units appear
 |-------|--------------|-----|
 | Admin page accessible without being admin | Proxy not running | Check `src/proxy.ts` exists at `src/` root (Next.js 16 renamed middleware → proxy) |
 | File proxy returns 403 | Course not published | Set `kurse.published = true` for the parent course |
-| `/dokumente/[docId]` 404s for a user who can see the document in the accordion | Parent Kurs unpublished — the route re-checks `published` in app code (admins bypass) | Set `kurse.published = true`, or confirm the 404 is intended (archived Kurs) |
+| `/dokumente/[docId]` 404s for a user who can see the document in the accordion | Parent Kurs unpublished — since #80 RLS withholds the row, and the route re-checks `published` in app code as well (admins bypass) | Set `kurse.published = true`, or confirm the 404 is intended (archived Kurs) |
+| An entitled user suddenly sees an empty Einheit / a Kurs's content vanished | Its Kurs was unpublished. Since #80 that hides the rows, not just the files | Intended archive behaviour — republish the Kurs, or confirm the archiving was deliberate. Run `supabase/checks/rls_published_conjunct_check.sql` if you suspect the policies themselves |
 | `/dokumente/[docId]` 404s for everyone including admins | No such document id | The route deliberately does not distinguish unknown / unentitled / archived — check the id against `documents` |
 | An in-app document link navigates full-page instead of opening the overlay | The link is a plain `<a>` or a `Link` outside `DocumentLink`, or `src/app/@modal/default.tsx` was removed | Interception only fires on client-side navigation through `next/link`; route in-app document links through `DocumentLink` |
 | Every route 404s after touching the root layout | The `@modal` slot lost its `default.tsx` | A parallel slot without a `default` makes every hard navigation that does not match it a 404 — restore `src/app/@modal/default.tsx` |

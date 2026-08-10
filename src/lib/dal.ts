@@ -1,6 +1,7 @@
 import 'server-only'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
+import type { BacklinkSourceKind } from '@/lib/editor/backlinks'
 import type { LinkTargetKind } from '@/lib/editor/links'
 import type { LinkTargetOwnership } from '@/lib/link-target-state'
 import type {
@@ -545,6 +546,75 @@ type LinkTargetDocumentOwnershipRow = {
       kurse: { published: boolean }
     }
   }
+}
+
+// ── Backlink scan (#75) ─────────────────────────────────────────────────────
+
+/** One document a backlink scan has to look inside, content still unparsed. */
+export interface BacklinkScanRow {
+  kind: BacklinkSourceKind
+  id: string
+  title: string
+  /** Raw stored JSON — the caller parses it (`readDocumentJson`). */
+  content: unknown
+}
+
+/**
+ * Every document that could hold a link: published snapshots AND unpublished
+ * drafts (#75, spec #63 §6).
+ *
+ * This is the thin shell under the pure scan — it fetches and orders, and
+ * knows nothing about what a link looks like. The parse and the matching live
+ * in `lib/editor/backlinks.ts`, which is where they can be unit-tested.
+ *
+ * ⚠ IT READS THE WHOLE CATALOGUE, DELIBERATELY. Nothing about links is
+ * persisted — no links table, no index — so „what points at this document" can
+ * only be answered by looking. That was the trade taken over a publish-written
+ * table, which drifts and cannot see drafts at all. Two round trips, run only
+ * when an author is about to delete or orphan something.
+ *
+ * Legacy rows (pdf, image, image_collection) carry no `content` and are
+ * filtered out in the query rather than parsed and discarded: they predate
+ * links entirely and can never hold one.
+ *
+ * Admin-only in practice — both callers start with `getAdminUser()`, and while
+ * `documents` is readable by entitled students, `editor_documents` is
+ * admin-only on all four verbs, so a non-admin would silently scan half the
+ * catalogue. A read error is THROWN rather than returned empty: an empty scan
+ * says „nothing links here", and letting a failed query say that would delete
+ * a linked document without a word.
+ *
+ * Published rows first, then drafts, each group ordered by title — the
+ * hierarchy's `position ASC, created_at ASC` is meaningless across Tasks, and
+ * the result is read as a list of names. Grouping by kind rather than
+ * interleaving is deliberate: the warning lists live content before drafts,
+ * because that is the half a student can already see.
+ */
+export async function getBacklinkScanRows(): Promise<BacklinkScanRow[]> {
+  const supabase = await createClient()
+  const [publishedResult, draftResult] = await Promise.all([
+    supabase
+      .from('documents')
+      .select('id, title, content')
+      .not('content', 'is', null)
+      .order('title', { ascending: true }),
+    supabase
+      .from('editor_documents')
+      .select('id, title, content')
+      .order('title', { ascending: true }),
+  ])
+  if (publishedResult.error) {
+    throw new Error(
+      `Veröffentlichte Dokumente konnten nicht gelesen werden: ${publishedResult.error.message}`
+    )
+  }
+  if (draftResult.error) {
+    throw new Error(`Entwürfe konnten nicht gelesen werden: ${draftResult.error.message}`)
+  }
+  return [
+    ...(publishedResult.data ?? []).map((row) => ({ kind: 'published' as const, ...row })),
+    ...(draftResult.data ?? []).map((row) => ({ kind: 'draft' as const, ...row })),
+  ]
 }
 
 // ── Entitlement queries ─────────────────────────────────────────────────────

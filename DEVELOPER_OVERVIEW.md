@@ -101,6 +101,7 @@ src/
 │   │   ├── editor-images.ts       # uploadEditorImage (implicit anchor draft, storage upload)
 │   │   ├── editor-publish.ts      # publishEditorDraft (PNG → Document; create / update-in-place)
 │   │   ├── link-targets.ts        # listLinkTargetDocuments (#72) — the link picker's lazy fourth level; a READ, so no audit entry and no revalidation
+│   │   ├── backlinks.ts           # scanDocumentBacklinks (#75) — what links to a Dokument, scanned on demand for the delete + „Als neues Dokument" warnings; a READ, so no audit entry and no revalidation
 │   │   └── index.ts               # Re-exports all actions
 │   └── auth.ts                    # signIn, signUp, signOut
 ├── app/
@@ -209,6 +210,7 @@ src/
 │   │   ├── document-version.ts    # Upgrade-on-read: pure vN→vN+1 chain + readDocumentJson (the boundary for stored snapshots) — pure
 │   │   ├── anchors.ts             # Sprungmarken (#71): the anchor's Zod shape + its block-dataset contract + the registry that resolves ids duplicated by copy/paste. DOM-only (no MathJax, no server), so jsdom-testable — but it WRITES block datasets and remembers who owns which id, so not pure
 │   │   ├── links.ts               # Cross-document links (#72): the target union ({kursId}|{unitId}|{docId}|{docId,anchorId}), the v1.1 `link` node's Zod shape, the chip's DOM contract, the kind glyph/label a chip shows (#73), and the picker seam types. DOM-only, no server
+│   │   ├── backlinks.ts           # Backlink scan (#75): given every parsed document — published AND draft — which of them link to one Dokument, plus the German warnings the two call sites show. Pure; nothing about links is stored, so the answer is computed at warning time
 │   │   ├── document-render.ts     # Student renderer: document JSON → live DOM, reusing the importer + resolver; MathJax-free. Owns the student-editable inputs and the recompute they trigger, and swaps each authoring link chip for a navigable <a> (#73), so it is imperative (owns its DOM, binds listeners) — React must not reconcile inside its container
 │   │   ├── publish-plan.ts        # Copy-fresh-then-swap image re-homing plan for publishing (what to copy/rewrite/delete) — pure
 │   │   ├── expression-evaluator.ts # CSP-safe math tokenizer/parser — replaces new Function; errors → NaN
@@ -406,10 +408,10 @@ Every major route segment has scoped `error.tsx` and `loading.tsx` files. A fail
 | `deleteEditorDraft` | `editor-documents.ts` | Delete editor draft + its `editor_images` rows (cascade) + storage objects |
 | `uploadEditorImage` | `editor-images.ts` | Upload an editor image to storage + insert `editor_images` row; creates the implicit „Unbenannt" anchor draft when no draft exists yet |
 | `publishEditorDraft` | `editor-publish.ts` | Publish a draft's rendered PNG as a Document: updates the linked Document's file + title in place by default (same entry for students), or creates + links a new Document (first publish, „Als neues Dokument", dead-link fallback); mirrors the documents.ts upload/rollback pattern and maintains `published_document_id` |
-
 | `listLinkTargetDocuments` | `link-targets.ts` | The link picker's lazy fourth level (#72): the Dokumente of one Aufgabe plus their Sprungmarken, and **only if the Aufgabe's Kurs is published** — the rule that makes „unpublished targets cannot be selected" true at the boundary. Parses the published snapshot server-side so the content itself never crosses to the client |
+| `scanDocumentBacklinks` | `backlinks.ts` | What links to a Dokument (#75), across published snapshots **and** unpublished drafts. Backs both warnings — deleting a linked Dokument, and „Als neues Dokument", the one publish path that mints a new id and strands inbound links on the old one. Reads the whole catalogue because nothing about links is persisted; parses server-side, so only source names cross to the client. Keeps „could not read it" apart from „nothing links here": an unparseable snapshot is counted, a failed query returns `{ ok: false }`, and neither blocks the operation |
 
-All MUTATING actions: validate input via Zod → auth check via `getAdminUser()` → database operation → audit log → revalidate cache. `listLinkTargetDocuments` is the one read-only action: it validates and auth-checks the same way, but writes nothing, so it neither audits nor revalidates.
+All MUTATING actions: validate input via Zod → auth check via `getAdminUser()` → database operation → audit log → revalidate cache. `listLinkTargetDocuments` and `scanDocumentBacklinks` are the read-only actions: they validate and auth-check the same way, but write nothing, so they neither audit nor revalidate.
 
 ### Auth (`src/actions/auth.ts`)
 
@@ -605,6 +607,7 @@ Set `published = true/false` in the `kurse` table. The Kurs and its Units appear
 | Document overlay navigation | `src/app/@modal/*`, `src/components/documents/DocumentOverlay.tsx`, `src/components/documents/DocumentLink.tsx`, `src/app/layout.tsx` |
 | Where a link goes | `src/lib/link-navigation.ts`, `src/app/einheiten/[unitId]/page.tsx`, `makeLinksNavigable` in `src/lib/editor/document-render.ts` |
 | Whether a link still goes anywhere | `src/lib/link-target-state.ts`, `src/lib/unreachable-links.ts`, `src/app/api/link-target/[kind]/[id]/route.ts`, `getLinkTargetOwnership` in `src/lib/dal.ts`, `src/components/documents/LinkLockedCard.tsx` |
+| What links TO a Dokument (delete / „Als neues Dokument" warnings) | `src/lib/editor/backlinks.ts`, `src/actions/admin/backlinks.ts`, `getBacklinkScanRows` in `src/lib/dal.ts`, `handleDelete` in `src/components/admin/AdminTree.tsx`, `confirmOrphaning` in `src/components/admin/editor/ExportBar.tsx` |
 | LaTeX editor core (controller + pure modules) | `src/lib/editor/*` |
 | LaTeX editor UI (page, shell, toolbar, export, drafts) | `src/app/admin/editor/*`, `src/components/admin/editor/*` |
 | Standalone reference editor (parity ground truth) | `latexEditor/*.html` |

@@ -1,9 +1,12 @@
 'use client'
 
 import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
+import { anchoredBlocks } from '@/lib/editor/anchors'
 import { renderDocumentJson } from '@/lib/editor/document-render'
 import { readDocumentJson } from '@/lib/editor/document-version'
 import { loadMathJax } from '@/lib/editor/mathjax-loader'
+import { linkHref, linkOpensOverlay } from '@/lib/link-navigation'
 import { DocumentPng } from './DocumentPng'
 import { Watermark } from './Watermark'
 import './interactive-document.css'
@@ -73,6 +76,17 @@ function LiveDocument({
   const hostRef = useRef<HTMLDivElement | null>(null)
   const [renderFailed, setRenderFailed] = useState(false)
 
+  // The router is reached through a ref rather than through the effect's
+  // dependencies, and that is not a style choice: re-running the effect calls
+  // `renderDocumentJson` again, which rebuilds the whole document and throws
+  // away every value the student typed into it. Nothing that merely CHANGES may
+  // be a dependency of this effect.
+  const router = useRouter()
+  const routerRef = useRef(router)
+  useEffect(() => {
+    routerRef.current = router
+  }, [router])
+
   useEffect(() => {
     if (!snapshot.ok) {
       console.error(`[InteractiveDocument ${docId}] Snapshot abgelehnt, PNG-Fallback:`, snapshot.error)
@@ -99,14 +113,42 @@ function LiveDocument({
         })
     }
 
+    // Where a link lands inside THIS document (#73). Run after the first
+    // typeset rather than straight after the render: a formula changes height
+    // when its source is replaced by SVG, so scrolling before that settles
+    // aims at a position the document is about to move out from under.
+    const scrollToMarkedSpot = () => {
+      const anchorId = markedSpotInUrl()
+      if (!anchorId) return
+      // Matched by walking the marked blocks rather than by a selector: an
+      // anchor id is opaque and only ever required to be non-empty, so it
+      // cannot be interpolated into one safely.
+      const block = anchoredBlocks(host).find((el) => el.dataset['anchorId'] === anchorId)
+      block?.scrollIntoView({ block: 'start' })
+    }
+
     try {
       const { renderTargets } = renderDocumentJson(snapshot.doc, host, {
         imageUrl: (imageId) => `/api/image/${imageId}`,
+        linkHref,
+        // Client-side, so the page underneath is never unmounted and the
+        // values the student typed survive the trip (#70). The href comes back
+        // from the chip rather than being resolved again, so a click cannot
+        // land anywhere other than where the chip says it goes.
+        //
+        // `scroll: false` only for the overlay: it stops the router discarding
+        // the reading position of a page that stays on screen, and would
+        // strand a student halfway down a Kurs page they have never seen.
+        followLink: (target, href) =>
+          routerRef.current.push(href, { scroll: !linkOpensOverlay(target) }),
         // Only the formulas whose value actually moved — an untouched formula
         // must not re-typeset, and re-typesetting is what this costs.
         onRecompute: typeset,
       })
       typeset(renderTargets)
+      queue = queue.then(() => {
+        if (!cancelled) scrollToMarkedSpot()
+      })
     } catch (err) {
       // Leave nothing half-drawn behind before handing over to the picture.
       host.replaceChildren()
@@ -119,8 +161,15 @@ function LiveDocument({
       })
     }
 
+    // A second link to another Sprungmarke in the document already on screen
+    // changes the fragment without remounting anything, so the jump has to be
+    // listened for. Every mounted document hears it and only the one actually
+    // holding that marked spot moves.
+    window.addEventListener('hashchange', scrollToMarkedSpot)
+
     return () => {
       cancelled = true
+      window.removeEventListener('hashchange', scrollToMarkedSpot)
     }
   }, [snapshot, docId])
 
@@ -132,6 +181,23 @@ function LiveDocument({
       <Watermark id={watermarkId} />
     </div>
   )
+}
+
+/**
+ * The Sprungmarke the current URL asks for, or `''`.
+ *
+ * A fragment is user-supplied text — a hand-typed or truncated URL can carry a
+ * broken escape sequence, and `decodeURIComponent` throws on those. Falling
+ * back to the raw fragment keeps a bad URL from throwing out of a listener over
+ * something as small as a scroll position.
+ */
+function markedSpotInUrl(): string {
+  const raw = window.location.hash.slice(1)
+  try {
+    return decodeURIComponent(raw)
+  } catch {
+    return raw
+  }
 }
 
 /**

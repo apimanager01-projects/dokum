@@ -18,8 +18,10 @@ import {
   LinkTargetSchema,
   createLinkChip,
   linkTargetAnchorId,
+  linkTargetIcon,
   linkTargetId,
   linkTargetKind,
+  linkTargetKindLabel,
   readLinkChip,
   sameLinkTarget,
   writeLinkChip,
@@ -176,4 +178,28 @@ describe('link chip dataset', () => {
     expect(readLinkChip(el)).toBeNull()
   })
 
+})
+
+// ── What a chip says about its target (#73) ─────────────────────────────────
+
+describe('how far a link travels', () => {
+  it('gives each kind its own glyph, and a Sprungmarke its own', () => {
+    const glyphs = [
+      linkTargetIcon({ kursId: KURS_ID }),
+      linkTargetIcon({ unitId: UNIT_ID }),
+      linkTargetIcon({ docId: DOC_ID }),
+      linkTargetIcon({ docId: DOC_ID, anchorId: 'anc_1' }),
+    ]
+    expect(new Set(glyphs).size).toBe(4)
+    expect(glyphs.every((g) => g.length > 0)).toBe(true)
+  })
+
+  it('names the target in German for the readers who get no glyph', () => {
+    // The glyph is CSS chrome so it never reaches a screen reader; this is what
+    // does, and it has to draw the same four distinctions.
+    expect(linkTargetKindLabel({ kursId: KURS_ID })).toBe('Kurs')
+    expect(linkTargetKindLabel({ unitId: UNIT_ID })).toBe('Einheit')
+    expect(linkTargetKindLabel({ docId: DOC_ID })).toBe('Dokument')
+    expect(linkTargetKindLabel({ docId: DOC_ID, anchorId: 'anc_1' })).toBe('Sprungmarke')
+  })
 })

@@ -216,6 +216,60 @@
   box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.45);
 }
 
+/* ------------------------------------------------------------- Link-Chips */
+
+/*
+ * A link inside a sentence (#73). It reads as a word, not as a button: the
+ * label carries the meaning and the glyph says how far the link travels — a
+ * Kurs, an Einheit, a Dokument or a Sprungmarke inside one.
+ *
+ * THERE IS NO HOVER PREVIEW AND THERE IS NOT MEANT TO BE. The peek was dropped
+ * (spec §6): the overlay shows the target one click away with everything the
+ * student typed intact, so a hover would only make the product quietly
+ * different on a touch screen. The colour shift below is the ordinary
+ * this-is-clickable feedback, and it is all a pointer gets.
+ */
+.dokum-document .doc-link {
+  display: inline;
+  padding: 1px 7px;
+  margin: 0 1px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #3730a3;
+  border: 1px solid #c7d2fe;
+  font-weight: 500;
+  text-decoration: none;
+  /* Wraps at the end of a line like the words around it rather than pushing
+     the whole chip onto the next one. */
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  transition: background-color 0.12s ease;
+}
+
+.dokum-document .doc-link:hover {
+  background: #e0e7ff;
+}
+
+.dokum-document .doc-link:focus-visible {
+  outline: 2px solid #4338ca;
+  outline-offset: 2px;
+}
+
+/* The glyph is drawn from the attribute the renderer stamps (document-render,
+   `replaceWithLinkAnchor`), which reads the one map in lib/editor/links.ts. A
+   pseudo-element keeps it out of `textContent`, so a student copying the
+   sentence gets the words and not the emoji. */
+.dokum-document .doc-link::before {
+  content: attr(data-link-icon) ' ';
+}
+
+/* A Sprungmarke is where a link LANDS — the spot is scrolled to, so it must
+   not end up flush against the top edge, under the sticky header of either
+   surface that shows a document. */
+.dokum-document [data-anchor-id] {
+  scroll-margin-top: 4.5rem;
+}
+
 @media (max-width: 640px) {
   .dokum-document {
     font-size: 16px;

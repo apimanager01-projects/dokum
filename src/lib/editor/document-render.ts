@@ -72,6 +72,14 @@ import {
   type FieldGraph,
   type LineToken,
 } from './field-resolver'
+import {
+  LINK_CHIP_SELECTOR,
+  linkTargetIcon,
+  linkTargetKindLabel,
+  readLinkChip,
+  type DocumentLink,
+  type LinkTarget,
+} from './links'
 import { formatGermanEntry, formatValue, parseGermanEntry } from './number-format'
 
 export interface DocumentRenderAdapters {
@@ -82,6 +90,29 @@ export interface DocumentRenderAdapters {
    * needed.
    */
   imageUrl(imageId: string): string
+  /**
+   * Browser URL for a link target (#73). REQUIRED, not optional: a chip with no
+   * href is a dead end in the middle of a sentence, and making it optional
+   * would let a surface ship one by forgetting a line. Where a link goes is app
+   * knowledge, so it is injected rather than derived here.
+   */
+  linkHref(target: LinkTarget): string
+  /**
+   * Follows a link WITHOUT leaving the page, when the caller can (#73). It
+   * exists because the student's typed values live only in this DOM: a real
+   * navigation unmounts the source document and takes them with it, while a
+   * client-side one opens the target as an overlay over a page that stays
+   * mounted (#70).
+   *
+   * It is handed the href the chip is actually WEARING rather than resolving
+   * the target a second time, so a click can never travel somewhere other than
+   * where the chip says it goes.
+   *
+   * Optional, and its absence is a real fallback rather than a broken state —
+   * the chip is a genuine `<a href>`, so the browser navigates on its own. The
+   * student loses what they typed, which is worse, but nothing is dead.
+   */
+  followLink?(target: LinkTarget, href: string): void
   /**
    * Called after a student edit has been resolved through the whole document
    * (#68), with the formula elements whose LaTeX actually changed — usually a
@@ -133,6 +164,7 @@ export function renderDocumentJson(
   // it by class and never descends into it, and the graph reads only its
   // dataset — so span or input makes no difference to any resolved value.
   makeInputsEditable(container, graph, renderTargets, adapters)
+  makeLinksNavigable(container, adapters)
 
   resolveDocument(container, graph, renderTargets, { writeFormulaText: true })
 
@@ -386,6 +418,87 @@ function controlSize(value: string): number {
 /** A field rendered as the student's editable control rather than as a pill. */
 function isStudentControl(el: HTMLElement): el is HTMLInputElement {
   return el.tagName === 'INPUT' && el.classList.contains('student-input')
+}
+
+// ── Link chips (#73) ────────────────────────────────────────────────────────
+
+/**
+ * Turns every link the author placed into one a student can follow. The
+ * importer builds the same opaque `contenteditable="false"` span the editor
+ * uses — right for a surface where a link is a thing to re-target, wrong for
+ * one where it is a thing to travel through.
+ *
+ * So a chip becomes a real `<a href>`, the same swap {@link replaceWithControl}
+ * makes for inputs and for the same reason: the platform then supplies what
+ * would otherwise be a hand-rolled key handler — focus order, activation by
+ * Enter, „open in new tab", and the browser's own navigation when nothing
+ * intercepts the click.
+ *
+ * WHAT IS DELIBERATELY ABSENT IS HOVER. Nothing previews, nothing prefetches on
+ * mouse-over, no `title` tooltip: the peek was dropped (spec §6) because the
+ * overlay does it better one click away, and a hover would make the product
+ * quietly different on a touch screen. The label plus the kind glyph is the
+ * whole of "say where you go before I click".
+ */
+function makeLinksNavigable(container: HTMLElement, adapters: DocumentRenderAdapters): void {
+  for (const chip of Array.from(container.querySelectorAll<HTMLElement>(LINK_CHIP_SELECTOR))) {
+    const link = readLinkChip(chip)
+    // Not reachable through the importer, which only builds a chip from a
+    // parsed link node. Left exactly as it is rather than guessed at: the
+    // words stay in the sentence, unlinked.
+    if (!link) continue
+
+    const href = adapters.linkHref(link.target)
+    const anchor = replaceWithLinkAnchor(chip, link, href)
+    // Per-element, like the input controls: they are rebuilt whenever the
+    // container is re-rendered, so their listeners die with them.
+    anchor.addEventListener('click', (event) => {
+      const follow = adapters.followLink
+      if (!follow || !isPlainLeftClick(event)) return
+      // Without this the browser navigates as well, unmounting the document
+      // and everything the student typed into it.
+      event.preventDefault()
+      follow(link.target, href)
+    })
+  }
+}
+
+/** Swaps an authoring chip for the student's navigable one. */
+function replaceWithLinkAnchor(
+  chip: HTMLElement,
+  link: DocumentLink,
+  href: string
+): HTMLAnchorElement {
+  const anchor = chip.ownerDocument.createElement('a')
+  // Copy every attribute wholesale, as the input control does: `data-link-*` is
+  // the chip's identity, `class` is what the stylesheet matches, and a key
+  // added to the link node later travels with them. The editor-only
+  // `contenteditable` rides along and is taken off by `stripEditorChrome`,
+  // which is where every such attribute goes.
+  for (const attr of Array.from(chip.attributes)) anchor.setAttribute(attr.name, attr.value)
+  anchor.setAttribute('href', href)
+  // The glyph is drawn by CSS from this attribute rather than written into the
+  // chip, so it never lands in the text a student selects and copies out — the
+  // same rule the authoring chip follows, reading the same map.
+  anchor.dataset['linkIcon'] = linkTargetIcon(link.target)
+  // Which means a screen reader would get nothing at all from it. This is how
+  // "what kind of thing does this point at" reaches a reader who cannot see the
+  // icon (spec §6, user story 19).
+  anchor.setAttribute('aria-label', `${link.label} – ${linkTargetKindLabel(link.target)}`)
+  anchor.textContent = link.label
+  chip.replaceWith(anchor)
+  return anchor
+}
+
+/**
+ * A click the app should handle itself. Everything else — a modifier held, the
+ * middle button — is the student asking the BROWSER for something (a new tab, a
+ * new window), and intercepting it would take that away.
+ */
+function isPlainLeftClick(event: MouseEvent): boolean {
+  return (
+    event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey
+  )
 }
 
 // ── Field graph over the rendered DOM ───────────────────────────────────────

@@ -21,9 +21,13 @@ function view(kursPublished: boolean): DocumentWithAncestry {
 /**
  * The rule these cases pin down is the one app-level access check of the
  * student document surfaces (#69, #70): RLS has already refused the row to
- * anyone without an entitlement, so all that is left here is the parent Kurs's
- * `published` flag, which the document policies deliberately dropped — plus
- * the admin bypass /api/file has always had.
+ * anyone without an entitlement — and, since #80, to anyone whose Kurs is
+ * archived — so what is left here is that same `published` rule restated in
+ * app code, plus the admin bypass /api/file has always had.
+ *
+ * That makes these cases the ONLY automated statement of the archive rule that
+ * `npm test` can run: the policy half lives in the database and is proved by
+ * supabase/checks/rls_published_conjunct_check.sql instead. Keep both.
  *
  * It is a predicate over a NULLABLE view on purpose. The full page and the
  * overlay must not be able to tell "no such document" apart from "not yours"

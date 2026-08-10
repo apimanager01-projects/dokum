@@ -54,7 +54,19 @@ export async function GET(
   }
 
   const role = user.app_metadata?.['role'] as string | undefined
-  const target = await getLinkTargetOwnership(kind, id)
+
+  let target
+  try {
+    target = await getLinkTargetOwnership(kind, id)
+  } catch (err) {
+    // A read that FAILED is not a target that is GONE. Answering `missing`
+    // here would degrade a perfectly live link to plain text over a transient
+    // database error; a non-OK status is what the browser half reads as „no
+    // verdict", leaving every chip exactly as it was.
+    console.error('[link-target] Auflösung fehlgeschlagen:', err)
+    return NextResponse.json({ error: 'Link-Ziel konnte nicht aufgelöst werden.' }, { status: 503 })
+  }
+
   // Skipped where nothing is gated — a Kurs and an Einheit cost no purchase to
   // reach, so the query would be asked and thrown away.
   const entitled = target?.gatedBy

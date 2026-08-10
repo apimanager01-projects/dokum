@@ -473,7 +473,8 @@ export async function getLinkTargetOwnership(
   const supabase = createServiceClient()
 
   if (kind === 'kurs') {
-    const { data } = await supabase.from('kurse').select('title, published').eq('id', id).maybeSingle()
+    const { data, error } = await supabase.from('kurse').select('title, published').eq('id', id).maybeSingle()
+    if (error) throw linkTargetReadFailed(kind, error)
     if (!data) return null
     // A Kurs page costs nothing to open — nothing gates it but its own
     // `published` flag, which is the archive.
@@ -481,11 +482,12 @@ export async function getLinkTargetOwnership(
   }
 
   if (kind === 'unit') {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('units')
       .select('title, kurse!inner(published)')
       .eq('id', id)
       .maybeSingle()
+    if (error) throw linkTargetReadFailed(kind, error)
     if (!data) return null
     const row = data as unknown as { title: string; kurse: { published: boolean } }
     // Deliberately NOT gated, even though buying an Einheit is the whole
@@ -496,11 +498,12 @@ export async function getLinkTargetOwnership(
     return { title: row.title, kursPublished: row.kurse.published, gatedBy: null }
   }
 
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('documents')
     .select('title, tasks!inner(units!inner(id, title, description, kurse!inner(published)))')
     .eq('id', id)
     .maybeSingle()
+  if (error) throw linkTargetReadFailed(kind, error)
   if (!data) return null
   const row = data as unknown as LinkTargetDocumentOwnershipRow
   const unit = row.tasks.units
@@ -509,6 +512,24 @@ export async function getLinkTargetOwnership(
     kursPublished: unit.kurse.published,
     gatedBy: { id: unit.id, title: unit.title, description: unit.description },
   }
+}
+
+/**
+ * ⚠ A FAILED READ IS THROWN, NEVER COLLAPSED INTO `null`.
+ *
+ * `null` here means „no such row", which becomes the verdict `missing` and
+ * degrades a live link to plain text in the middle of a sentence. A transient
+ * database failure returning `null` would therefore silently unlink a document
+ * that is perfectly fine — the exact opposite of the fail-open rule the rest of
+ * this path is built on, and invisible, because it arrives as a confident 200.
+ *
+ * The route turns this into a non-OK status, which the browser half reads as
+ * „no verdict" and leaves every chip exactly as the renderer built it. This is
+ * the one DAL function that distinguishes the two, because it is the one whose
+ * empty result is a user-visible statement rather than a 404.
+ */
+function linkTargetReadFailed(kind: LinkTargetKind, error: { message: string }): Error {
+  return new Error(`Link-Ziel (${kind}) konnte nicht gelesen werden: ${error.message}`)
 }
 
 // The raw PostgREST shape of the document query above — nested embeds are not

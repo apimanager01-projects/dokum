@@ -164,10 +164,11 @@ describe('applyLinkTargetDescriptor — a locked target', () => {
     expect(chip.getAttribute('aria-label')).toContain('gesperrt')
   })
 
-  it('reveals nothing about the target beyond the words already in the sentence', () => {
-    // The Einheit is the offer and may be named. The locked DOCUMENT's title is
-    // not the offer, and putting it in the page would tell an unentitled reader
-    // what is behind the paywall.
+  it('leaves the sentence itself carrying only the words the author wrote', () => {
+    // The descriptor knows the target's title and the card DOES show it — the
+    // student is told what they would be buying. What must not happen is the
+    // resolver rewriting the running text of a document around it: the chip
+    // stays the author's label, so a verdict can never edit the material.
     const { host, link } = renderOneLink()
     applyLinkTargetDescriptor(link, LOCKED, () => {})
     expect(host.textContent).not.toContain(LOCKED.title)

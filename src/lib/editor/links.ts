@@ -134,7 +134,16 @@ export const LINK_KIND_ICON: Record<LinkTargetKind, string> = {
   document: '📄',
 }
 
-/** A Sprungmarke is not a kind of its own, but it does get its own glyph. */
+/**
+ * A Sprungmarke is not a kind of its own, but it does get its own glyph.
+ *
+ * ⚠ It is not the only one either: a chip whose target the student has not
+ * bought wears a lock instead (`lib/unreachable-links.ts`, #74). That one is
+ * deliberately NOT here — it says something about the READER rather than about
+ * the target, and entitlements are app knowledge this module stays free of. If
+ * you are chasing „where does a chip's glyph come from", it is these two plus
+ * {@link LINK_KIND_ICON}, all through `data-link-icon`.
+ */
 export const LINK_ANCHOR_ICON = '⚓'
 
 /** …and its own name, for the same reason (#73). */

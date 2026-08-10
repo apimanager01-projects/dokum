@@ -67,6 +67,10 @@ export function LinkLockedCard({
   return (
     <dialog
       ref={dialogRef}
+      // `aria-labelledby` wins whenever it resolves; the static label is the
+      // net under it, so a state that failed to render the line below degrades
+      // to a vaguely-named dialog rather than an unnamed one (DocumentOverlay
+      // carries the same pair for the same reason).
       aria-label="Einheit gesperrt"
       aria-labelledby={titleId}
       onClose={onDismiss}

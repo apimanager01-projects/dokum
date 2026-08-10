@@ -52,7 +52,7 @@ Kurs (Course)
 - Proxy (`src/proxy.ts` — Next.js 16 renamed the `middleware` convention to `proxy`) protects `/admin/*` routes and API proxy routes
 - Admin pages do **not** duplicate the auth check — the proxy is the single enforcement point
 - File proxy routes (`/api/file`, `/api/image`) verify the document belongs to a published course before serving — unauthenticated or unpublished-content requests return 401/403 at the application layer
-- `/api/link-target` (#74) is the one route that reads *past* RLS, and answers only with a verdict — locked, archived, missing, ok — plus the Einheit an unlock would buy. Never content, never a storage path. See [Unreachable Link Targets](#unreachable-link-targets-74)
+- `/api/link-target` (#74) is the only **read** route that answers past RLS (the service-role client is otherwise used by the payment routes, `/api/checkout/success` and `/api/stripe/webhook`, to *write*). It returns a verdict — locked, archived, missing, ok — plus the Einheit an unlock would buy. Never content, never a storage path. See [Unreachable Link Targets](#unreachable-link-targets-74)
 - JWT includes role automatically — no extra DB queries needed
 - Role grants: `UPDATE auth.users SET raw_app_meta_data = ... WHERE email = '...'` (user must sign out/in to refresh JWT)
 

@@ -1,5 +1,8 @@
 import 'server-only'
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
+import type { LinkTargetKind } from '@/lib/editor/links'
+import type { LinkTargetOwnership } from '@/lib/link-target-state'
 import type {
   Document,
   DocumentImage,
@@ -433,6 +436,94 @@ export async function getEditorImageFilePath(
     .eq('id', imageId)
     .single()
   return data ?? null
+}
+
+// ── Link target resolution (#74) ────────────────────────────────────────────
+
+/**
+ * What a link's target IS — title, whether its Kurs is still published, and
+ * the Einheit whose entitlement gates it. `null` when there is no such row.
+ *
+ * ⚠ THE ONE READ IN THIS FILE THAT BYPASSES RLS, and it does so for a reason
+ * the policies cannot serve: `documents` SELECT requires an entitlement, so the
+ * student we want to SELL to gets no row and cannot be told which Einheit to
+ * buy — locked and deleted look identical from the browser (#74).
+ *
+ * Three rules keep that bypass safe, and all three are in this function:
+ *
+ * 1. **It selects only what a refusal may name.** No `content`, no
+ *    `file_path`, no `description` of the target itself — the columns are
+ *    listed one by one and the list is the audit.
+ * 2. **It never learns who is asking.** No user id, no role, no entitlement
+ *    read: it answers „what is this" and nothing about „may you have it".
+ *    Being identity-free is what makes it unable to leak per-reader data.
+ * 3. **Its result must go through `describeLinkTarget` before crossing to the
+ *    browser** — that is where the reader's admin flag and entitlement decide
+ *    which of these fields the answer is allowed to carry, and every field
+ *    below is withheld from every verdict except `locked`.
+ *
+ * Consequently there is exactly one caller, `/api/link-target/[kind]/[id]`. A
+ * page rendering this straight into HTML would be a new way to read the
+ * catalogue.
+ */
+export async function getLinkTargetOwnership(
+  kind: LinkTargetKind,
+  id: string
+): Promise<LinkTargetOwnership | null> {
+  const supabase = createServiceClient()
+
+  if (kind === 'kurs') {
+    const { data } = await supabase.from('kurse').select('title, published').eq('id', id).maybeSingle()
+    if (!data) return null
+    // A Kurs page costs nothing to open — nothing gates it but its own
+    // `published` flag, which is the archive.
+    return { title: data.title as string, kursPublished: data.published as boolean, gatedBy: null }
+  }
+
+  if (kind === 'unit') {
+    const { data } = await supabase
+      .from('units')
+      .select('title, kurse!inner(published)')
+      .eq('id', id)
+      .maybeSingle()
+    if (!data) return null
+    const row = data as unknown as { title: string; kurse: { published: boolean } }
+    // Deliberately NOT gated, even though buying an Einheit is the whole
+    // paywall: the Einheit page is readable without the purchase and IS the
+    // unlock surface (paywall + teaser + „Freischalten"). Interposing a card
+    // in front of a link to it would sell the student a worse copy of the page
+    // they are one click from.
+    return { title: row.title, kursPublished: row.kurse.published, gatedBy: null }
+  }
+
+  const { data } = await supabase
+    .from('documents')
+    .select('title, tasks!inner(units!inner(id, title, description, kurse!inner(published)))')
+    .eq('id', id)
+    .maybeSingle()
+  if (!data) return null
+  const row = data as unknown as LinkTargetDocumentOwnershipRow
+  const unit = row.tasks.units
+  return {
+    title: row.title,
+    kursPublished: unit.kurse.published,
+    gatedBy: { id: unit.id, title: unit.title, description: unit.description },
+  }
+}
+
+// The raw PostgREST shape of the document query above — nested embeds are not
+// inferred without generated types, and the `!inner` joins guarantee the
+// ancestry exists (getDocumentWithAncestry precedent).
+type LinkTargetDocumentOwnershipRow = {
+  title: string
+  tasks: {
+    units: {
+      id: string
+      title: string
+      description: string | null
+      kurse: { published: boolean }
+    }
+  }
 }
 
 // ── Entitlement queries ─────────────────────────────────────────────────────

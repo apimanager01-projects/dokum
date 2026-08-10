@@ -74,6 +74,7 @@ import {
 } from './field-resolver'
 import {
   LINK_CHIP_SELECTOR,
+  isPlainLeftClick,
   linkTargetIcon,
   linkTargetKindLabel,
   readLinkChip,
@@ -132,7 +133,20 @@ export interface DocumentRenderResult {
    * `data-raw-latex`. The caller MathJax-renders them.
    */
   renderTargets: HTMLElement[]
+  /**
+   * Every link chip that became a navigable anchor, in document order, with
+   * the link it carries (#74).
+   *
+   * Reported for the same reason `renderTargets` is: whether a target is still
+   * REACHABLE — bought, archived, deleted — is a server question this module
+   * refuses to ask, exactly as it refuses to typeset. The caller resolves them
+   * and rewrites the ones that turn out to be unreachable.
+   */
+  links: RenderedDocumentLink[]
 }
+
+/** A link as it ended up in the rendered document: its data and its element. */
+export type RenderedDocumentLink = DocumentLink & { anchor: HTMLAnchorElement }
 
 const FIELD_SELECTOR = '.input-field, .output-field'
 
@@ -164,13 +178,13 @@ export function renderDocumentJson(
   // it by class and never descends into it, and the graph reads only its
   // dataset — so span or input makes no difference to any resolved value.
   makeInputsEditable(container, graph, renderTargets, adapters)
-  makeLinksNavigable(container, adapters)
+  const links = makeLinksNavigable(container, adapters)
 
   resolveDocument(container, graph, renderTargets, { writeFormulaText: true })
 
   stripEditorChrome(container)
 
-  return { renderTargets }
+  return { renderTargets, links }
 }
 
 /**
@@ -440,7 +454,11 @@ function isStudentControl(el: HTMLElement): el is HTMLInputElement {
  * quietly different on a touch screen. The label plus the kind glyph is the
  * whole of "say where you go before I click".
  */
-function makeLinksNavigable(container: HTMLElement, adapters: DocumentRenderAdapters): void {
+function makeLinksNavigable(
+  container: HTMLElement,
+  adapters: DocumentRenderAdapters
+): RenderedDocumentLink[] {
+  const rendered: RenderedDocumentLink[] = []
   for (const chip of Array.from(container.querySelectorAll<HTMLElement>(LINK_CHIP_SELECTOR))) {
     const link = readLinkChip(chip)
     // Not reachable through the importer, which only builds a chip from a
@@ -460,7 +478,9 @@ function makeLinksNavigable(container: HTMLElement, adapters: DocumentRenderAdap
       event.preventDefault()
       follow(link.target, href)
     })
+    rendered.push({ ...link, anchor })
   }
+  return rendered
 }
 
 /** Swaps an authoring chip for the student's navigable one. */
@@ -488,17 +508,6 @@ function replaceWithLinkAnchor(
   anchor.textContent = link.label
   chip.replaceWith(anchor)
   return anchor
-}
-
-/**
- * A click the app should handle itself. Everything else — a modifier held, the
- * middle button — is the student asking the BROWSER for something (a new tab, a
- * new window), and intercepting it would take that away.
- */
-function isPlainLeftClick(event: MouseEvent): boolean {
-  return (
-    event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey
-  )
 }
 
 // ── Field graph over the rendered DOM ───────────────────────────────────────

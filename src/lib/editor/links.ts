@@ -220,6 +220,24 @@ export function createLinkChip(docEl: Document, link: DocumentLink): HTMLElement
   return el
 }
 
+/**
+ * A click on a chip that the APP should handle itself. Everything else — a
+ * modifier held, the middle button — is the student asking the BROWSER for
+ * something (a new tab, a new window), and intercepting it would take that
+ * away.
+ *
+ * Lives here rather than beside either of its callers because both the live
+ * chip (document-render.ts) and the locked one (lib/unreachable-links.ts)
+ * intercept clicks, and a chip that answered a Ctrl-click differently
+ * depending on whether its target was bought would be the strangest possible
+ * inconsistency.
+ */
+export function isPlainLeftClick(event: MouseEvent): boolean {
+  return (
+    event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey
+  )
+}
+
 // ── The picker seam ─────────────────────────────────────────────────────────
 //
 // The target tree is server data, so the picker itself is a React component —

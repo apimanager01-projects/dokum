@@ -52,6 +52,7 @@ Kurs (Course)
 - Proxy (`src/proxy.ts` — Next.js 16 renamed the `middleware` convention to `proxy`) protects `/admin/*` routes and API proxy routes
 - Admin pages do **not** duplicate the auth check — the proxy is the single enforcement point
 - File proxy routes (`/api/file`, `/api/image`) verify the document belongs to a published course before serving — unauthenticated or unpublished-content requests return 401/403 at the application layer
+- `/api/link-target` (#74) is the one route that reads *past* RLS, and answers only with a verdict — locked, archived, missing, ok — plus the Einheit an unlock would buy. Never content, never a storage path. See [Unreachable Link Targets](#unreachable-link-targets-74)
 - JWT includes role automatically — no extra DB queries needed
 - Role grants: `UPDATE auth.users SET raw_app_meta_data = ... WHERE email = '...'` (user must sign out/in to refresh JWT)
 
@@ -148,7 +149,8 @@ src/
 │   └── api/
 │       ├── file/[docId]/route.ts          # Auth-gated file proxy (PDFs/images)
 │       ├── image/[imageId]/route.ts       # Auth-gated image collection proxy
-│       └── editor-image/[imageId]/route.ts # Admin-only editor-image proxy (STREAMS, same-origin)
+│       ├── editor-image/[imageId]/route.ts # Admin-only editor-image proxy (STREAMS, same-origin)
+│       └── link-target/[kind]/[id]/route.ts # Link resolver (#74): ok | locked | archived | missing + the Einheit that unlocks it — never content
 ├── components/
 │   ├── admin/
 │   │   ├── KursForm.tsx           # Create/edit Kurs form
@@ -177,6 +179,7 @@ src/
 │   │   ├── DocumentArticle.tsx     # Breadcrumb + title + description + body at page scale — shared by the full page and the overlay, which differ only in their chrome
 │   │   ├── DocumentOverlay.tsx     # The overlay shell (#70): native <dialog>.showModal() for the focus trap, Escape and inert background; every dismissal is router.back()
 │   │   ├── DocumentLink.tsx        # The in-app link to a Dokument — carries scroll={false} so opening an overlay cannot discard the source page's reading position
+│   │   ├── LinkLockedCard.tsx      # What a link into unbought material opens (#74): the Einheit + its teaser + the unlock button, as UnitPaywall inside a <dialog> — in place, so nothing the student typed is unmounted
 │   │   ├── DocumentCard.tsx
 │   │   ├── InteractiveDocument.tsx # Live student render of a published document JSON + PNG fallback (error boundary); owns only the MathJax half — typesets the formulas each recompute reports as changed, serialised so a fast typist cannot land a stale one
 │   │   ├── DocumentPng.tsx        #   the stored picture: legacy 'image' render AND the interactive fallback
@@ -196,6 +199,8 @@ src/
 │   ├── document-access.ts         # isDocumentReadable(): the one app-level access rule (published re-check + admin bypass, nullable view) — pure, tested
 │   ├── document-surface.ts        # loadDocumentSurface(): auth + DAL read + access rule + watermark, `cache`d — the single read path behind BOTH student document surfaces
 │   ├── link-navigation.ts         # linkHref()/linkOpensOverlay() (#73): a stored link target → a URL, and whether following it opens the overlay. Pure; injected into the renderer so lib/editor never learns this app's routes
+│   ├── link-target-state.ts       # describeLinkTarget() (#74): the ok|locked|archived|missing verdict AND what may cross with it, in one function so a field cannot be attached to a verdict that must not carry it. Pure, tested; NOT server-only — the browser parses the same schema
+│   ├── unreachable-links.ts       # Browser half of #74: resolves each distinct target once, degrades archived/deleted chips to plain text, re-points locked ones at their Einheit. Fails open — an unresolved chip is left exactly as the renderer built it
 │   ├── schemas.ts                 # Zod schemas for server action input validation
 │   ├── audit.ts                   # logAdminAction() — fire-and-forget audit log writer
 │   ├── editor/                    # LaTeX editor (PRD #28): TWO imperative surfaces (controller.ts for /admin/editor, document-render.ts for the student viewer) + pure modules
@@ -242,6 +247,8 @@ if (!kurs) notFound()
 ```
 
 The DAL is marked `import 'server-only'` — importing it in a client component causes a build error. Sorting (position ASC, created_at ASC) is applied inside each DAL function.
+
+**One read bypasses RLS**, and it is the only one: `getLinkTargetOwnership()` uses the service-role client, because the link resolver (#74) has to tell an *unentitled* student which Einheit to buy — and that is exactly the row `documents` SELECT withholds from them. Three properties keep it safe and all three are in the function: it selects only the columns a refusal may name (no `content`, no `file_path`), it never learns who is asking (no user id, no role — so it cannot leak per-reader data), and its result must pass through `describeLinkTarget()` before crossing to the browser. It has exactly one caller.
 
 ### Server Action Result Type
 
@@ -315,6 +322,8 @@ Access reuses the two mechanisms that already exist and adds none. Both surfaces
 
 Every failure — unknown id, no entitlement, archived Kurs — collapses into one refusal; distinguishing them would leak which documents exist to someone who cannot read them. The full page turns that into `notFound()`, the overlay into a „nicht gefunden" panel inside the dialog.
 
+**These surfaces still collapse them, and that has not changed.** The link resolver (#74, below) tells the three apart, but only for a target somebody has already *linked to*, only as a verdict plus the Einheit that unlocks it, and never as content — see that section for why the difference has to exist at all.
+
 **One URL, two presentations (#70).** A **hard** navigation — pasted link, bookmark, reload, a mail from a classmate — renders the full page. A **client-side** navigation from inside the app is intercepted by `app/@modal/(.)dokumente/[docId]` and opens the same document as a modal dialog over the current page: centred panel on desktop, full-screen sheet on a phone. Nothing in our code chooses between them; the App Router's interception rule does, and it only fires on soft navigation.
 
 The overlay is not cosmetic. **The viewer holds live student inputs and nothing persists them** — plain navigation would discard whatever the student typed, on the way out and again on the way back. Parallel routing never unmounts the `children` slot, so the source page (accordion state, scroll position, every typed value) is still there underneath and is still there when the overlay closes. Three rules keep that true:
@@ -343,7 +352,28 @@ Two consequences of it being a raw anchor rather than a `next/link`, both accept
 - **The kind glyph is CSS chrome**, drawn from `data-link-icon` via `attr()`, so it never enters the text a student copies. The one glyph map lives in `lib/editor/links.ts`; the chip's `aria-label` carries the same distinction in words for readers who get no icon.
 - **There is no hover behaviour anywhere, deliberately** (spec §6). The peek was dropped: the overlay does it better one click away with state intact, and a hover would make the product quietly different on touch. No preview, no prefetch on mouse-over, and no `title` tooltip.
 - **A Sprungmarke travels in the fragment**, never reaching the server, and is resolved against the rendered DOM after the first typeset run (formulas change height when MathJax replaces them). A `hashchange` listener covers a second jump inside a document already on screen.
-- Unreachable targets — locked, archived, deleted — are **#74's**: today a link to one lands on the same refusal any inaccessible document does.
+
+### Unreachable Link Targets (#74)
+
+A stored link outlives what it points at: the Einheit may be unbought, the Kurs archived, the Dokument deleted. **`GET /api/link-target/[kind]/[id]` is the resolver that tells those apart**, and it exists because RLS cannot: `documents` SELECT is entitlement-gated, so an unentitled student's lookup returns *no row at all* and locked is indistinguishable from deleted in the browser — while „das liegt in Einheit 3, schalte sie frei" needs exactly the data the policy withholds from the reader we want to sell to.
+
+The route is a thin shell: authenticate (same requirement and same `app_metadata.role` bypass as the file proxies), one identity-free privileged read, one entitlement read *under the reader's own RLS*, then the pure decision in `lib/link-target-state.ts`:
+
+| Verdict | When | What crosses to the browser |
+|---------|------|-----------------------------|
+| `missing` | no such row | nothing but the verdict |
+| `archived` | exists, Kurs unpublished | nothing but the verdict |
+| `locked` | live, Einheit not bought | the target's title + the Einheit and its teaser |
+| `ok` | reachable — and everything that exists, for an admin | nothing but the verdict |
+
+**The order between them is load-bearing: `archived` beats `locked`.** An unentitled reader looking at a link into a retired Kurs must not be offered a €3 unlock for an Einheit that stays dark.
+
+The chips are resolved **eagerly**, one request per *distinct* target, after the document is already on screen — `DocumentRenderResult.links` reports them for exactly this, the same way `renderTargets` reports the formulas the renderer refuses to typeset. Then `lib/unreachable-links.ts` rewrites each one:
+
+- **archived / missing** → no longer a link. The author's words plus a quiet „(nicht mehr verfügbar)", so the sentence still reads. Both say the same thing — which of the two it is belongs to the operator.
+- **locked** → still a chip, now amber with a lock glyph. Its href is **re-pointed at the Einheit**, so a middle click, „open in new tab" or our JS not running all land on the paywall rather than a dead end; a plain click opens `LinkLockedCard` in place, which is `UnitPaywall` — the same component the locked Einheit page shows — so the teaser reaches both surfaces by construction.
+
+Two rules that are easy to break: **both rewrites replace the element** rather than mutating it, because the renderer bound a click listener that pushes the target's URL and there is no handle to remove it with — a mutated locked chip would still navigate to the refusal this replaces. And the whole path **fails open**: an unreachable resolver, a non-OK status, or a body that does not parse (what an unauthenticated fetch actually gets is the proxy's HTML login redirect) all leave every chip exactly as the renderer built it. A document must never silently unlink itself because a request failed.
 
 ### Error & Loading Boundaries
 
@@ -400,7 +430,8 @@ All magic values live in `src/lib/constants.ts`:
 | `editorImageUrl(imageId)` | `` `/api/editor-image/${imageId}` `` | Single source for editor-image browser URLs (controller, JSON importer, proxy route) |
 | `documentUrl(docId, anchorId?)` | `` `/dokumente/${docId}` `` (+ `#anchorId`) | Single source for the addressable Dokument URL (#69). In-app links go through `DocumentLink`, which adds the `scroll={false}` the overlay needs (#70) — the accordion's „Einzelansicht", `DocumentCard`, and the link chips (#73) |
 | `kursUrl(kursId)` | `` `/kurse/${kursId}` `` | Where a Kurs link goes (#73) |
-| `unitUrl(unitId)` | `` `/einheiten/${unitId}` `` | Where an Einheit link goes (#73) — the flat redirect that supplies the Kurs a link never stored |
+| `unitUrl(unitId)` | `` `/einheiten/${unitId}` `` | Where an Einheit link goes (#73) — the flat redirect that supplies the Kurs a link never stored. Also where a **locked** chip is re-pointed (#74), so every path out of it lands on the paywall rather than a dead end |
+| `linkTargetUrl(kind, id)` | `` `/api/link-target/${kind}/${id}` `` | The resolver a rendered chip asks whether its target is still reachable (#74). The id is percent-encoded — it is read off a chip's dataset in the browser |
 
 ## Dependencies
 
@@ -550,6 +581,10 @@ Set `published = true/false` in the `kurse` table. The Kurs and its Units appear
 | A link chip shows no glyph | `data-link-icon` missing, or the `attr()` rule was scoped away | The glyph is CSS chrome (`interactive-document.css`) drawn from the attribute the renderer stamps; it is never part of the label |
 | An Einheit link 404s | Its Kurs or the Einheit itself is unpublished | `/einheiten/[unitId]` resolves through the DAL under the reader's RLS — no row, no redirect. Publish the Einheit, or accept the 404 as the archive rule working |
 | A link to a Sprungmarke opens the document at the top | The anchor id is not in that document's snapshot | The fragment is matched against `data-anchor-id` in the rendered DOM; a Sprungmarke deleted or re-stamped after the link was made no longer matches (that is #75's warning to add) |
+| A chip stays blue and clickable although its target is gone | The resolver was never answered — it **fails open** by design (#74) | Check `/api/link-target/[kind]/[id]` in the network tab: a non-OK status, a thrown fetch, or a body that is not a verdict (an unauthenticated request gets the proxy's HTML login redirect) all leave every chip untouched |
+| Every chip in a document degrades at once | Not a resolver verdict — the render failed | A verdict is per target; a document that lost all its links either fell back to the PNG or never rendered. Look for `Rendern fehlgeschlagen` in the console |
+| A locked chip navigates instead of opening the card | The element was mutated rather than replaced | The renderer's `followLink` listener has no handle to remove it with, so `applyLinkTargetDescriptor` replaces the anchor with a clone. Mutating it in place leaves that listener attached |
+| The unlock card offers an Einheit that cannot be bought | `archived` lost to `locked` in the decision | `describeLinkTarget` checks `kursPublished` **before** the entitlement, on purpose — the test „archived beats locked" pins it |
 
 ## File Reference Guide
 
@@ -569,6 +604,7 @@ Set `published = true/false` in the `kurse` table. The Kurs and its Units appear
 | Student document access + shared page-scale view | `src/lib/document-access.ts`, `src/lib/document-surface.ts`, `src/components/documents/DocumentArticle.tsx` |
 | Document overlay navigation | `src/app/@modal/*`, `src/components/documents/DocumentOverlay.tsx`, `src/components/documents/DocumentLink.tsx`, `src/app/layout.tsx` |
 | Where a link goes | `src/lib/link-navigation.ts`, `src/app/einheiten/[unitId]/page.tsx`, `makeLinksNavigable` in `src/lib/editor/document-render.ts` |
+| Whether a link still goes anywhere | `src/lib/link-target-state.ts`, `src/lib/unreachable-links.ts`, `src/app/api/link-target/[kind]/[id]/route.ts`, `getLinkTargetOwnership` in `src/lib/dal.ts`, `src/components/documents/LinkLockedCard.tsx` |
 | LaTeX editor core (controller + pure modules) | `src/lib/editor/*` |
 | LaTeX editor UI (page, shell, toolbar, export, drafts) | `src/app/admin/editor/*`, `src/components/admin/editor/*` |
 | Standalone reference editor (parity ground truth) | `latexEditor/*.html` |
@@ -576,4 +612,4 @@ Set `published = true/false` in the `kurse` table. The Kurs and its Units appear
 
 ---
 
-**Last Updated**: 2026-07-05 | **Version**: 4.3
+**Last Updated**: 2026-08-10 | **Version**: 4.4

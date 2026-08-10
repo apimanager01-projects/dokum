@@ -724,8 +724,19 @@ describe('renderDocumentJson — link chips', () => {
   })
 
   it('leaves a document without links exactly as it was', () => {
-    const { host } = render(DOC)
+    const { host, result } = render(DOC)
     expect(host.querySelector('.doc-link')).toBeNull()
     expect(host.querySelector('a')).toBeNull()
+    expect(result.links).toEqual([])
+  })
+
+  it('reports every chip it built, with the link it carries (#74)', () => {
+    // The same contract `renderTargets` has: whether a target is still
+    // REACHABLE is a server question this module refuses to ask, exactly as it
+    // refuses to typeset — so it hands the elements back and the caller
+    // resolves them.
+    const target = { docId: DOC_ID, anchorId: 'anc_1' }
+    const { host, result } = render(withLink(target))
+    expect(result.links).toEqual([{ target, label: 'Kapitel 3', anchor: chipIn(host) }])
   })
 })

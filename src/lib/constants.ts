@@ -1,3 +1,5 @@
+import type { LinkTargetKind } from '@/lib/editor/links'
+
 export const STORAGE_BUCKET = 'pdfs'
 
 export const MAX_FILE_SIZE_BYTES = 4 * 1024 * 1024 // 4 MB
@@ -57,4 +59,20 @@ export function kursUrl(kursId: string): string {
 // following an Einheit link needs no client-side lookup of its Kurs.
 export function unitUrl(unitId: string): string {
   return `/einheiten/${unitId}`
+}
+
+// The resolver a rendered link chip asks whether its target is still reachable
+// (#74). Kind and id both ride in the path, mirroring the file proxies: this is
+// a read of one named thing, not a query.
+//
+// It answers with a verdict and, for a locked target, the Einheit that unlocks
+// it — never content. The route is the only caller of the DAL's one
+// RLS-bypassing read, and `describeLinkTarget` is what decides how much of it
+// may cross.
+// The id is percent-encoded even though the route rejects anything that is not
+// a uuid: it is read off a chip's dataset in the browser, and a value that
+// could climb out of its path segment must not be able to address a different
+// route on the way to being refused.
+export function linkTargetUrl(kind: LinkTargetKind, id: string): string {
+  return `/api/link-target/${kind}/${encodeURIComponent(id)}`
 }

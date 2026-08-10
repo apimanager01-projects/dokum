@@ -284,6 +284,40 @@
   content: attr(data-link-icon) '\00a0';
 }
 
+/* A link into an Einheit the student has not bought (#74). Still a chip and
+   still clickable — it opens the unlock card — but it wears the amber of the
+   paywall rather than the blue of a link that goes somewhere now, so „I can
+   read this" and „I can buy this" are not the same colour. The lock glyph comes
+   through the same `data-link-icon` attribute the kind glyphs do. */
+.dokum-document .doc-link[data-link-state='locked'] {
+  background: #fffbeb;
+  color: #92400e;
+  border-color: #fcd34d;
+}
+
+.dokum-document .doc-link[data-link-state='locked']:hover {
+  background: #fef3c7;
+}
+
+.dokum-document .doc-link[data-link-state='locked']:focus-visible {
+  outline-color: #b45309;
+}
+
+/* A link whose target is archived or deleted (#74). NOT a chip: it is plain
+   text now, because the one thing it must not do is look like something worth
+   clicking. The author's words stay exactly as they were written so the
+   sentence still reads, and the note beside them is real text — quiet, but read
+   aloud like everything else. */
+.dokum-document .doc-link-gone {
+  color: inherit;
+}
+
+.dokum-document .doc-link-gone-note {
+  color: #6b7280;
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
 /* A Sprungmarke is where a link LANDS — the spot is scrolled to, so it must
    not end up flush against the top edge, under the sticky header of either
    surface that shows a document. */

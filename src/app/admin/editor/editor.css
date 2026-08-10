@@ -468,6 +468,49 @@
   border-color: #fca5a5;
 }
 
+/* ------------------------------------------------------- Link-Chips (#72) */
+/* Wie die Input/Output-Pillen ein Atom: contenteditable="false", also kann der
+   Cursor die Beschriftung nicht von ihrem Ziel trennen. Ein Klick öffnet den
+   Ziel-Picker (controller.ts, onEditorClick). */
+
+.latex-editor .doc-link {
+  display: inline-block;
+  padding: 2px 8px;
+  margin: 0 2px;
+  border-radius: 999px;
+  cursor: pointer;
+  user-select: none;
+  font-weight: 500;
+  font-size: 0.92em;
+  background: #eef2ff;
+  color: #3730a3;
+  border: 1px solid #c7d2fe;
+  transition: filter 0.1s;
+}
+
+.latex-editor .doc-link:hover {
+  filter: brightness(0.96);
+}
+
+/* Das Zielsymbol ist CSS-Chrome, kein Inhalt: es steht in keinem textContent
+   und kann deshalb nie in einer gespeicherten Beschriftung landen. Reihenfolge
+   zählt — die Sprungmarke gewinnt gegen das allgemeine Dokument. */
+.latex-editor .doc-link[data-link-kind='kurs']::before {
+  content: '📘 ';
+}
+
+.latex-editor .doc-link[data-link-kind='unit']::before {
+  content: '📗 ';
+}
+
+.latex-editor .doc-link[data-link-kind='document']::before {
+  content: '📄 ';
+}
+
+.latex-editor .doc-link[data-link-anchor-id]::before {
+  content: '⚓ ';
+}
+
 /* ------------------------------------------------- Sprungmarken (#71) */
 /* Editor-Chrome, rein visuell: das Badge ist ein Pseudo-Element, also für den
    Serializer unsichtbar (er liest nur data-anchor-id/-label) und ohne

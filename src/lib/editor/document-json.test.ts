@@ -22,6 +22,7 @@ import {
   DocumentJsonSchema,
   JSON_IMPORT_EXAMPLE,
   LATEST_DOCUMENT_JSON_VERSION,
+  collectDocumentAnchors,
   collectReferencedImageIds,
   describeDocumentJsonError,
   emptyEditorDocumentJson,
@@ -1413,5 +1414,197 @@ describe('withDocumentMeta', () => {
     const roundTripped = roundTrip(doc)
     expect(roundTripped.meta).toBeUndefined()
     expect(JSON.stringify(roundTripped)).toBe(JSON.stringify(emptyEditorDocumentJson()))
+  })
+})
+
+// ── Inline links (v1.1, #72) ────────────────────────────────────────────────
+
+describe('inline link nodes (schema v1.1)', () => {
+  const KURS_ID = '11111111-1111-4111-8111-111111111111'
+  const UNIT_ID = '22222222-2222-4222-8222-222222222222'
+  const DOC_ID = '33333333-3333-4333-8333-333333333333'
+
+  const linked = (target: unknown) => ({
+    version: '1.1',
+    variables: [],
+    content: [
+      { type: 'paragraph', children: ['siehe ', { type: 'link', target, label: 'Aufgabe 2' }] },
+    ],
+  })
+
+  it('accepts a link node on a v1.1 document', () => {
+    expect(DocumentJsonSchema.safeParse(linked({ docId: DOC_ID })).success).toBe(true)
+    expect(DocumentJsonSchema.safeParse(linked({ kursId: KURS_ID })).success).toBe(true)
+    expect(DocumentJsonSchema.safeParse(linked({ unitId: UNIT_ID })).success).toBe(true)
+    expect(DocumentJsonSchema.safeParse(linked({ docId: DOC_ID, anchorId: 'anc_a' })).success).toBe(
+      true
+    )
+  })
+
+  it('rejects a link node on a v1.0 document — the version discriminator means something', () => {
+    // Same rule the anchor follows: links arrived WITH 1.1, so a v1.0 snapshot
+    // claiming one is refused rather than read as a shape its version lacks.
+    expect(DocumentJsonSchema.safeParse({ ...linked({ docId: DOC_ID }), version: '1.0' }).success).toBe(
+      false
+    )
+  })
+
+  it('rejects a link hidden inside a styled group of a v1.0 document', () => {
+    // The `children` group recurses into its OWN version's inline union — the
+    // reason the schema is built per version rather than shared and extended.
+    const nested = {
+      version: '1.0',
+      variables: [],
+      content: [
+        {
+          type: 'paragraph',
+          children: [{ children: [{ type: 'link', target: { docId: DOC_ID }, label: 'x' }] }],
+        },
+      ],
+    }
+    expect(DocumentJsonSchema.safeParse(nested).success).toBe(false)
+    expect(DocumentJsonSchema.safeParse({ ...nested, version: '1.1' }).success).toBe(true)
+  })
+
+  it('accepts links in every inline position — headings, list items, captions', () => {
+    const link = { type: 'link', target: { unitId: UNIT_ID }, label: 'Einheit 3' }
+    const doc = {
+      version: '1.1',
+      variables: [],
+      content: [
+        { type: 'heading', level: 1, children: [link] },
+        { type: 'list', ordered: false, items: [[link]] },
+        { type: 'formula', latex: 'x', caption: { children: [link] } },
+      ],
+    }
+    expect(DocumentJsonSchema.safeParse(doc).success).toBe(true)
+  })
+
+  it('rejects a draft-shaped or malformed target at the boundary', () => {
+    expect(DocumentJsonSchema.safeParse(linked({ draftId: DOC_ID })).success).toBe(false)
+    expect(DocumentJsonSchema.safeParse(linked({ docId: 'entwurf-7' })).success).toBe(false)
+    expect(DocumentJsonSchema.safeParse(linked({ anchorId: 'anc_a' })).success).toBe(false)
+    expect(DocumentJsonSchema.safeParse(linked({})).success).toBe(false)
+  })
+
+  it('imports a link as a contenteditable=false chip carrying the target', () => {
+    const editor = makeEditor()
+    importEditorJson(parse(linked({ docId: DOC_ID, anchorId: 'anc_a' })), editor, makeAdapters())
+    const chip = editor.querySelector<HTMLElement>('.doc-link')!
+    expect(chip.textContent).toBe('Aufgabe 2')
+    expect(chip.getAttribute('contenteditable')).toBe('false')
+    expect(chip.dataset['linkKind']).toBe('document')
+    expect(chip.dataset['linkId']).toBe(DOC_ID)
+    expect(chip.dataset['linkAnchorId']).toBe('anc_a')
+    editor.remove()
+  })
+
+  it('serializes a chip back to one link node, not to its text', () => {
+    const editor = makeEditor()
+    editor.innerHTML =
+      '<p>siehe <span class="doc-link" contenteditable="false" ' +
+      `data-link-kind="unit" data-link-id="${UNIT_ID}">Einheit 3</span></p>`
+    expect(serializeEditorState(editor, []).content[0]).toEqual({
+      type: 'paragraph',
+      children: ['siehe ', { type: 'link', target: { unitId: UNIT_ID }, label: 'Einheit 3' }],
+    })
+    editor.remove()
+  })
+
+  it('emits the link keys in the schema’s order — type, target, label', () => {
+    const editor = makeEditor()
+    editor.innerHTML = `<p><span class="doc-link" data-link-kind="kurs" data-link-id="${KURS_ID}">K</span></p>`
+    const block = serializeEditorState(editor, []).content[0] as { children: unknown[] }
+    expect(Object.keys(block.children[0] as object)).toEqual(['type', 'target', 'label'])
+    editor.remove()
+  })
+
+  it('degrades a chip with no usable target to plain text rather than dropping it', () => {
+    // An unfollowable node must not enter the JSON — but the sentence still
+    // has to read, so the label survives as text.
+    const editor = makeEditor()
+    editor.innerHTML =
+      '<p>vgl. <span class="doc-link" data-link-kind="document" data-link-id="">Aufgabe 2</span></p>'
+    expect(serializeEditorState(editor, []).content[0]).toEqual({
+      type: 'paragraph',
+      children: ['vgl. ', { text: 'Aufgabe 2' }],
+    })
+    editor.remove()
+  })
+
+  it('is byte-stable through export → import → export', () => {
+    const editor = makeEditor()
+    importEditorJson(
+      parse({
+        version: '1.1',
+        variables: [],
+        content: [
+          {
+            type: 'paragraph',
+            children: [
+              'siehe ',
+              { type: 'link', target: { docId: DOC_ID, anchorId: 'anc_a' }, label: 'Herleitung' },
+              ' und ',
+              { type: 'link', target: { kursId: KURS_ID }, label: 'den Kurs' },
+            ],
+          },
+          {
+            type: 'heading',
+            level: 2,
+            children: [{ type: 'link', target: { unitId: UNIT_ID }, label: 'Einheit 3' }],
+            anchor: { id: 'anc_h', label: 'Verweise' },
+          },
+        ],
+      }),
+      editor,
+      makeAdapters()
+    )
+    const j1 = serializeEditorState(editor, [])
+    expect(DocumentJsonSchema.safeParse(j1).success).toBe(true)
+    expect(JSON.stringify(roundTrip(j1))).toBe(JSON.stringify(j1))
+    editor.remove()
+  })
+})
+
+// ── Sprungmarken of a published document (#72) ──────────────────────────────
+
+describe('collectDocumentAnchors', () => {
+  const doc = (content: unknown[]) => parse({ version: '1.1', variables: [], content })
+
+  it('lists the anchors in content order', () => {
+    const anchors = collectDocumentAnchors(
+      doc([
+        { type: 'paragraph', children: ['a'] },
+        { type: 'heading', level: 1, children: ['b'], anchor: { id: 'anc_2', label: 'Zwei' } },
+        { type: 'formula', latex: 'x', anchor: { id: 'anc_1', label: 'Eins' } },
+      ])
+    )
+    expect(anchors).toEqual([
+      { id: 'anc_2', label: 'Zwei' },
+      { id: 'anc_1', label: 'Eins' },
+    ])
+  })
+
+  it('is empty for a document nobody marked', () => {
+    expect(collectDocumentAnchors(doc([{ type: 'paragraph', children: ['a'] }]))).toEqual([])
+  })
+
+  it('lists a duplicated id once — a picker offering one target twice would lie', () => {
+    const anchors = collectDocumentAnchors(
+      doc([
+        { type: 'paragraph', children: ['a'], anchor: { id: 'anc_1', label: 'Erste' } },
+        { type: 'paragraph', children: ['b'], anchor: { id: 'anc_1', label: 'Kopie' } },
+      ])
+    )
+    expect(anchors).toEqual([{ id: 'anc_1', label: 'Erste' }])
+  })
+
+  it('reads an upgraded v1.0 snapshot as having none', () => {
+    const v10 = parse({
+      version: '1.0',
+      variables: [],
+      content: [{ type: 'paragraph', children: ['a'] }],
+    })
+    expect(collectDocumentAnchors(v10)).toEqual([])
   })
 })

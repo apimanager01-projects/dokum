@@ -342,17 +342,21 @@ export async function getEditorDocumentById(draftId: string): Promise<EditorDocu
   return data ?? null
 }
 
-// Target tree for the editor's ExportBar (slice 10): Kurs → Unit → Task only
-// — deliberately not getAllKurseDeep(), which would drag every document +
-// image id into the client bundle for nothing. Sorted here in the DAL at
-// every level (invariant); the 1-based index in these arrays is the export
-// filename's ordinal.
+// Target tree for the editor's ExportBar (slice 10) and link picker (#72):
+// Kurs → Unit → Task only — deliberately not getAllKurseDeep(), which would
+// drag every document + image id into the client bundle for nothing. Sorted
+// here in the DAL at every level (invariant); the 1-based index in these
+// arrays is the export filename's ordinal.
+//
+// `published` rides along unfiltered: the publish target may be an unpublished
+// Kurs, the link picker's targets may not. Filtering here would break one of
+// the two.
 export async function getEditorTargetTree(): Promise<EditorTargetKurs[]> {
   const supabase = await createClient()
   const { data } = await supabase
     .from('kurse')
     .select(
-      'id, title, position, created_at, units(id, title, position, created_at, tasks(id, title, position, created_at))'
+      'id, title, position, created_at, published, units(id, title, position, created_at, tasks(id, title, position, created_at))'
     )
     .order('position', { ascending: true })
     .order('created_at', { ascending: true })
@@ -364,6 +368,47 @@ export async function getEditorTargetTree(): Promise<EditorTargetKurs[]> {
     })
   })
   return kurse
+}
+
+// The link picker's fourth level (#72), fetched per Task on expand: the
+// Dokumente of one Task, WITH their published snapshot so the caller can read
+// the Sprungmarken out of it.
+//
+// Returns [] when the Task's Kurs is unpublished, which is the rule that makes
+// „unpublished targets cannot be selected" true at the boundary rather than
+// only in the picker's UI: an author must publish the target first, because a
+// link may only point at something a student can reach (spec #63 §6).
+//
+// The Kurs is reached through the `units!inner` / `kurse!inner` embed, so the
+// gate and the rows arrive in one round trip.
+export async function getLinkTargetDocuments(
+  taskId: string
+): Promise<{ id: string; title: string; content: unknown }[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('tasks')
+    .select(
+      'id, units!inner(kurse!inner(published)), documents(id, title, content, position, created_at)'
+    )
+    .eq('id', taskId)
+    .maybeSingle()
+  if (!data) return []
+
+  // PostgREST returns a to-one embed as an object; the generated row type is
+  // untyped here (no generated DB types in this project — CLAUDE.md), so the
+  // shape is asserted once, at the boundary.
+  const row = data as unknown as {
+    units: { kurse: { published: boolean } } | null
+    documents:
+      | { id: string; title: string; content: unknown; position: number; created_at: string }[]
+      | null
+  }
+  if (!row.units?.kurse?.published) return []
+  return sortByPosition(row.documents ?? []).map(({ id, title, content }) => ({
+    id,
+    title,
+    content,
+  }))
 }
 
 // Used by /api/editor-image/[imageId] route (slice 8). RLS is admin-only, so

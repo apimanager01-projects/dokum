@@ -133,16 +133,35 @@ export interface EditorImage {
 }
 
 // Lean Kurs → Unit → Task tree for the editor's export/publish target
-// selection (slice 10 — filename ordinals; slice 11 — publish target).
-// Fetched by getEditorTargetTree() (DAL-sorted: position ASC, created_at
-// ASC); serializable, crosses the server→client boundary as a page prop.
+// selection (slice 10 — filename ordinals; slice 11 — publish target) and,
+// since #72, for the link picker. Fetched by getEditorTargetTree()
+// (DAL-sorted: position ASC, created_at ASC); serializable, crosses the
+// server→client boundary as a page prop.
 // The 1-based array index is the filename ordinal — NOT the raw `position`.
+//
+// `published` is carried but NOT filtered on: publishing may target an
+// unpublished Kurs, while the link picker may only offer published ones
+// (a link must point at something a student can reach, spec #63 §6). One tree,
+// two rules — the consumer applies its own.
 export type EditorTargetTask = Pick<Task, 'id' | 'title' | 'position' | 'created_at'>
 export type EditorTargetUnit = Pick<Unit, 'id' | 'title' | 'position' | 'created_at'> & {
   tasks: EditorTargetTask[]
 }
-export type EditorTargetKurs = Pick<Kurs, 'id' | 'title' | 'position' | 'created_at'> & {
+export type EditorTargetKurs = Pick<Kurs, 'id' | 'title' | 'position' | 'created_at' | 'published'> & {
   units: EditorTargetUnit[]
+}
+
+// The lazily-fetched fourth level of the link picker (#72): the Dokumente of
+// one Task, each with the Sprungmarken it offers.
+//
+// The tree above deliberately stops at Task so no document or image id reaches
+// the client bundle, and that reason still holds — so this arrives per Task, on
+// expand. `anchors` is read out of the published snapshot server-side; the
+// snapshot itself never crosses the boundary.
+export interface LinkTargetDocument {
+  id: string
+  title: string
+  anchors: { id: string; label: string }[]
 }
 
 // ── Server action result types ──────────────────────────────────────────────

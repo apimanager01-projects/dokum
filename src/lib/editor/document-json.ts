@@ -5,11 +5,12 @@
  * Three parts:
  *
  * 1. `DocumentJsonSchema` — the versioned Zod schema: a DISCRIMINATED UNION
- *    over `version` (#64), members v1.0 and v1.1. v1.1 (#71) adds the optional
- *    block-level `anchor` — a Sprungmarke another document can link to — and
- *    changes nothing else; v1.0 snapshots reach it through the upgrade chain,
- *    and a v1.0 snapshot carrying an anchor is refused rather than read as a
- *    shape its version does not describe. It doubles as
+ *    over `version` (#64), members v1.0 and v1.1. v1.1 adds the optional
+ *    block-level `anchor` — a Sprungmarke another document can link to (#71) —
+ *    and the inline `link` node that points at one (#72, shape owned by
+ *    links.ts); v1.0 snapshots reach it through the upgrade chain, and a v1.0
+ *    snapshot carrying either is refused rather than read as a shape its
+ *    version does not describe. It doubles as
  *    the server-action validation for draft saves (operator story
  *    34: malformed content is rejected at the boundary). Reading a stored
  *    snapshot goes through `readDocumentJson` (document-version.ts), which
@@ -73,6 +74,13 @@
 
 import { z } from 'zod'
 import { AnchorSchema, readBlockAnchor, writeBlockAnchor, type DocumentAnchor } from './anchors'
+import {
+  LINK_CHIP_CLASS,
+  LinkNodeSchema,
+  createLinkChip,
+  readLinkChip,
+  type LinkNode,
+} from './links'
 
 // ── Schema (versions 1.0 and 1.1) ───────────────────────────────────────────
 
@@ -94,9 +102,15 @@ const StyleSchema = z.strictObject({
 export type EditorTextStyle = z.infer<typeof StyleSchema>
 
 /**
- * One inline node, exactly the shapes the reference `createInlineNodes`
- * (L2449) accepts: plain strings/numbers, `{br}`, styled text, field
- * references by name or id, nested styled groups.
+ * One inline node: the shapes the reference `createInlineNodes` (L2449)
+ * accepts — plain strings/numbers, `{br}`, styled text, field references by
+ * name or id, nested styled groups — plus the v1.1 `link` node (#72).
+ *
+ * This TS type is the union across ALL supported versions, deliberately: the
+ * runtime schemas are versioned apart (see {@link inlineNodeSchema}), while
+ * every consumer of a parsed document works on the NEWEST version, which
+ * `upgradeDocumentJson` guarantees. Splitting the type per version would buy
+ * precision nothing reads.
  */
 export type InlineNode =
   | string
@@ -105,83 +119,115 @@ export type InlineNode =
   | { type: 'br' }
   | { text: string | number; style?: EditorTextStyle }
   | { field?: string; fieldId?: string }
+  | LinkNode
   | { children: InlineNode[]; style?: EditorTextStyle }
 
-const InlineNodeSchema: z.ZodType<InlineNode> = z.lazy(() =>
-  z.union([
-    z.string(),
-    z.number(),
-    z.strictObject({ br: z.literal(true) }),
-    z.strictObject({ type: z.literal('br') }),
-    z.strictObject({
-      text: z.union([z.string(), z.number()]),
-      style: StyleSchema.optional(),
-    }),
-    z
-      .strictObject({
-        field: z.string().optional(),
-        fieldId: z.string().optional(),
-      })
-      .refine((v) => v.field !== undefined || v.fieldId !== undefined, {
-        message: 'Feldreferenz benötigt "field" oder "fieldId".',
+/**
+ * The inline union of ONE schema version. `extra` holds the node types that
+ * version added — today just the v1.1 `link`.
+ *
+ * The parameter is what keeps the version discriminator meaningful all the way
+ * down: v1.0 and v1.1 differ in their inline vocabulary, not only in their
+ * block shape, so a v1.0 snapshot carrying a link is refused rather than read
+ * as something its version does not describe (spec #63 §2). The `children`
+ * group recurses into the SAME version, so a link cannot smuggle itself into a
+ * v1.0 document by hiding inside a styled group either.
+ */
+function inlineNodeSchema(extra: readonly z.ZodType<InlineNode>[]): z.ZodType<InlineNode> {
+  const self: z.ZodType<InlineNode> = z.lazy(() =>
+    z.union([
+      z.string(),
+      z.number(),
+      z.strictObject({ br: z.literal(true) }),
+      z.strictObject({ type: z.literal('br') }),
+      z.strictObject({
+        text: z.union([z.string(), z.number()]),
+        style: StyleSchema.optional(),
       }),
+      z
+        .strictObject({
+          field: z.string().optional(),
+          fieldId: z.string().optional(),
+        })
+        .refine((v) => v.field !== undefined || v.fieldId !== undefined, {
+          message: 'Feldreferenz benötigt "field" oder "fieldId".',
+        }),
+      ...extra,
+      z.strictObject({
+        children: z.array(self),
+        style: StyleSchema.optional(),
+      }),
+    ])
+  )
+  return self
+}
+
+const InlineNodeSchemaV1_0 = inlineNodeSchema([])
+const InlineNodeSchemaV1_1 = inlineNodeSchema([LinkNodeSchema])
+
+/**
+ * The four block types whose content is inline, built against one version's
+ * inline union. `code` and `image` hold no inline nodes, so they are shared
+ * across versions unchanged.
+ *
+ * Key order inside each shape is part of the byte-stability contract — the
+ * serializer emits these keys in this order, and a parse reproduces the shape
+ * order, so the two must not drift.
+ */
+function inlineBlockSchemas(inline: z.ZodType<InlineNode>) {
+  /** Reference list items: an inline array or `{ children }` / `{ text }` (L2531). */
+  const ListItemSchema = z.union([
+    z.array(inline),
     z.strictObject({
-      children: z.array(InlineNodeSchema),
-      style: StyleSchema.optional(),
+      children: z.array(inline).optional(),
+      text: z.union([z.string(), z.number()]).optional(),
     }),
   ])
-)
 
-/** Reference list items: an inline array or `{ children }` / `{ text }` (L2531). */
-const ListItemSchema = z.union([
-  z.array(InlineNodeSchema),
-  z.strictObject({
-    children: z.array(InlineNodeSchema).optional(),
-    text: z.union([z.string(), z.number()]).optional(),
-  }),
-])
+  /** Reference captions: a plain string or `{ children }` / `{ text }` (L2547). */
+  const CaptionSchema = z.union([
+    z.string(),
+    z.strictObject({
+      children: z.array(inline).optional(),
+      text: z.union([z.string(), z.number()]).optional(),
+    }),
+  ])
 
-/** Reference captions: a plain string or `{ children }` / `{ text }` (L2547). */
-const CaptionSchema = z.union([
-  z.string(),
-  z.strictObject({
-    children: z.array(InlineNodeSchema).optional(),
-    text: z.union([z.string(), z.number()]).optional(),
-  }),
-])
+  return {
+    paragraph: z.strictObject({
+      type: z.literal('paragraph'),
+      children: z.array(inline).optional(),
+      text: z.union([z.string(), z.number()]).optional(),
+      style: StyleSchema.optional(),
+    }),
+    heading: z.strictObject({
+      type: z.literal('heading'),
+      level: z.number().optional(),
+      children: z.array(inline).optional(),
+      text: z.union([z.string(), z.number()]).optional(),
+      style: StyleSchema.optional(),
+    }),
+    list: z.strictObject({
+      type: z.literal('list'),
+      ordered: z.boolean().optional(),
+      items: z.array(ListItemSchema).optional(),
+      style: StyleSchema.optional(),
+    }),
+    formula: z.strictObject({
+      type: z.literal('formula'),
+      latex: z.string().optional(),
+      /** Reference alias (L2538). */
+      rawLatex: z.string().optional(),
+      /** Reference per-formula library flag — only consulted when the top-level `library` list is absent. */
+      library: z.boolean().optional(),
+      caption: CaptionSchema.optional(),
+      style: StyleSchema.optional(),
+    }),
+  }
+}
 
-const ParagraphBlockSchema = z.strictObject({
-  type: z.literal('paragraph'),
-  children: z.array(InlineNodeSchema).optional(),
-  text: z.union([z.string(), z.number()]).optional(),
-  style: StyleSchema.optional(),
-})
-
-const HeadingBlockSchema = z.strictObject({
-  type: z.literal('heading'),
-  level: z.number().optional(),
-  children: z.array(InlineNodeSchema).optional(),
-  text: z.union([z.string(), z.number()]).optional(),
-  style: StyleSchema.optional(),
-})
-
-const ListBlockSchema = z.strictObject({
-  type: z.literal('list'),
-  ordered: z.boolean().optional(),
-  items: z.array(ListItemSchema).optional(),
-  style: StyleSchema.optional(),
-})
-
-const FormulaBlockSchema = z.strictObject({
-  type: z.literal('formula'),
-  latex: z.string().optional(),
-  /** Reference alias (L2538). */
-  rawLatex: z.string().optional(),
-  /** Reference per-formula library flag — only consulted when the top-level `library` list is absent. */
-  library: z.boolean().optional(),
-  caption: CaptionSchema.optional(),
-  style: StyleSchema.optional(),
-})
+const InlineBlocksV1_0 = inlineBlockSchemas(InlineNodeSchemaV1_0)
+const InlineBlocksV1_1 = inlineBlockSchemas(InlineNodeSchemaV1_1)
 
 /** Slice-7 extension — the reference importer had no mapping for `<pre>` blocks. */
 const CodeBlockSchema = z.strictObject({
@@ -205,10 +251,10 @@ const ImageBlockSchema = z.strictObject({
 
 /** The v1.0 block union — the six block types, none of them anchorable. */
 const BlockSchemaV1_0 = z.discriminatedUnion('type', [
-  ParagraphBlockSchema,
-  HeadingBlockSchema,
-  ListBlockSchema,
-  FormulaBlockSchema,
+  InlineBlocksV1_0.paragraph,
+  InlineBlocksV1_0.heading,
+  InlineBlocksV1_0.list,
+  InlineBlocksV1_0.formula,
   CodeBlockSchema,
   ImageBlockSchema,
 ])
@@ -225,12 +271,15 @@ const BlockSchemaV1_0 = z.discriminatedUnion('type', [
  */
 const AnchorExtension = { anchor: AnchorSchema.optional() }
 
-/** The v1.1 block union — v1.0 plus the optional block-level anchor. */
+/**
+ * The v1.1 block union — v1.0 plus the optional block-level anchor, over the
+ * v1.1 inline vocabulary (which is where the `link` node lives).
+ */
 const BlockSchemaV1_1 = z.discriminatedUnion('type', [
-  ParagraphBlockSchema.extend(AnchorExtension),
-  HeadingBlockSchema.extend(AnchorExtension),
-  ListBlockSchema.extend(AnchorExtension),
-  FormulaBlockSchema.extend(AnchorExtension),
+  InlineBlocksV1_1.paragraph.extend(AnchorExtension),
+  InlineBlocksV1_1.heading.extend(AnchorExtension),
+  InlineBlocksV1_1.list.extend(AnchorExtension),
+  InlineBlocksV1_1.formula.extend(AnchorExtension),
   CodeBlockSchema.extend(AnchorExtension),
   ImageBlockSchema.extend(AnchorExtension),
 ])
@@ -700,6 +749,13 @@ function createInlineNodes(children: InlineNode[] | undefined, ctx: InlineContex
       frag.appendChild(ctx.docEl.createElement('br'))
       continue
     }
+    if ('type' in ch && ch.type === 'link') {
+      // v1.1 link (#72). An opaque chip, like a field pill: the whole node is
+      // one atom in the DOM, so the label and the target it names cannot be
+      // separated by editing.
+      frag.appendChild(createLinkChip(ctx.docEl, { target: ch.target, label: ch.label }))
+      continue
+    }
     if ('text' in ch) {
       frag.appendChild(createTextSpan(ctx.docEl, ch))
       continue
@@ -1000,6 +1056,17 @@ function appendInlineNode(node: Node, out: InlineNode[]): void {
     out.push({ fieldId: el.dataset['fieldId'] ?? '' })
     return
   }
+  if (el.classList.contains(LINK_CHIP_CLASS)) {
+    const link = readLinkChip(el)
+    // A chip whose dataset does not describe a target is not a link. Falling
+    // through leaves its label as ordinary text, which is the honest outcome:
+    // the sentence still reads, and nothing unfollowable enters the JSON.
+    if (link) {
+      // Key order is the byte-stability contract — same order as LinkNodeSchema.
+      out.push({ type: 'link', target: link.target, label: link.label })
+      return
+    }
+  }
   const style = extractStyle(el)
   const childNodes = Array.from(el.childNodes)
   const firstChild = childNodes[0]
@@ -1277,6 +1344,34 @@ export function collectReferencedImageIds(doc: EditorDocumentJson): string[] {
     if (block.type !== 'image' || seen.has(block.imageId)) continue
     seen.add(block.imageId)
     out.push(block.imageId)
+  }
+  return out
+}
+
+// ── Sprungmarken of a published document (#72) ──────────────────────────────
+
+/**
+ * The Sprungmarken a document offers as link targets, in content order.
+ *
+ * This is what the link picker lists beneath a document — read out of the
+ * published snapshot itself, which is why linking needs no anchor table and no
+ * index (spec #63 §6). Takes a document at the NEWEST version because only
+ * v1.1 blocks can carry an anchor; callers come through `readDocumentJson`,
+ * which upgrades.
+ *
+ * Duplicate ids are dropped rather than listed twice. The editor's anchor
+ * registry makes them impossible on the authoring side, but a snapshot is
+ * untrusted storage, and offering one link target under two names would be a
+ * picker that lies.
+ */
+export function collectDocumentAnchors(doc: LatestEditorDocumentJson): DocumentAnchor[] {
+  const seen = new Set<string>()
+  const out: DocumentAnchor[] = []
+  for (const block of doc.content) {
+    const anchor = block.anchor
+    if (!anchor || seen.has(anchor.id)) continue
+    seen.add(anchor.id)
+    out.push(anchor)
   }
   return out
 }

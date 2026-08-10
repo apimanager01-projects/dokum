@@ -99,6 +99,7 @@ src/
 │   │   ├── editor-documents.ts    # createEditorDraft, updateEditorDraft, deleteEditorDraft
 │   │   ├── editor-images.ts       # uploadEditorImage (implicit anchor draft, storage upload)
 │   │   ├── editor-publish.ts      # publishEditorDraft (PNG → Document; create / update-in-place)
+│   │   ├── link-targets.ts        # listLinkTargetDocuments (#72) — the link picker's lazy fourth level; a READ, so no audit entry and no revalidation
 │   │   └── index.ts               # Re-exports all actions
 │   └── auth.ts                    # signIn, signUp, signOut
 ├── app/
@@ -158,9 +159,10 @@ src/
 │   │   ├── AdminTree.tsx          # Generic nested tree visualizer
 │   │   ├── AdminSubpageNav.tsx    # Tab navigation for admin subpages
 │   │   └── editor/                # LaTeX editor React shell (PRD #28)
-│   │       ├── EditorShell.tsx    #   save bar + Term state + imperative mount (controller)
+│   │       ├── EditorShell.tsx    #   save bar + Term state + imperative mount (controller) + the link picker's promise seam
 │   │       ├── EditorToolbar.tsx  #   rich-text toolbar (uncontrolled → controller)
 │   │       ├── ExportBar.tsx      #   Kurs/Unit/Task targets, Term, filename, PNG download + publish (size guard)
+│   │       ├── LinkTargetPicker.tsx # Link target tree (#72): PUBLISHED Kurse → Einheiten → Aufgaben from the page prop, Dokumente + their Sprungmarken fetched lazily per Aufgabe
 │   │       └── DraftList.tsx      #   draft list with open/delete
 │   ├── auth/
 │   │   ├── LoginForm.tsx
@@ -195,9 +197,10 @@ src/
 │   ├── audit.ts                   # logAdminAction() — fire-and-forget audit log writer
 │   ├── editor/                    # LaTeX editor (PRD #28): TWO imperative surfaces (controller.ts for /admin/editor, document-render.ts for the student viewer) + pure modules
 │   │   ├── controller.ts          # Imperative contenteditable controller (browser-only)
-│   │   ├── document-json.ts       # Versioned Zod schema (discriminated union over `version`: v1.0, v1.1) + ported importer + serializer
+│   │   ├── document-json.ts       # Versioned Zod schema (discriminated union over `version`: v1.0, v1.1 = block `anchor` + inline `link`) + ported importer + serializer. The inline vocabulary is built PER VERSION, so a v1.0 snapshot carrying a link is refused rather than duck-typed
 │   │   ├── document-version.ts    # Upgrade-on-read: pure vN→vN+1 chain + readDocumentJson (the boundary for stored snapshots) — pure
 │   │   ├── anchors.ts             # Sprungmarken (#71): the anchor's Zod shape + its block-dataset contract + the registry that resolves ids duplicated by copy/paste. DOM-only (no MathJax, no server), so jsdom-testable — but it WRITES block datasets and remembers who owns which id, so not pure
+│   │   ├── links.ts               # Cross-document links (#72): the target union ({kursId}|{unitId}|{docId}|{docId,anchorId}), the v1.1 `link` node's Zod shape, the chip's DOM contract, and the picker seam types. DOM-only, no server
 │   │   ├── document-render.ts     # Student renderer: document JSON → live DOM, reusing the importer + resolver; MathJax-free. Owns the student-editable inputs and the recompute they trigger, so it is imperative (owns its DOM, binds listeners) — React must not reconcile inside its container
 │   │   ├── publish-plan.ts        # Copy-fresh-then-swap image re-homing plan for publishing (what to copy/rewrite/delete) — pure
 │   │   ├── expression-evaluator.ts # CSP-safe math tokenizer/parser — replaces new Function; errors → NaN
@@ -347,7 +350,9 @@ Every major route segment has scoped `error.tsx` and `loading.tsx` files. A fail
 | `uploadEditorImage` | `editor-images.ts` | Upload an editor image to storage + insert `editor_images` row; creates the implicit „Unbenannt" anchor draft when no draft exists yet |
 | `publishEditorDraft` | `editor-publish.ts` | Publish a draft's rendered PNG as a Document: updates the linked Document's file + title in place by default (same entry for students), or creates + links a new Document (first publish, „Als neues Dokument", dead-link fallback); mirrors the documents.ts upload/rollback pattern and maintains `published_document_id` |
 
-All actions: validate input via Zod → auth check via `getAdminUser()` → database operation → audit log → revalidate cache.
+| `listLinkTargetDocuments` | `link-targets.ts` | The link picker's lazy fourth level (#72): the Dokumente of one Aufgabe plus their Sprungmarken, and **only if the Aufgabe's Kurs is published** — the rule that makes „unpublished targets cannot be selected" true at the boundary. Parses the published snapshot server-side so the content itself never crosses to the client |
+
+All MUTATING actions: validate input via Zod → auth check via `getAdminUser()` → database operation → audit log → revalidate cache. `listLinkTargetDocuments` is the one read-only action: it validates and auth-checks the same way, but writes nothing, so it neither audits nor revalidates.
 
 ### Auth (`src/actions/auth.ts`)
 
@@ -506,6 +511,11 @@ Set `published = true/false` in the `kurse` table. The Kurs and its Units appear
 | ⚓ on the very first line of an empty draft | The line is a bare text node, not a block | Handled (#93): the ⚓ button promotes the stray run into the `<p>` the serializer would have folded it into anyway (`promoteStrayRunToBlock`), so the saved document is unchanged and the line becomes markable |
 | A pasted block's ⚓ badge keeps the name but the link goes elsewhere | By design (#71) | Copying a marked block re-stamps the copy with a **fresh** id and keeps the label — two blocks may never answer to one link. Rename the copy to tell them apart |
 | The ⚓ badge vanishes from the half after an Enter | By design (#71) | A contenteditable Enter clones the block's attributes; the new half is unmarked rather than given a second Sprungmarke under the same name |
+| The link picker's tree is empty | No Kurs is published | By design (#72): a link may only point at something a student can reach, so authoring is order-dependent — publish the target Kurs first, then link to it |
+| A Dokument is missing from the link picker | Its Kurs is unpublished, or the Aufgabe was never expanded | The document level is fetched per Aufgabe on expand (`listLinkTargetDocuments`), and the server returns nothing at all for an Aufgabe under an unpublished Kurs |
+| A published Dokument lists no Sprungmarken | Legacy row, or an unreadable snapshot | Only `content` snapshots carry anchors: a PDF/image document has none, and a snapshot `readDocumentJson` refuses contributes none rather than failing the picker. The document itself stays linkable as a whole |
+| Can't put the cursor inside a link chip | By design (#72) | The chip is `contenteditable="false"` so no keystroke can separate a label from its target — **click** the chip to re-target, relabel or remove it |
+| „Link entfernen" leaves the words behind | By design (#72) | Unlinking replaces the chip with its own label as plain text; the author asked for the link to go, not the sentence |
 
 ## File Reference Guide
 

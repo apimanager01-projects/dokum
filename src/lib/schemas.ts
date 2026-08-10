@@ -92,6 +92,13 @@ export const EditorPublishSchema = z.object({
   mode: z.enum(['update', 'new']).default('update'),
 })
 
+// The link picker's lazy fourth level (#72). Not a FormData action — the
+// picker calls it with a plain Task id on expand — but the input is still
+// validated before it reaches the DB, like every other server-action input.
+export const LinkTargetDocumentsSchema = z.object({
+  task_id: uuidField,
+})
+
 // ── Auth schemas ────────────────────────────────────────────────────────────
 
 export const SignInSchema = z.object({

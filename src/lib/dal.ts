@@ -374,16 +374,20 @@ export async function getEditorTargetTree(): Promise<EditorTargetKurs[]> {
 // Dokumente of one Task, WITH their published snapshot so the caller can read
 // the Sprungmarken out of it.
 //
-// Returns [] when the Task's Kurs is unpublished, which is the rule that makes
-// „unpublished targets cannot be selected" true at the boundary rather than
-// only in the picker's UI: an author must publish the target first, because a
-// link may only point at something a student can reach (spec #63 §6).
+// Returns [] when the Task's Kurs is unpublished: a link may only be authored
+// against something a student can reach (spec #63 §6), so the level that costs
+// a round trip refuses server-side rather than trusting the picker's filter.
+//
+// That is an AUTHORING-TIME rule, not an invariant of a stored link. A Kurs can
+// be unpublished long after something linked into it, so nothing on the save
+// path re-checks it — a target that has gone dark is the resolver's business
+// (#74), which degrades it quietly for the student.
 //
 // The Kurs is reached through the `units!inner` / `kurse!inner` embed, so the
 // gate and the rows arrive in one round trip.
 export async function getLinkTargetDocuments(
   taskId: string
-): Promise<{ id: string; title: string; content: unknown }[]> {
+): Promise<LinkTargetDocumentRow[]> {
   const supabase = await createClient()
   const { data } = await supabase
     .from('tasks')
@@ -394,21 +398,27 @@ export async function getLinkTargetDocuments(
     .maybeSingle()
   if (!data) return []
 
-  // PostgREST returns a to-one embed as an object; the generated row type is
-  // untyped here (no generated DB types in this project — CLAUDE.md), so the
-  // shape is asserted once, at the boundary.
-  const row = data as unknown as {
-    units: { kurse: { published: boolean } } | null
-    documents:
-      | { id: string; title: string; content: unknown; position: number; created_at: string }[]
-      | null
-  }
+  // Nested embeds are not inferred without generated types; the `!inner` joins
+  // guarantee the ancestry exists, and the shape is pinned by the row type
+  // below — the one cast in this function (getDocumentWithAncestry precedent).
+  const row = data as unknown as LinkTargetTaskRow
   if (!row.units?.kurse?.published) return []
   return sortByPosition(row.documents ?? []).map(({ id, title, content }) => ({
     id,
     title,
     content,
   }))
+}
+
+/** One linkable Dokument, snapshot included so the caller can read its anchors. */
+type LinkTargetDocumentRow = { id: string; title: string; content: unknown }
+
+// The raw PostgREST shape of the query above: the published gate reached
+// through the ancestry, plus the Task's documents. `position`/`created_at`
+// ride along only so the DAL can apply the hierarchy's sort here, as everywhere.
+type LinkTargetTaskRow = {
+  units: { kurse: { published: boolean } } | null
+  documents: (LinkTargetDocumentRow & { position: number; created_at: string })[] | null
 }
 
 // Used by /api/editor-image/[imageId] route (slice 8). RLS is admin-only, so

@@ -17,7 +17,6 @@ import {
   LinkNodeSchema,
   LinkTargetSchema,
   createLinkChip,
-  linkChips,
   linkTargetAnchorId,
   linkTargetId,
   linkTargetKind,
@@ -177,11 +176,4 @@ describe('link chip dataset', () => {
     expect(readLinkChip(el)).toBeNull()
   })
 
-  it('lists chips in document order and ignores everything else', () => {
-    const root = document.createElement('div')
-    root.appendChild(createLinkChip(document, { target: { kursId: KURS_ID }, label: 'A' }))
-    root.appendChild(document.createElement('p'))
-    root.appendChild(createLinkChip(document, { target: { unitId: UNIT_ID }, label: 'B' }))
-    expect(linkChips(root).map((el) => el.textContent)).toEqual(['A', 'B'])
-  })
 })

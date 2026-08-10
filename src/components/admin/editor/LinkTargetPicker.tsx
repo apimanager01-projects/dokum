@@ -2,7 +2,17 @@
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { listLinkTargetDocuments } from '@/actions/admin'
-import type { DocumentLink, LinkPickRequest, LinkPickResult, LinkTarget } from '@/lib/editor/links'
+import {
+  LINK_ANCHOR_ICON,
+  LINK_KIND_ICON,
+  LINK_KIND_LABEL,
+  linkTargetKind,
+  sameLinkTarget,
+  type DocumentLink,
+  type LinkPickRequest,
+  type LinkPickResult,
+  type LinkTarget,
+} from '@/lib/editor/links'
 import type { EditorTargetKurs, LinkTargetDocument } from '@/types'
 
 /**
@@ -59,7 +69,14 @@ export function LinkTargetPicker({
   const [initialLabel] = useState(request.current?.label ?? request.selectedText)
   const [label, setLabel] = useState(initialLabel)
   const [labelEdited, setLabelEdited] = useState(false)
-  const [choice, setChoice] = useState<Choice | null>(null)
+  // An existing link starts out already pointing where it points, so RELABELLING
+  // is one edit. Seeding this null instead would force the author to walk the
+  // tree back down to the target just to fix a word — and where that target's
+  // Kurs has since been unpublished, the tree cannot offer it at all, so the
+  // link could only be deleted, never rewritten.
+  const [choice, setChoice] = useState<Choice | null>(
+    request.current ? currentChoice(request.current) : null
+  )
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [documents, setDocuments] = useState<Record<string, DocumentsState>>({})
 
@@ -80,10 +97,15 @@ export function LinkTargetPicker({
   }
 
   async function expandTask(taskId: string) {
+    const opening = !expanded.has(taskId)
     toggle(taskId)
-    // Loaded once per open picker. A re-fetch on every expand would hit the
-    // server for a tree the author is only browsing.
-    if (documents[taskId]) return
+    if (!opening) return
+    // Loaded once per open picker — a re-fetch on every expand would hit the
+    // server for a tree the author is only browsing. A FAILED load is the
+    // exception: keeping it would hide the Aufgabe's documents for the life of
+    // the dialog over one transient error, so collapsing and reopening retries.
+    const state = documents[taskId]
+    if (state && state.status !== 'error') return
     setDocuments((prev) => ({ ...prev, [taskId]: { status: 'loading' } }))
     try {
       const result = await listLinkTargetDocuments(taskId)
@@ -166,7 +188,7 @@ export function LinkTargetPicker({
                     expandable
                     expanded={expanded.has(kurs.id)}
                     onToggle={() => toggle(kurs.id)}
-                    icon="📘"
+                    icon={LINK_KIND_ICON.kurs}
                     title={kurs.title}
                     selected={isSelected(choice, { kursId: kurs.id })}
                     onSelect={() =>
@@ -183,7 +205,7 @@ export function LinkTargetPicker({
                             expandable
                             expanded={expanded.has(unit.id)}
                             onToggle={() => toggle(unit.id)}
-                            icon="📗"
+                            icon={LINK_KIND_ICON.unit}
                             title={unit.title}
                             selected={isSelected(choice, { unitId: unit.id })}
                             onSelect={() =>
@@ -230,7 +252,7 @@ export function LinkTargetPicker({
                                             <li key={doc.id}>
                                               <Row
                                                 depth={3}
-                                                icon="📄"
+                                                icon={LINK_KIND_ICON.document}
                                                 title={doc.title}
                                                 selected={isSelected(choice, { docId: doc.id })}
                                                 onSelect={() =>
@@ -246,7 +268,7 @@ export function LinkTargetPicker({
                                                   <li key={anchor.id}>
                                                     <Row
                                                       depth={4}
-                                                      icon="⚓"
+                                                      icon={LINK_ANCHOR_ICON}
                                                       title={anchor.label || 'Unbenannte Sprungmarke'}
                                                       selected={isSelected(choice, {
                                                         docId: doc.id,
@@ -339,10 +361,27 @@ export function LinkTargetPicker({
   )
 }
 
+/**
+ * What the picker starts on when an EXISTING link is being edited: where it
+ * already points.
+ *
+ * The tree cannot describe that target yet — a document's level is not fetched
+ * until its Aufgabe is expanded, and the target may sit under a Kurs that is no
+ * longer published — so the path names the kind rather than the route to it.
+ * Choosing anything in the tree replaces this wholesale.
+ */
+function currentChoice(current: DocumentLink): Choice {
+  const kind = LINK_KIND_LABEL[linkTargetKind(current.target)]
+  return {
+    target: current.target,
+    name: current.label,
+    path: `bisheriges Ziel (${kind})`,
+  }
+}
+
 /** Whether `choice` already points at exactly this target. */
 function isSelected(choice: Choice | null, target: LinkTarget): boolean {
-  if (!choice) return false
-  return JSON.stringify(choice.target) === JSON.stringify(target)
+  return choice !== null && sameLinkTarget(choice.target, target)
 }
 
 const INDENT = ['pl-2', 'pl-6', 'pl-10', 'pl-14', 'pl-[4.5rem]'] as const

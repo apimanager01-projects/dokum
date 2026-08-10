@@ -471,7 +471,10 @@
 /* ------------------------------------------------------- Link-Chips (#72) */
 /* Wie die Input/Output-Pillen ein Atom: contenteditable="false", also kann der
    Cursor die Beschriftung nicht von ihrem Ziel trennen. Ein Klick öffnet den
-   Ziel-Picker (controller.ts, onEditorClick). */
+   Ziel-Picker (controller.ts, onEditorClick).
+   Nur die AUTORENSEITE: der Student-Renderer benutzt zwar denselben Importer
+   und erzeugt daher dieselben Chips, hat aber sein eigenes, auf
+   `.dokum-document` begrenztes Stylesheet — dort landet der Chip mit #73. */
 
 .latex-editor .doc-link {
   display: inline-block;
@@ -494,7 +497,10 @@
 
 /* Das Zielsymbol ist CSS-Chrome, kein Inhalt: es steht in keinem textContent
    und kann deshalb nie in einer gespeicherten Beschriftung landen. Reihenfolge
-   zählt — die Sprungmarke gewinnt gegen das allgemeine Dokument. */
+   zählt — die Sprungmarke gewinnt gegen das allgemeine Dokument.
+   ⚠ Zweite Kopie von LINK_KIND_ICON / LINK_ANCHOR_ICON (lib/editor/links.ts),
+   den der Picker liest: ein ::before kann die Map nicht lesen, also müssen
+   beide Seiten gemeinsam geändert werden. */
 .latex-editor .doc-link[data-link-kind='kurs']::before {
   content: '📘 ';
 }

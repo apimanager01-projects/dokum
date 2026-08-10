@@ -111,12 +111,30 @@ export function sameLinkTarget(a: LinkTarget, b: LinkTarget): boolean {
   )
 }
 
-/** German name of a target kind — picker headings and chip tooltips. */
+/** German name of a target kind — what the picker calls the thing. */
 export const LINK_KIND_LABEL: Record<LinkTargetKind, string> = {
   kurs: 'Kurs',
   unit: 'Einheit',
   document: 'Dokument',
 }
+
+/**
+ * The glyph that tells an author how far a link travels, one per kind.
+ *
+ * ⚠ MIRRORED IN CSS. The chip draws its own icon from `data-link-kind` in a
+ * `::before` (editor.css, „Link-Chips"), because an icon inside the chip's text
+ * would end up baked into a stored label. A pseudo-element cannot read this
+ * map, so the two must be changed together — the picker reads it from here so
+ * that at least the TypeScript side has one copy.
+ */
+export const LINK_KIND_ICON: Record<LinkTargetKind, string> = {
+  kurs: '📘',
+  unit: '📗',
+  document: '📄',
+}
+
+/** A Sprungmarke is not a kind of its own, but it does get its own glyph. */
+export const LINK_ANCHOR_ICON = '⚓'
 
 /** The class every link chip carries — the serializer's hook. */
 export const LINK_CHIP_CLASS = 'doc-link'
@@ -177,11 +195,6 @@ export function createLinkChip(docEl: Document, link: DocumentLink): HTMLElement
   el.setAttribute('contenteditable', 'false')
   writeLinkChip(el, link)
   return el
-}
-
-/** Every link chip inside `root`, in document order. */
-export function linkChips(root: HTMLElement): HTMLElement[] {
-  return Array.from(root.querySelectorAll<HTMLElement>(LINK_CHIP_SELECTOR))
 }
 
 // ── The picker seam ─────────────────────────────────────────────────────────

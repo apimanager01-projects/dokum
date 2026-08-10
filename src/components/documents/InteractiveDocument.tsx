@@ -1,9 +1,12 @@
 'use client'
 
 import { Component, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
+import { anchoredBlocks } from '@/lib/editor/anchors'
 import { renderDocumentJson } from '@/lib/editor/document-render'
 import { readDocumentJson } from '@/lib/editor/document-version'
 import { loadMathJax } from '@/lib/editor/mathjax-loader'
+import { documentIdInPath, linkHref, linkOpensOverlay } from '@/lib/link-navigation'
 import { DocumentPng } from './DocumentPng'
 import { Watermark } from './Watermark'
 import './interactive-document.css'
@@ -73,6 +76,17 @@ function LiveDocument({
   const hostRef = useRef<HTMLDivElement | null>(null)
   const [renderFailed, setRenderFailed] = useState(false)
 
+  // The router is reached through a ref rather than through the effect's
+  // dependencies, and that is not a style choice: re-running the effect calls
+  // `renderDocumentJson` again, which rebuilds the whole document and throws
+  // away every value the student typed into it. Nothing that merely CHANGES may
+  // be a dependency of this effect.
+  const router = useRouter()
+  const routerRef = useRef(router)
+  useEffect(() => {
+    routerRef.current = router
+  }, [router])
+
   useEffect(() => {
     if (!snapshot.ok) {
       console.error(`[InteractiveDocument ${docId}] Snapshot abgelehnt, PNG-Fallback:`, snapshot.error)
@@ -99,14 +113,82 @@ function LiveDocument({
         })
     }
 
+    // Where a link lands inside THIS document (#73). Run after the first
+    // typeset rather than straight after the render: a formula changes height
+    // when its source is replaced by SVG, so scrolling before that settles
+    // aims at a position the document is about to move out from under.
+    const scrollToMarkedSpot = (anchorId: string) => {
+      if (!anchorId) return
+      // Matched by walking the marked blocks rather than by a selector: an
+      // anchor id is opaque and only ever required to be non-empty, so it
+      // cannot be interpolated into one safely.
+      const block = anchoredBlocks(host).find((el) => el.dataset['anchorId'] === anchorId)
+      block?.scrollIntoView({ block: 'start' })
+    }
+
+    // Whether THIS mounted copy is the one the URL is addressing (#99).
+    //
+    // The Einheit page renders every document of the unit live at once, so
+    // opening the overlay on one of them puts the same `data-anchor-id` in the
+    // DOM twice. Both copies would otherwise chase the same fragment and the
+    // page underneath would scroll away behind the overlay — the one thing the
+    // overlay (#70) exists to prevent, and invisible until the student closes
+    // it and finds themselves somewhere else.
+    //
+    // Two conditions, both needed. The layer: a host's own dialog must be the
+    // open one, which with `null === null` also says that while no dialog is
+    // open only a host outside every dialog may move. And the address: the
+    // document the path names must be this one, which is what separates two
+    // different documents that happen to share an anchor id.
+    const addressesThisDocument = () =>
+      host.closest('dialog') === window.document.querySelector('dialog[open]') &&
+      documentIdInPath(window.location.pathname) === docId
+
     try {
       const { renderTargets } = renderDocumentJson(snapshot.doc, host, {
         imageUrl: (imageId) => `/api/image/${imageId}`,
+        linkHref,
+        // Client-side, so the page underneath is never unmounted and the
+        // values the student typed survive the trip (#70). The href comes back
+        // from the chip rather than being resolved again, so a click cannot
+        // land anywhere other than where the chip says it goes.
+        //
+        // `scroll: false` only for the overlay: it stops the router discarding
+        // the reading position of a page that stays on screen, and would
+        // strand a student halfway down a Kurs page they have never seen.
+        followLink: (target, href) => {
+          routerRef.current.push(href, { scroll: !linkOpensOverlay(target) })
+          // A Sprungmarke in the document ALREADY ON SCREEN moves nothing on
+          // its own (#98): that push differs from the current URL only in its
+          // fragment, so the router writes history with `pushState` — and
+          // `pushState` never fires `hashchange`. The listener below is never
+          // reached, which kills the most natural use of a Sprungmarke, a
+          // table of contents linking down into its own document. So resolve
+          // that case here instead of waiting for an event that never comes.
+          //
+          // The anchor comes off the target rather than out of the URL: it
+          // does not depend on when the router commits the push.
+          //
+          // Guarded exactly like the listener, and for the same reason. On the
+          // Einheit page this document is also rendered inline underneath, and
+          // a Dokument link there opens the overlay — so the copy that must
+          // scroll is the one the overlay is about to mount, never this one.
+          if (!('docId' in target) || target.docId !== docId || !target.anchorId) return
+          if (addressesThisDocument()) scrollToMarkedSpot(target.anchorId)
+        },
         // Only the formulas whose value actually moved — an untouched formula
         // must not re-typeset, and re-typesetting is what this costs.
         onRecompute: typeset,
       })
       typeset(renderTargets)
+      // Deliberately UNGUARDED, unlike the two paths above: this runs once per
+      // mount, so only the copy that was just created by the navigation can
+      // reach it. Asking `addressesThisDocument()` here would instead make the
+      // first jump depend on whether the overlay's `showModal()` has landed by
+      // the time the typeset queue drains.
+      queue = queue.then(() => {
+        if (!cancelled) scrollToMarkedSpot(markedSpotInUrl())
+      })
     } catch (err) {
       // Leave nothing half-drawn behind before handing over to the picture.
       host.replaceChildren()
@@ -119,8 +201,18 @@ function LiveDocument({
       })
     }
 
+    // What is left for `hashchange` is history traversal — Back and Forward
+    // between two fragment URLs, which no click adapter sees. Every mounted
+    // document hears it, so the copy the URL is not addressing has to say so
+    // itself; a marked spot can exist in more than one place at once.
+    const onHashChange = () => {
+      if (addressesThisDocument()) scrollToMarkedSpot(markedSpotInUrl())
+    }
+    window.addEventListener('hashchange', onHashChange)
+
     return () => {
       cancelled = true
+      window.removeEventListener('hashchange', onHashChange)
     }
   }, [snapshot, docId])
 
@@ -132,6 +224,23 @@ function LiveDocument({
       <Watermark id={watermarkId} />
     </div>
   )
+}
+
+/**
+ * The Sprungmarke the current URL asks for, or `''`.
+ *
+ * A fragment is user-supplied text — a hand-typed or truncated URL can carry a
+ * broken escape sequence, and `decodeURIComponent` throws on those. Falling
+ * back to the raw fragment keeps a bad URL from throwing out of a listener over
+ * something as small as a scroll position.
+ */
+function markedSpotInUrl(): string {
+  const raw = window.location.hash.slice(1)
+  try {
+    return decodeURIComponent(raw)
+  } catch {
+    return raw
+  }
 }
 
 /**

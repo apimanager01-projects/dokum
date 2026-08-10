@@ -119,13 +119,14 @@ export const LINK_KIND_LABEL: Record<LinkTargetKind, string> = {
 }
 
 /**
- * The glyph that tells an author how far a link travels, one per kind.
+ * The glyph that tells a reader how far a link travels, one per kind.
  *
- * ⚠ MIRRORED IN CSS. The chip draws its own icon from `data-link-kind` in a
- * `::before` (editor.css, „Link-Chips"), because an icon inside the chip's text
- * would end up baked into a stored label. A pseudo-element cannot read this
- * map, so the two must be changed together — the picker reads it from here so
- * that at least the TypeScript side has one copy.
+ * ⚠ MIRRORED IN THE EDITOR'S CSS. The authoring chip draws its icon from
+ * `data-link-kind` in a `::before` (editor.css, „Link-Chips"), because an icon
+ * inside the chip's text would end up baked into a stored label. A
+ * pseudo-element cannot read this map, so those two must be changed together.
+ * The picker and the student's chip (#73) both read it from here, so the
+ * editor stylesheet is the only copy.
  */
 export const LINK_KIND_ICON: Record<LinkTargetKind, string> = {
   kurs: '📘',
@@ -135,6 +136,28 @@ export const LINK_KIND_ICON: Record<LinkTargetKind, string> = {
 
 /** A Sprungmarke is not a kind of its own, but it does get its own glyph. */
 export const LINK_ANCHOR_ICON = '⚓'
+
+/** …and its own name, for the same reason (#73). */
+export const LINK_ANCHOR_LABEL = 'Sprungmarke'
+
+/**
+ * The glyph a target wears. A Sprungmarke wins over the document that holds it
+ * — it is the more specific thing, and it is the one that says the link lands
+ * somewhere particular rather than at the top.
+ */
+export function linkTargetIcon(target: LinkTarget): string {
+  if (linkTargetAnchorId(target)) return LINK_ANCHOR_ICON
+  return LINK_KIND_ICON[linkTargetKind(target)]
+}
+
+/**
+ * What the glyph would say in words — the same four distinctions, for the
+ * readers a CSS-drawn icon never reaches (#73, spec §6 user story 19).
+ */
+export function linkTargetKindLabel(target: LinkTarget): string {
+  if (linkTargetAnchorId(target)) return LINK_ANCHOR_LABEL
+  return LINK_KIND_LABEL[linkTargetKind(target)]
+}
 
 /** The class every link chip carries — the serializer's hook. */
 export const LINK_CHIP_CLASS = 'doc-link'

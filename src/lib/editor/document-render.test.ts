@@ -14,9 +14,23 @@
 
 import { describe, expect, it } from 'vitest'
 import type { LatestEditorDocumentJson } from './document-json'
-import { renderDocumentJson } from './document-render'
+import { renderDocumentJson, type DocumentRenderAdapters } from './document-render'
+import { linkTargetAnchorId, linkTargetId, type LinkTarget } from './links'
 
 const IMG_ID = '44444444-4444-4444-8444-444444444444'
+
+/**
+ * The two things the renderer refuses to know by itself. Both are stubs on
+ * purpose: a URL that looks nothing like the app's proves the chip is pointed
+ * by the caller rather than by a route baked into the renderer.
+ */
+const ADAPTERS: DocumentRenderAdapters = {
+  imageUrl: (id) => `/api/image/${id}`,
+  linkHref: (target) => {
+    const anchor = linkTargetAnchorId(target)
+    return `/ziel/${linkTargetId(target)}` + (anchor ? `#${anchor}` : '')
+  },
+}
 
 function mount(): HTMLElement {
   const host = document.createElement('div')
@@ -25,7 +39,7 @@ function mount(): HTMLElement {
 }
 
 function render(doc: LatestEditorDocumentJson, host = mount()) {
-  const result = renderDocumentJson(doc, host, { imageUrl: (id) => `/api/image/${id}` })
+  const result = renderDocumentJson(doc, host, ADAPTERS)
   return { host, result }
 }
 
@@ -369,7 +383,7 @@ describe('renderDocumentJson — live recompute', () => {
     const changed: HTMLElement[][] = []
     const host = mount()
     const { renderTargets } = renderDocumentJson(WORKED_EXAMPLE, host, {
-      imageUrl: (id) => `/api/image/${id}`,
+      ...ADAPTERS,
       onRecompute: (targets) => changed.push(targets),
     })
     expect(renderTargets[0]?.dataset['latex']).toContain('1 000')
@@ -397,7 +411,7 @@ describe('renderDocumentJson — live recompute', () => {
     const changed: HTMLElement[][] = []
     const host = mount()
     renderDocumentJson(doc, host, {
-      imageUrl: (id) => `/api/image/${id}`,
+      ...ADAPTERS,
       onRecompute: (targets) => changed.push(targets),
     })
     type(inputsFor(host, 'v_unbeteiligt')[0]!, '7')
@@ -545,7 +559,7 @@ describe('renderDocumentJson — live recompute', () => {
     const changed: HTMLElement[][] = []
     const host = mount()
     renderDocumentJson(WORKED_EXAMPLE, host, {
-      imageUrl: (id) => `/api/image/${id}`,
+      ...ADAPTERS,
       onRecompute: (targets) => changed.push(targets),
     })
     const kap = inputsFor(host, 'v_kap')[0]!
@@ -573,5 +587,145 @@ describe('renderDocumentJson — live recompute', () => {
     const { host } = render(WORKED_EXAMPLE)
     type(inputsFor(host, 'v_kap')[0]!, '9999')
     expect(JSON.stringify(WORKED_EXAMPLE)).toBe(before)
+  })
+})
+
+// ── Link chips (#73) ────────────────────────────────────────────────────────
+
+const KURS_ID = '11111111-1111-4111-8111-111111111111'
+const UNIT_ID = '22222222-2222-4222-8222-222222222222'
+const DOC_ID = '33333333-3333-4333-8333-333333333333'
+
+/** One link inside a sentence, which is the only place a link ever sits. */
+function withLink(target: LinkTarget, label = 'Kapitel 3'): LatestEditorDocumentJson {
+  return {
+    version: '1.1',
+    variables: [],
+    content: [
+      {
+        type: 'paragraph',
+        children: [{ text: 'Siehe ' }, { type: 'link', target, label }, { text: ' dazu.' }],
+      },
+    ],
+    library: [],
+  }
+}
+
+function chipIn(host: HTMLElement): HTMLAnchorElement {
+  const chip = host.querySelector<HTMLAnchorElement>('a.doc-link')
+  if (!chip) throw new Error('no link chip rendered')
+  return chip
+}
+
+/** A click the way a student makes it, or with a modifier held. */
+function click(el: HTMLElement, init: MouseEventInit = {}): MouseEvent {
+  const event = new MouseEvent('click', { bubbles: true, cancelable: true, ...init })
+  el.dispatchEvent(event)
+  return event
+}
+
+describe('renderDocumentJson — link chips', () => {
+  it('renders a link as a labelled chip inside its sentence', () => {
+    const { host } = render(withLink({ docId: DOC_ID }))
+    expect(chipIn(host).textContent).toBe('Kapitel 3')
+    // The sentence still reads around it — a chip is a word, not a block.
+    expect(host.querySelector('p')?.textContent).toBe('Siehe Kapitel 3 dazu.')
+  })
+
+  it('points the chip wherever the caller resolves the target', () => {
+    const { host } = render(withLink({ unitId: UNIT_ID }))
+    expect(chipIn(host).getAttribute('href')).toBe(`/ziel/${UNIT_ID}`)
+  })
+
+  it('shows what kind of thing it points at, without putting it in the text', () => {
+    // The glyph is CSS chrome drawn from an attribute: it must not land in the
+    // text a student selects and copies out of the document.
+    const seen = new Set<string>()
+    for (const target of [
+      { kursId: KURS_ID },
+      { unitId: UNIT_ID },
+      { docId: DOC_ID },
+      { docId: DOC_ID, anchorId: 'anc_1' },
+    ] as const) {
+      const chip = chipIn(render(withLink(target)).host)
+      const icon = chip.dataset['linkIcon'] ?? ''
+      expect(icon).not.toBe('')
+      expect(chip.textContent).toBe('Kapitel 3')
+      seen.add(icon)
+    }
+    expect(seen.size).toBe(4)
+  })
+
+  it('names the target kind for a screen reader, which gets no glyph', () => {
+    expect(chipIn(render(withLink({ kursId: KURS_ID })).host).getAttribute('aria-label')).toBe(
+      'Kapitel 3 – Kurs'
+    )
+    expect(
+      chipIn(render(withLink({ docId: DOC_ID, anchorId: 'anc_1' })).host).getAttribute('aria-label')
+    ).toBe('Kapitel 3 – Sprungmarke')
+  })
+
+  it('is reachable and activatable from the keyboard', () => {
+    const { host } = render(withLink({ docId: DOC_ID }))
+    const chip = chipIn(host)
+    // A real anchor with a real href: focus, Enter and „open in new tab" all
+    // come from the platform rather than from a key handler of ours.
+    expect(chip.tagName).toBe('A')
+    expect(chip.hasAttribute('href')).toBe(true)
+    chip.focus()
+    expect(document.activeElement).toBe(chip)
+  })
+
+  it('carries no hover behaviour at all — touch and desktop are identical', () => {
+    const { host } = render(withLink({ docId: DOC_ID }))
+    const chip = chipIn(host)
+    // A `title` would be a tooltip, which is exactly the dropped peek.
+    expect(chip.hasAttribute('title')).toBe(false)
+    expect(chip.getAttribute('target')).toBeNull()
+  })
+
+  it('follows a plain click through the app instead of reloading the page', () => {
+    const followed: Array<[LinkTarget, string]> = []
+    const host = mount()
+    renderDocumentJson(withLink({ docId: DOC_ID, anchorId: 'anc_1' }), host, {
+      ...ADAPTERS,
+      followLink: (target, href) => followed.push([target, href]),
+    })
+    const chip = chipIn(host)
+    const event = click(chip)
+    // Followed to exactly where the chip says it goes — resolving the target a
+    // second time is how a click and its own href drift apart.
+    expect(followed).toEqual([[{ docId: DOC_ID, anchorId: 'anc_1' }, chip.getAttribute('href')]])
+    // Prevented, or the browser would navigate as well and unmount the page
+    // holding everything the student typed.
+    expect(event.defaultPrevented).toBe(true)
+  })
+
+  it('leaves a modified or middle click to the browser', () => {
+    const followed: LinkTarget[] = []
+    const host = mount()
+    renderDocumentJson(withLink({ docId: DOC_ID }), host, {
+      ...ADAPTERS,
+      followLink: (target) => followed.push(target),
+    })
+    const chip = chipIn(host)
+    for (const init of [{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { button: 1 }]) {
+      expect(click(chip, init).defaultPrevented).toBe(false)
+    }
+    expect(followed).toEqual([])
+  })
+
+  it('still navigates when nobody is listening — a chip is never dead', () => {
+    const { host } = render(withLink({ docId: DOC_ID }))
+    // No `followLink`: the anchor's own href takes over, which is a worse
+    // navigation (the source page unmounts) but never a broken one.
+    expect(click(chipIn(host)).defaultPrevented).toBe(false)
+    expect(chipIn(host).getAttribute('href')).toBe(`/ziel/${DOC_ID}`)
+  })
+
+  it('leaves a document without links exactly as it was', () => {
+    const { host } = render(DOC)
+    expect(host.querySelector('.doc-link')).toBeNull()
+    expect(host.querySelector('a')).toBeNull()
   })
 })

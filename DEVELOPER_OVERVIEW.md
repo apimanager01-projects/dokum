@@ -127,6 +127,8 @@ src/
 │   │   ├── page.tsx               #   full-page view: loadDocumentSurface → DocumentArticle
 │   │   ├── error.tsx
 │   │   └── loading.tsx
+│   ├── einheiten/[unitId]/        # Flat Einheit URL (#73) — a REDIRECT to /kurse/[kursId]/units/[unitId]
+│   │   └── page.tsx               #   supplies the Kurs an Einheit link never stored; RLS decides 404 vs redirect
 │   ├── @modal/                    # Overlay slot (#70) — parallel route on the ROOT layout
 │   │   ├── default.tsx            #   renders null: what every non-intercepted route falls back to (its absence would 404 them)
 │   │   └── (.)dokumente/[docId]/  #   INTERCEPTS the route above on client-side navigation only
@@ -193,6 +195,7 @@ src/
 │   ├── document-view.ts           # documentViewKind(): which render path a Document takes (interactive | picture | collection | file) — pure, shared by both student surfaces
 │   ├── document-access.ts         # isDocumentReadable(): the one app-level access rule (published re-check + admin bypass, nullable view) — pure, tested
 │   ├── document-surface.ts        # loadDocumentSurface(): auth + DAL read + access rule + watermark, `cache`d — the single read path behind BOTH student document surfaces
+│   ├── link-navigation.ts         # linkHref()/linkOpensOverlay() (#73): a stored link target → a URL, and whether following it opens the overlay. Pure; injected into the renderer so lib/editor never learns this app's routes
 │   ├── schemas.ts                 # Zod schemas for server action input validation
 │   ├── audit.ts                   # logAdminAction() — fire-and-forget audit log writer
 │   ├── editor/                    # LaTeX editor (PRD #28): TWO imperative surfaces (controller.ts for /admin/editor, document-render.ts for the student viewer) + pure modules
@@ -200,8 +203,8 @@ src/
 │   │   ├── document-json.ts       # Versioned Zod schema (discriminated union over `version`: v1.0, v1.1 = block `anchor` + inline `link`) + ported importer + serializer. The inline vocabulary is built PER VERSION, so a v1.0 snapshot carrying a link is refused rather than duck-typed
 │   │   ├── document-version.ts    # Upgrade-on-read: pure vN→vN+1 chain + readDocumentJson (the boundary for stored snapshots) — pure
 │   │   ├── anchors.ts             # Sprungmarken (#71): the anchor's Zod shape + its block-dataset contract + the registry that resolves ids duplicated by copy/paste. DOM-only (no MathJax, no server), so jsdom-testable — but it WRITES block datasets and remembers who owns which id, so not pure
-│   │   ├── links.ts               # Cross-document links (#72): the target union ({kursId}|{unitId}|{docId}|{docId,anchorId}), the v1.1 `link` node's Zod shape, the chip's DOM contract, and the picker seam types. DOM-only, no server
-│   │   ├── document-render.ts     # Student renderer: document JSON → live DOM, reusing the importer + resolver; MathJax-free. Owns the student-editable inputs and the recompute they trigger, so it is imperative (owns its DOM, binds listeners) — React must not reconcile inside its container
+│   │   ├── links.ts               # Cross-document links (#72): the target union ({kursId}|{unitId}|{docId}|{docId,anchorId}), the v1.1 `link` node's Zod shape, the chip's DOM contract, the kind glyph/label a chip shows (#73), and the picker seam types. DOM-only, no server
+│   │   ├── document-render.ts     # Student renderer: document JSON → live DOM, reusing the importer + resolver; MathJax-free. Owns the student-editable inputs and the recompute they trigger, and swaps each authoring link chip for a navigable <a> (#73), so it is imperative (owns its DOM, binds listeners) — React must not reconcile inside its container
 │   │   ├── publish-plan.ts        # Copy-fresh-then-swap image re-homing plan for publishing (what to copy/rewrite/delete) — pure
 │   │   ├── expression-evaluator.ts # CSP-safe math tokenizer/parser — replaces new Function; errors → NaN
 │   │   ├── latex-normalise.ts     # LaTeX→expression translation + auto-expression extraction
@@ -320,9 +323,33 @@ The overlay is not cosmetic. **The viewer holds live student inputs and nothing 
 - **In-app document links carry `scroll={false}`** (that is all `DocumentLink` is for). Without it the router scrolls to the top of the "page" it is navigating to, silently throwing away the reading position of the page underneath.
 - **The dialog shell renders outside the Suspense boundary.** It costs no database read, so the overlay is on screen while the document is still loading — and it is the *same* dialog element before and after, which is what keeps focus where `showModal()` put it. A `loading.tsx` at that level would open one dialog and swap it for a second, moving focus mid-navigation.
 
+### Following a Link (#73)
+
+A link inside a document is stored as a target and a label; **turning that into a URL is app knowledge and lives in `lib/link-navigation.ts`**, injected into the student renderer as the `linkHref` adapter. The editor library therefore never learns this app's routes, and the renderer cannot silently disagree with `DocumentLink` about where a document lives.
+
+| Target | URL | Presentation |
+|--------|-----|--------------|
+| `{ kursId }` | `/kurse/[kursId]` | Ordinary navigation (a real departure) |
+| `{ unitId }` | `/einheiten/[unitId]` → redirect | Ordinary navigation |
+| `{ docId }` | `/dokumente/[docId]` | Overlay, `scroll: false` |
+| `{ docId, anchorId }` | `/dokumente/[docId]#anchorId` | Overlay, scrolled to the marked block |
+
+**`/einheiten/[unitId]` exists because of what a link stores.** An Einheit link carries `{ unitId }` alone while the Einheit is shown under its Kurs, so something must supply the Kurs id. One server-side redirect does it, which keeps the chip's href a pure function of the target — no lookup in the browser and no Kurs id copied into stored content where it could go stale. It adds no access surface: the lookup runs through the DAL under the reader's own RLS (`units` gate on `published`), and everything else is enforced by the Einheit page it hands the student to.
+
+**The chip is a real `<a href>`, built by `document-render.ts` in place of the authoring chip the importer produces.** That is what gives focus order, Enter, and „open in new tab" for free; a plain left click is intercepted and pushed through `router.push` so the source page is never unmounted, while a modified or middle click is left to the browser. `followLink` is handed the href the chip is **wearing**, not the target to re-resolve, so a click cannot travel somewhere other than where the chip says it goes. Without `followLink` the anchor still navigates — worse (typed values are lost), never dead.
+
+Two consequences of it being a raw anchor rather than a `next/link`, both accepted: **a chip does not prefetch** (`DocumentLink` does, which is why the accordion's „Einzelansicht" opens faster than a chip), and nothing about it can be reconciled by React — it lives in DOM the renderer owns.
+
+- **The kind glyph is CSS chrome**, drawn from `data-link-icon` via `attr()`, so it never enters the text a student copies. The one glyph map lives in `lib/editor/links.ts`; the chip's `aria-label` carries the same distinction in words for readers who get no icon.
+- **There is no hover behaviour anywhere, deliberately** (spec §6). The peek was dropped: the overlay does it better one click away with state intact, and a hover would make the product quietly different on touch. No preview, no prefetch on mouse-over, and no `title` tooltip.
+- **A Sprungmarke travels in the fragment**, never reaching the server, and is resolved against the rendered DOM after the first typeset run (formulas change height when MathJax replaces them). A `hashchange` listener covers a second jump inside a document already on screen.
+- Unreachable targets — locked, archived, deleted — are **#74's**: today a link to one lands on the same refusal any inaccessible document does.
+
 ### Error & Loading Boundaries
 
 Every major route segment has scoped `error.tsx` and `loading.tsx` files. A failed Supabase query shows a friendly German error UI instead of a white screen.
+
+**`app/einheiten/[unitId]` has neither**, deliberately: it renders nothing at all — one DAL read, then a `redirect()` or a `notFound()` — so a loading state would flash a boundary for a page that never appears, and a failed read falls through to the root `error.tsx` exactly as it should.
 
 **One deliberate exception:** the overlay slot `app/@modal/(.)dokumente/[docId]` has an `error.tsx` but **no `loading.tsx`** — its page streams the document into a `<Suspense>` inside the dialog it has already opened, and a segment-level loading boundary would open a second dialog and move focus mid-navigation. Both boundaries there render inside `DocumentOverlay` for the same reason: the page underneath is still mounted and the student needs the close button to get back to it.
 
@@ -371,7 +398,9 @@ All magic values live in `src/lib/constants.ts`:
 | `ALLOWED_FILE_MIMES` | `['application/pdf', ...]` | Accepted file types |
 | `MIME_TO_EXT` | `Record<string, string>` | MIME → file extension map |
 | `editorImageUrl(imageId)` | `` `/api/editor-image/${imageId}` `` | Single source for editor-image browser URLs (controller, JSON importer, proxy route) |
-| `documentUrl(docId)` | `` `/dokumente/${docId}` `` | Single source for the addressable Dokument URL (#69). In-app links go through `DocumentLink`, which adds the `scroll={false}` the overlay needs (#70) — the accordion's „Einzelansicht", `DocumentCard`, and every future link chip |
+| `documentUrl(docId, anchorId?)` | `` `/dokumente/${docId}` `` (+ `#anchorId`) | Single source for the addressable Dokument URL (#69). In-app links go through `DocumentLink`, which adds the `scroll={false}` the overlay needs (#70) — the accordion's „Einzelansicht", `DocumentCard`, and the link chips (#73) |
+| `kursUrl(kursId)` | `` `/kurse/${kursId}` `` | Where a Kurs link goes (#73) |
+| `unitUrl(unitId)` | `` `/einheiten/${unitId}` `` | Where an Einheit link goes (#73) — the flat redirect that supplies the Kurs a link never stored |
 
 ## Dependencies
 
@@ -421,7 +450,7 @@ npm run test:watch   # watch mode
 
 Conventions: tests are colocated `*.test.ts` files next to their modules and assert **external behavior only** (inputs → outputs, no internal call structure). The default environment is plain Node; DOM-dependent suites opt into jsdom per file via a `@vitest-environment jsdom` docblock — currently `document-json.test.ts`, whose importer builds real DOM. The editor-module tests under `src/lib/editor/` are golden cases generated from the standalone reference editor (`latexEditor/*.html`) and double as the React port's parity contract — expected values must not be changed without checking the reference behavior first.
 
-Tests are not confined to `src/lib/editor/`: any pure module is a candidate. `src/lib/document-view.test.ts` pins the render-path rule both student surfaces share and `src/lib/document-access.test.ts` pins the access rule they share. React components have no test seam here (no testing-library, no browser E2E) — component and navigation behaviour is verified by manual QA recorded on the ticket, which is why the overlay of #70 carries a written checklist rather than a suite.
+Tests are not confined to `src/lib/editor/`: any pure module is a candidate. `src/lib/document-view.test.ts` pins the render-path rule both student surfaces share, `src/lib/document-access.test.ts` pins the access rule they share, and `src/lib/link-navigation.test.ts` pins where a stored link target actually points (#73). React components have no test seam here (no testing-library, no browser E2E) — component and navigation behaviour is verified by manual QA recorded on the ticket, which is why the overlay of #70 carries a written checklist rather than a suite.
 
 ### Two Supabase Projects
 
@@ -516,6 +545,11 @@ Set `published = true/false` in the `kurse` table. The Kurs and its Units appear
 | A published Dokument lists no Sprungmarken | Legacy row, or an unreadable snapshot | Only `content` snapshots carry anchors: a PDF/image document has none, and a snapshot `readDocumentJson` refuses contributes none rather than failing the picker. The document itself stays linkable as a whole |
 | Can't put the cursor inside a link chip | By design (#72) | The chip is `contenteditable="false"` so no keystroke can separate a label from its target — **click** the chip to re-target, relabel or remove it |
 | „Link entfernen" leaves the words behind | By design (#72) | Unlinking replaces the chip with its own label as plain text; the author asked for the link to go, not the sentence |
+| A link chip in a published document is not clickable | The chip is still the authoring `<span>` — the renderer's swap did not run | Only `document-render.ts` turns a chip into an `<a href>`; check the document actually renders live (not the PNG fallback) and that the caller passes the `linkHref` adapter |
+| Following a link loses everything the student typed | The click was not intercepted, so the browser navigated | `followLink` must be wired (InteractiveDocument passes it) and the target must be a **Dokument** — a Kurs or Einheit link is a real departure and always unmounts the source |
+| A link chip shows no glyph | `data-link-icon` missing, or the `attr()` rule was scoped away | The glyph is CSS chrome (`interactive-document.css`) drawn from the attribute the renderer stamps; it is never part of the label |
+| An Einheit link 404s | Its Kurs or the Einheit itself is unpublished | `/einheiten/[unitId]` resolves through the DAL under the reader's RLS — no row, no redirect. Publish the Einheit, or accept the 404 as the archive rule working |
+| A link to a Sprungmarke opens the document at the top | The anchor id is not in that document's snapshot | The fragment is matched against `data-anchor-id` in the rendered DOM; a Sprungmarke deleted or re-stamped after the link was made no longer matches (that is #75's warning to add) |
 
 ## File Reference Guide
 
@@ -534,6 +568,7 @@ Set `published = true/false` in the `kurse` table. The Kurs and its Units appear
 | Student document rendering | `src/lib/document-view.ts`, `src/components/documents/DocumentBody.tsx`, `src/app/dokumente/[docId]/page.tsx` |
 | Student document access + shared page-scale view | `src/lib/document-access.ts`, `src/lib/document-surface.ts`, `src/components/documents/DocumentArticle.tsx` |
 | Document overlay navigation | `src/app/@modal/*`, `src/components/documents/DocumentOverlay.tsx`, `src/components/documents/DocumentLink.tsx`, `src/app/layout.tsx` |
+| Where a link goes | `src/lib/link-navigation.ts`, `src/app/einheiten/[unitId]/page.tsx`, `makeLinksNavigable` in `src/lib/editor/document-render.ts` |
 | LaTeX editor core (controller + pure modules) | `src/lib/editor/*` |
 | LaTeX editor UI (page, shell, toolbar, export, drafts) | `src/app/admin/editor/*`, `src/components/admin/editor/*` |
 | Standalone reference editor (parity ground truth) | `latexEditor/*.html` |

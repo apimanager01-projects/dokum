@@ -500,21 +500,24 @@
    zählt — die Sprungmarke gewinnt gegen das allgemeine Dokument.
    ⚠ Zweite Kopie von LINK_KIND_ICON / LINK_ANCHOR_ICON (lib/editor/links.ts),
    den der Picker liest: ein ::before kann die Map nicht lesen, also müssen
-   beide Seiten gemeinsam geändert werden. */
+   beide Seiten gemeinsam geändert werden.
+   Das Trennzeichen ist ein geschütztes Leerzeichen (#100): sonst darf die Zeile
+   zwischen Symbol und Beschriftung umbrechen und das Symbol bleibt als eigener
+   leerer Chip zurück. Spiegelt interactive-document.css. */
 .latex-editor .doc-link[data-link-kind='kurs']::before {
-  content: '📘 ';
+  content: '📘\00a0';
 }
 
 .latex-editor .doc-link[data-link-kind='unit']::before {
-  content: '📗 ';
+  content: '📗\00a0';
 }
 
 .latex-editor .doc-link[data-link-kind='document']::before {
-  content: '📄 ';
+  content: '📄\00a0';
 }
 
 .latex-editor .doc-link[data-link-anchor-id]::before {
-  content: '⚓ ';
+  content: '⚓\00a0';
 }
 
 /* ------------------------------------------------- Sprungmarken (#71) */

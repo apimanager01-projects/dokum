@@ -34,6 +34,27 @@ export function editorImageUrl(imageId: string): string {
 // target's document id and nothing else (#63 §6), so the URL needs no Kurs or
 // Unit in it, and a top-level segment is also the shape the overlay's
 // intercepting route needs (#70).
-export function documentUrl(docId: string): string {
-  return `/dokumente/${docId}`
+//
+// `anchorId` puts a Sprungmarke in the fragment (#73). A fragment rather than a
+// query parameter because the spot inside a document is a client-side concern:
+// it never reaches the server, so neither route re-renders for it, and both the
+// full page and the overlay resolve it against the DOM they have already built.
+// It is percent-encoded because an anchor id is opaque — the schema asks only
+// that it be non-empty (anchors.ts).
+export function documentUrl(docId: string, anchorId?: string): string {
+  const base = `/dokumente/${docId}`
+  return anchorId ? `${base}#${encodeURIComponent(anchorId)}` : base
+}
+
+// The Kurs a link points at (#73) — the existing public Kurs page.
+export function kursUrl(kursId: string): string {
+  return `/kurse/${kursId}`
+}
+
+// The Einheit a link points at (#73), FLAT for the same reason `documentUrl`
+// is: a link stores `{ unitId }` and nothing else, while the Einheit page lives
+// under its Kurs. This URL is the redirect that supplies the missing half, so
+// following an Einheit link needs no client-side lookup of its Kurs.
+export function unitUrl(unitId: string): string {
+  return `/einheiten/${unitId}`
 }

@@ -83,6 +83,14 @@ import {
   writeBlockAnchor,
 } from './anchors'
 import {
+  LINK_CHIP_SELECTOR,
+  createLinkChip,
+  readLinkChip,
+  writeLinkChip,
+  type LinkPickRequest,
+  type LinkPickResult,
+} from './links'
+import {
   JSON_IMPORT_EXAMPLE,
   createImageRemoveButton,
   importEditorJson,
@@ -116,6 +124,17 @@ export interface EditorControllerHooks {
    * `editor_images` id the document JSON will reference.
    */
   uploadImage(file: File): Promise<{ ok: true; imageId: string } | { ok: false; error: string }>
+  /**
+   * Opens the link target picker (#72) and resolves with what the author
+   * chose, or `null` when they cancelled.
+   *
+   * A hook rather than a controller-owned modal because the picker's tree is
+   * SERVER data — published Kurse → Einheiten → Aufgaben, plus a document
+   * level fetched lazily per Aufgabe — and the controller must stay free of
+   * server imports. It is the same seam `uploadImage` uses, for the same
+   * reason.
+   */
+  pickLinkTarget(request: LinkPickRequest): Promise<LinkPickResult | null>
 }
 
 /**
@@ -180,6 +199,17 @@ export interface EditorController {
    * survive a rename) and as unmark (an emptied name removes the mark).
    */
   markAnchor(): void
+  /**
+   * „Link"-Toolbar-Button (#72): opens the target picker and inserts the
+   * chosen link as a chip at the cursor, replacing the selected text — which
+   * becomes the link's label.
+   *
+   * With the caret inside an existing chip it re-targets that one instead. The
+   * ordinary way to edit a link is to CLICK its chip, which routes here too:
+   * the chip is `contenteditable="false"`, so the caret cannot usually be put
+   * inside it.
+   */
+  insertLink(): void
   /** „Editor zurücksetzen" — clears all content after a confirm dialog. */
   resetEditor(): void
   /**
@@ -1788,6 +1818,101 @@ export function createEditorController(
     restoreEditorSelection()
   }
 
+  // --- Links (#72) ---
+
+  /**
+   * The range the „Link"-button acts on: the live editor selection if there is
+   * one, otherwise the selectionchange-maintained `savedRange`.
+   *
+   * Same reason as `anchorTargetBlock`: a toolbar button takes focus before
+   * its handler runs, which in some browsers collapses or drops the editor's
+   * selection, and `savedRange` is what survives that. It is also what carries
+   * the author's SELECTED TEXT into the picker — the default link label.
+   */
+  function linkRange(): Range | null {
+    const sel = window.getSelection()
+    if (sel && sel.rangeCount > 0 && editor.contains(sel.anchorNode) && !sel.isCollapsed) {
+      return sel.getRangeAt(0)
+    }
+    return state.savedRange
+  }
+
+  /** The link chip the caret sits in, or `null`. */
+  function linkChipAtSelection(): HTMLElement | null {
+    const range = linkRange()
+    const node = range?.startContainer ?? null
+    const el =
+      node === null
+        ? null
+        : node.nodeType === Node.ELEMENT_NODE
+          ? (node as Element)
+          : node.parentElement
+    const chip = el?.closest<HTMLElement>(LINK_CHIP_SELECTOR) ?? null
+    return chip && editor.contains(chip) ? chip : null
+  }
+
+  /** Collapses the caret directly after `node` and records it as the saved range. */
+  function caretAfter(node: Node) {
+    const range = document.createRange()
+    range.setStartAfter(node)
+    range.collapse(true)
+    state.savedRange = range
+    editor.focus()
+    const sel = window.getSelection()
+    if (!sel) return
+    sel.removeAllRanges()
+    sel.addRange(range)
+  }
+
+  /**
+   * Opens the picker for `chip` (re-target/relabel/remove) or, with no chip,
+   * for a new link at the current selection.
+   *
+   * Unlinking replaces the chip with its own label as plain text: the author
+   * asked for the link to go, not for the words to go with it.
+   */
+  async function runLinkPicker(chip: HTMLElement | null): Promise<void> {
+    const current = chip ? readLinkChip(chip) : null
+    // The selected text is only a label suggestion for a NEW link — when a chip
+    // is being edited, its own label is what the picker starts from.
+    const range = linkRange()
+    const selectedText = current || !range || range.collapsed ? '' : range.toString()
+
+    const result = await hooks.pickLinkTarget({ selectedText, current })
+    if (!result) {
+      // Cancelled — the document is untouched, but the caret still has to come
+      // back from the modal.
+      restoreEditorSelection()
+      return
+    }
+    // The chip may have been removed while the modal was open (contenteditable
+    // undo, a stray keystroke); acting on a detached node would silently write
+    // into nothing.
+    const live = chip && editor.contains(chip) ? chip : null
+    if (result.action === 'remove') {
+      if (live) {
+        const text = document.createTextNode(live.textContent ?? '')
+        live.replaceWith(text)
+        caretAfter(text)
+      }
+      return
+    }
+    if (live) {
+      writeLinkChip(live, result.link)
+      caretAfter(live)
+      return
+    }
+    // A fresh link REPLACES the selection it was made from — insertNodeAtCursor
+    // deletes the range's contents first, so the selected text becomes the
+    // chip's label rather than being duplicated beside it.
+    restoreEditorSelection()
+    insertNodeAtCursor(createLinkChip(document, result.link))
+  }
+
+  function insertLink() {
+    void runLinkPicker(linkChipAtSelection())
+  }
+
   /** Puts the caret back where it was before a modal/prompt stole the focus. */
   function restoreEditorSelection() {
     editor.focus()
@@ -2165,6 +2290,17 @@ export function createEditorController(
       openFieldModal(pill.dataset['fieldId'] ?? '')
       return
     }
+    // Klick auf einen Link-Chip öffnet den Ziel-Picker (#72) — dieselbe
+    // Delegation wie bei den Pillen, aus demselben Grund, und die EINZIGE
+    // verlässliche Bearbeitungsgeste: der Chip ist contenteditable="false",
+    // also lässt sich der Cursor nicht in ihn setzen.
+    const chip = clicked?.closest<HTMLElement>(LINK_CHIP_SELECTOR)
+    if (chip && editor.contains(chip)) {
+      e.preventDefault()
+      e.stopPropagation()
+      void runLinkPicker(chip)
+      return
+    }
     const target = clicked?.closest('.render-target')
     if (!target) return
     const block = target.closest<HTMLElement>('.formula-block')
@@ -2514,6 +2650,7 @@ export function createEditorController(
     insertInputField: () => insertField('input'),
     insertOutputField: () => insertField('output'),
     markAnchor,
+    insertLink,
     resetEditor,
     insertImageFromFile: (file: File, alt?: string) => {
       void insertImageFromFile(file, alt)

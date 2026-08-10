@@ -196,6 +196,18 @@ export function EditorToolbar({
         >
           ⚓ Sprungmarke
         </button>
+        {/* #72: Link auf einen veröffentlichten Kurs, eine Einheit, ein
+            Dokument oder eine Sprungmarke darin. Wie bei ⚓ bewusst OHNE
+            saveSelection(): die Schaltfläche nimmt vor ihrem Handler den Fokus,
+            und saveSelection() würde genau den markierten Bereich verwerfen,
+            aus dem die Beschriftung entsteht. */}
+        <button
+          type="button"
+          title="Link auf einen veröffentlichten Kurs, eine Einheit, ein Dokument oder eine Sprungmarke einfügen. Markierter Text wird zur Beschriftung. Einen bestehenden Link bearbeitest du mit einem Klick darauf."
+          onClick={() => ctrl()?.insertLink()}
+        >
+          🔗 Link
+        </button>
         <button type="button" onClick={() => ctrl()?.resetEditor()}>
           Editor zurücksetzen
         </button>

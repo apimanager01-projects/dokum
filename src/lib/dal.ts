@@ -342,17 +342,21 @@ export async function getEditorDocumentById(draftId: string): Promise<EditorDocu
   return data ?? null
 }
 
-// Target tree for the editor's ExportBar (slice 10): Kurs → Unit → Task only
-// — deliberately not getAllKurseDeep(), which would drag every document +
-// image id into the client bundle for nothing. Sorted here in the DAL at
-// every level (invariant); the 1-based index in these arrays is the export
-// filename's ordinal.
+// Target tree for the editor's ExportBar (slice 10) and link picker (#72):
+// Kurs → Unit → Task only — deliberately not getAllKurseDeep(), which would
+// drag every document + image id into the client bundle for nothing. Sorted
+// here in the DAL at every level (invariant); the 1-based index in these
+// arrays is the export filename's ordinal.
+//
+// `published` rides along unfiltered: the publish target may be an unpublished
+// Kurs, the link picker's targets may not. Filtering here would break one of
+// the two.
 export async function getEditorTargetTree(): Promise<EditorTargetKurs[]> {
   const supabase = await createClient()
   const { data } = await supabase
     .from('kurse')
     .select(
-      'id, title, position, created_at, units(id, title, position, created_at, tasks(id, title, position, created_at))'
+      'id, title, position, created_at, published, units(id, title, position, created_at, tasks(id, title, position, created_at))'
     )
     .order('position', { ascending: true })
     .order('created_at', { ascending: true })
@@ -364,6 +368,57 @@ export async function getEditorTargetTree(): Promise<EditorTargetKurs[]> {
     })
   })
   return kurse
+}
+
+// The link picker's fourth level (#72), fetched per Task on expand: the
+// Dokumente of one Task, WITH their published snapshot so the caller can read
+// the Sprungmarken out of it.
+//
+// Returns [] when the Task's Kurs is unpublished: a link may only be authored
+// against something a student can reach (spec #63 §6), so the level that costs
+// a round trip refuses server-side rather than trusting the picker's filter.
+//
+// That is an AUTHORING-TIME rule, not an invariant of a stored link. A Kurs can
+// be unpublished long after something linked into it, so nothing on the save
+// path re-checks it — a target that has gone dark is the resolver's business
+// (#74), which degrades it quietly for the student.
+//
+// The Kurs is reached through the `units!inner` / `kurse!inner` embed, so the
+// gate and the rows arrive in one round trip.
+export async function getLinkTargetDocuments(
+  taskId: string
+): Promise<LinkTargetDocumentRow[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('tasks')
+    .select(
+      'id, units!inner(kurse!inner(published)), documents(id, title, content, position, created_at)'
+    )
+    .eq('id', taskId)
+    .maybeSingle()
+  if (!data) return []
+
+  // Nested embeds are not inferred without generated types; the `!inner` joins
+  // guarantee the ancestry exists, and the shape is pinned by the row type
+  // below — the one cast in this function (getDocumentWithAncestry precedent).
+  const row = data as unknown as LinkTargetTaskRow
+  if (!row.units?.kurse?.published) return []
+  return sortByPosition(row.documents ?? []).map(({ id, title, content }) => ({
+    id,
+    title,
+    content,
+  }))
+}
+
+/** One linkable Dokument, snapshot included so the caller can read its anchors. */
+type LinkTargetDocumentRow = { id: string; title: string; content: unknown }
+
+// The raw PostgREST shape of the query above: the published gate reached
+// through the ancestry, plus the Task's documents. `position`/`created_at`
+// ride along only so the DAL can apply the hierarchy's sort here, as everywhere.
+type LinkTargetTaskRow = {
+  units: { kurse: { published: boolean } } | null
+  documents: (LinkTargetDocumentRow & { position: number; created_at: string })[] | null
 }
 
 // Used by /api/editor-image/[imageId] route (slice 8). RLS is admin-only, so

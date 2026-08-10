@@ -99,6 +99,13 @@ export const LinkTargetDocumentsSchema = z.object({
   task_id: uuidField,
 })
 
+// The backlink scan (#75). Also not a FormData action — the admin tree and the
+// ExportBar both call it with a plain Document id — but the same rule holds:
+// nothing reaches the DB unvalidated.
+export const BacklinkScanSchema = z.object({
+  document_id: uuidField,
+})
+
 // ── Auth schemas ────────────────────────────────────────────────────────────
 
 export const SignInSchema = z.object({

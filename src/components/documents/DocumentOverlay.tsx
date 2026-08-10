@@ -74,7 +74,15 @@ export function DocumentOverlay({
       // a vaguely-named dialog instead of an unnamed one.
       aria-label="Dokument"
       aria-labelledby={titleId}
+      // ONLY THIS DIALOG'S OWN CANCEL COUNTS (#103). `cancel` does not bubble in
+      // the DOM, but React replays it along the COMPONENT tree, so Escape over a
+      // dialog rendered inside the document — the locked-link card — arrives
+      // here too and used to take the whole overlay down with it, discarding
+      // everything the student had typed. The identity check is the same one
+      // `onMouseDown` makes for the backdrop, and it holds for any dialog
+      // embedded below, not just that one.
       onCancel={(event) => {
+        if (event.target !== dialogRef.current) return
         event.preventDefault()
         dismiss()
       }}

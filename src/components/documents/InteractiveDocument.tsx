@@ -7,7 +7,10 @@ import { renderDocumentJson } from '@/lib/editor/document-render'
 import { readDocumentJson } from '@/lib/editor/document-version'
 import { loadMathJax } from '@/lib/editor/mathjax-loader'
 import { documentIdInPath, linkHref, linkOpensOverlay } from '@/lib/link-navigation'
+import type { LockedLinkTarget } from '@/lib/link-target-state'
+import { resolveRenderedLinks } from '@/lib/unreachable-links'
 import { DocumentPng } from './DocumentPng'
+import { LinkLockedCard } from './LinkLockedCard'
 import { Watermark } from './Watermark'
 import './interactive-document.css'
 
@@ -75,6 +78,12 @@ function LiveDocument({
   const snapshot = useMemo(() => readDocumentJson(content), [content])
   const hostRef = useRef<HTMLDivElement | null>(null)
   const [renderFailed, setRenderFailed] = useState(false)
+  // The one thing the DOM below the host hands back to React (#74): a link into
+  // material this student has not bought opens the unlock card rather than
+  // travelling to the refusal it would otherwise land on. `useState`'s setter is
+  // stable, so passing it into the effect does not make the effect re-run — and
+  // re-running it would rebuild the document and lose everything typed into it.
+  const [lockedTarget, setLockedTarget] = useState<LockedLinkTarget | null>(null)
 
   // The router is reached through a ref rather than through the effect's
   // dependencies, and that is not a style choice: re-running the effect calls
@@ -144,8 +153,12 @@ function LiveDocument({
       host.closest('dialog') === window.document.querySelector('dialog[open]') &&
       documentIdInPath(window.location.pathname) === docId
 
+    // Cancels the link resolver's DOM writes when this document goes away —
+    // the requests themselves are left to finish and their answers discarded.
+    const linkResolution = new AbortController()
+
     try {
-      const { renderTargets } = renderDocumentJson(snapshot.doc, host, {
+      const { renderTargets, links: renderedLinks } = renderDocumentJson(snapshot.doc, host, {
         imageUrl: (imageId) => `/api/image/${imageId}`,
         linkHref,
         // Client-side, so the page underneath is never unmounted and the
@@ -181,6 +194,18 @@ function LiveDocument({
         onRecompute: typeset,
       })
       typeset(renderTargets)
+      // Which of those chips actually goes anywhere (#74). Asynchronous and
+      // deliberately not awaited: the document is already on screen and
+      // readable, and a link that turns out to be locked or gone is rewritten
+      // in place a moment later. Failures inside are already swallowed one
+      // request at a time — every chip is simply left alone — so this catch is
+      // for the DOM writes.
+      void resolveRenderedLinks(renderedLinks, {
+        onLocked: setLockedTarget,
+        signal: linkResolution.signal,
+      }).catch((err) => {
+        console.error(`[InteractiveDocument ${docId}] Link-Auflösung fehlgeschlagen:`, err)
+      })
       // Deliberately UNGUARDED, unlike the two paths above: this runs once per
       // mount, so only the copy that was just created by the navigation can
       // reach it. Asking `addressesThisDocument()` here would instead make the
@@ -212,6 +237,7 @@ function LiveDocument({
 
     return () => {
       cancelled = true
+      linkResolution.abort()
       window.removeEventListener('hashchange', onHashChange)
     }
   }, [snapshot, docId])
@@ -222,6 +248,12 @@ function LiveDocument({
     <div className="relative mt-2">
       <div ref={hostRef} className="dokum-document" />
       <Watermark id={watermarkId} />
+      {/* Outside the host, which the renderer owns — React may only reconcile
+          out here. A modal `<dialog>` lands in the top layer regardless, so
+          sitting inside a `relative` box costs it no stacking. */}
+      {lockedTarget && (
+        <LinkLockedCard target={lockedTarget} onDismiss={() => setLockedTarget(null)} />
+      )}
     </div>
   )
 }

@@ -37,6 +37,17 @@
   margin: 1em 0 0.4em;
 }
 
+/* Running text, and the only place a link chip can meet another one on the
+   line below. At 1.55 the line box is narrower than the 24px-tall chip (#101)
+   and two stacked pills touch, which reads as one dense block rather than two
+   separate targets — so the lines that can carry a chip get the room the chip
+   needs. A heading needs none of this: its line-height scales with its own
+   larger font and already clears the pill. */
+.dokum-document p,
+.dokum-document li {
+  line-height: 1.65;
+}
+
 .dokum-document p {
   margin: 0.8em 0;
 }
@@ -231,7 +242,11 @@
  */
 .dokum-document .doc-link {
   display: inline;
-  padding: 1px 7px;
+  /* 3px, not 1px, so the chip clears 24px tall — WCAG 2.2 AA 2.5.8, and a
+     thumb on a phone, where this is the only way to follow a link (#101).
+     `display: inline` means the extra padding overflows the line box instead
+     of pushing the lines apart, so paragraph rhythm is untouched. */
+  padding: 3px 7px;
   margin: 0 1px;
   border-radius: 999px;
   background: #eef2ff;
@@ -258,9 +273,15 @@
 /* The glyph is drawn from the attribute the renderer stamps (document-render,
    `replaceWithLinkAnchor`), which reads the one map in lib/editor/links.ts. A
    pseudo-element keeps it out of `textContent`, so a student copying the
-   sentence gets the words and not the emoji. */
+   sentence gets the words and not the emoji.
+
+   The separator is a NO-BREAK space (#100). With `box-decoration-break: clone`
+   an ordinary space lets the line break between glyph and label, and the glyph
+   is left behind as its own rounded pill — an empty chip that says nothing,
+   exactly where the reader needs to know how far the link travels. The label
+   itself still wraps freely. */
 .dokum-document .doc-link::before {
-  content: attr(data-link-icon) ' ';
+  content: attr(data-link-icon) '\00a0';
 }
 
 /* A Sprungmarke is where a link LANDS — the spot is scrolled to, so it must

@@ -6,7 +6,7 @@ import { anchoredBlocks } from '@/lib/editor/anchors'
 import { renderDocumentJson } from '@/lib/editor/document-render'
 import { readDocumentJson } from '@/lib/editor/document-version'
 import { loadMathJax } from '@/lib/editor/mathjax-loader'
-import { linkHref, linkOpensOverlay } from '@/lib/link-navigation'
+import { documentIdInPath, linkHref, linkOpensOverlay } from '@/lib/link-navigation'
 import { DocumentPng } from './DocumentPng'
 import { Watermark } from './Watermark'
 import './interactive-document.css'
@@ -117,8 +117,7 @@ function LiveDocument({
     // typeset rather than straight after the render: a formula changes height
     // when its source is replaced by SVG, so scrolling before that settles
     // aims at a position the document is about to move out from under.
-    const scrollToMarkedSpot = () => {
-      const anchorId = markedSpotInUrl()
+    const scrollToMarkedSpot = (anchorId: string) => {
       if (!anchorId) return
       // Matched by walking the marked blocks rather than by a selector: an
       // anchor id is opaque and only ever required to be non-empty, so it
@@ -126,6 +125,24 @@ function LiveDocument({
       const block = anchoredBlocks(host).find((el) => el.dataset['anchorId'] === anchorId)
       block?.scrollIntoView({ block: 'start' })
     }
+
+    // Whether THIS mounted copy is the one the URL is addressing (#99).
+    //
+    // The Einheit page renders every document of the unit live at once, so
+    // opening the overlay on one of them puts the same `data-anchor-id` in the
+    // DOM twice. Both copies would otherwise chase the same fragment and the
+    // page underneath would scroll away behind the overlay — the one thing the
+    // overlay (#70) exists to prevent, and invisible until the student closes
+    // it and finds themselves somewhere else.
+    //
+    // Two conditions, both needed. The layer: a host's own dialog must be the
+    // open one, which with `null === null` also says that while no dialog is
+    // open only a host outside every dialog may move. And the address: the
+    // document the path names must be this one, which is what separates two
+    // different documents that happen to share an anchor id.
+    const addressesThisDocument = () =>
+      host.closest('dialog') === window.document.querySelector('dialog[open]') &&
+      documentIdInPath(window.location.pathname) === docId
 
     try {
       const { renderTargets } = renderDocumentJson(snapshot.doc, host, {
@@ -139,15 +156,38 @@ function LiveDocument({
         // `scroll: false` only for the overlay: it stops the router discarding
         // the reading position of a page that stays on screen, and would
         // strand a student halfway down a Kurs page they have never seen.
-        followLink: (target, href) =>
-          routerRef.current.push(href, { scroll: !linkOpensOverlay(target) }),
+        followLink: (target, href) => {
+          routerRef.current.push(href, { scroll: !linkOpensOverlay(target) })
+          // A Sprungmarke in the document ALREADY ON SCREEN moves nothing on
+          // its own (#98): that push differs from the current URL only in its
+          // fragment, so the router writes history with `pushState` — and
+          // `pushState` never fires `hashchange`. The listener below is never
+          // reached, which kills the most natural use of a Sprungmarke, a
+          // table of contents linking down into its own document. So resolve
+          // that case here instead of waiting for an event that never comes.
+          //
+          // The anchor comes off the target rather than out of the URL: it
+          // does not depend on when the router commits the push.
+          //
+          // Guarded exactly like the listener, and for the same reason. On the
+          // Einheit page this document is also rendered inline underneath, and
+          // a Dokument link there opens the overlay — so the copy that must
+          // scroll is the one the overlay is about to mount, never this one.
+          if (!('docId' in target) || target.docId !== docId || !target.anchorId) return
+          if (addressesThisDocument()) scrollToMarkedSpot(target.anchorId)
+        },
         // Only the formulas whose value actually moved — an untouched formula
         // must not re-typeset, and re-typesetting is what this costs.
         onRecompute: typeset,
       })
       typeset(renderTargets)
+      // Deliberately UNGUARDED, unlike the two paths above: this runs once per
+      // mount, so only the copy that was just created by the navigation can
+      // reach it. Asking `addressesThisDocument()` here would instead make the
+      // first jump depend on whether the overlay's `showModal()` has landed by
+      // the time the typeset queue drains.
       queue = queue.then(() => {
-        if (!cancelled) scrollToMarkedSpot()
+        if (!cancelled) scrollToMarkedSpot(markedSpotInUrl())
       })
     } catch (err) {
       // Leave nothing half-drawn behind before handing over to the picture.
@@ -161,15 +201,18 @@ function LiveDocument({
       })
     }
 
-    // A second link to another Sprungmarke in the document already on screen
-    // changes the fragment without remounting anything, so the jump has to be
-    // listened for. Every mounted document hears it and only the one actually
-    // holding that marked spot moves.
-    window.addEventListener('hashchange', scrollToMarkedSpot)
+    // What is left for `hashchange` is history traversal — Back and Forward
+    // between two fragment URLs, which no click adapter sees. Every mounted
+    // document hears it, so the copy the URL is not addressing has to say so
+    // itself; a marked spot can exist in more than one place at once.
+    const onHashChange = () => {
+      if (addressesThisDocument()) scrollToMarkedSpot(markedSpotInUrl())
+    }
+    window.addEventListener('hashchange', onHashChange)
 
     return () => {
       cancelled = true
-      window.removeEventListener('hashchange', scrollToMarkedSpot)
+      window.removeEventListener('hashchange', onHashChange)
     }
   }, [snapshot, docId])
 

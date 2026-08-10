@@ -45,3 +45,28 @@ export function linkHref(target: LinkTarget): string {
 export function linkOpensOverlay(target: LinkTarget): boolean {
   return 'docId' in target
 }
+
+/**
+ * The Dokument a browser path names, or `null` where it names none — the
+ * inverse of the `documentUrl` half of `linkHref`.
+ *
+ * Which mounted document may react to a fragment depends on this (#99): the
+ * Einheit page renders every document of its unit live at once, so opening the
+ * overlay puts the same Sprungmarke in the DOM twice, and a copy the URL is not
+ * addressing must sit still rather than scroll the page out from under the
+ * student. An Einheit or Kurs path names no document, which is exactly what
+ * silences those inline copies.
+ *
+ * The intercepted overlay route resolves to the same flat path as the full
+ * page, and that is deliberate: both are addressing that one document, and
+ * which of the two is on screen is a question about the DOM, not the URL.
+ */
+export function documentIdInPath(pathname: string): string | null {
+  const match = /^\/dokumente\/([^/?#]+)/.exec(pathname)
+  if (!match) return null
+  try {
+    return decodeURIComponent(match[1]!)
+  } catch {
+    return match[1]!
+  }
+}

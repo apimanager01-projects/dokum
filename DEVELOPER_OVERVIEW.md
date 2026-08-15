@@ -236,7 +236,7 @@ src/
     └── index.ts                   # TypeScript interfaces + ActionResult<T> union
 ```
 
-Outside `src/`: `supabase/` holds the SQL migrations (see [Database Migrations](#database-migrations)), and `latexEditor/` holds the committed standalone reference editor (PRD #28) — the port's behavioral ground truth, still runnable in a plain browser.
+Outside `src/`: `supabase/` holds the SQL migrations (see [Database Migrations](#database-migrations)), `latexEditor/` holds the committed standalone reference editor (PRD #28) — the port's behavioral ground truth, still runnable in a plain browser — and `docs/document-json-authoring.md` is the authoring guide for the editor's JSON import (#107): a paste-ready LLM prompt, the v1.1 schema reference, and two worked examples that double as the fixtures of `src/lib/editor/document-json-authoring.test.ts`.
 
 ## Key Patterns
 

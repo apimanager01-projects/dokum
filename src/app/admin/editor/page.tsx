@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import { AdminSubpageNav } from '@/components/admin/AdminSubpageNav'
-import { DraftList } from '@/components/admin/editor/DraftList'
+import { DraftCatalog } from '@/components/admin/editor/DraftCatalog'
 import { EditorShell, type EditorShellDraft } from '@/components/admin/editor/EditorShell'
 import { getEditorDocumentById, getEditorDocuments, getEditorTargetTree } from '@/lib/dal'
 import './editor.css'
@@ -37,11 +37,13 @@ export default async function AdminEditorPage({
   return (
     <main className="mx-auto max-w-[1560px] px-4 py-10">
       <AdminSubpageNav active="editor" />
-      <div className="mb-8 flex items-baseline gap-4">
-        <h1 className="text-2xl font-bold text-gray-900">LaTeX-Editor</h1>
+      {/* The drafts live behind the header button (#109) — no standing list
+          between the heading and the editor, which starts right below this. */}
+      <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <h1 className="shrink-0 text-2xl font-bold text-gray-900">LaTeX-Editor</h1>
+        <DraftCatalog drafts={drafts} activeId={draftId} />
       </div>
 
-      <DraftList drafts={drafts} activeId={draftId} />
       {/* key: switching drafts (or leaving one) rebuilds the imperative
           editor — the established edit-page remount pattern. */}
       <EditorShell key={draftId ?? 'new'} initialDraft={initialDraft} targetTree={targetTree} />

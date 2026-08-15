@@ -144,7 +144,7 @@ src/
 │   │   ├── units/new/page.tsx     # Create/edit Unit
 │   │   ├── tasks/new/page.tsx     # Create/edit Task
 │   │   ├── documents/new/page.tsx # Create/edit Document
-│   │   └── editor/                # LaTeX editor (PRD #28): draft list, editor shell, PNG export, publish
+│   │   └── editor/                # LaTeX editor (PRD #28): drafts popup, editor shell, PNG export, publish
 │   │       ├── page.tsx           #   loads draft + target tree via DAL, remounts shell per draftId
 │   │       └── editor.css         #   consolidated editor styles (Dokum-red rebrand)
 │   └── api/
@@ -168,7 +168,7 @@ src/
 │   │       ├── EditorToolbar.tsx  #   rich-text toolbar (uncontrolled → controller)
 │   │       ├── ExportBar.tsx      #   Kurs/Unit/Task targets (seeded from the draft's remembered target, #106), Term, filename, PNG download + publish (size guard)
 │   │       ├── LinkTargetPicker.tsx # Link target tree (#72): PUBLISHED Kurse → Einheiten → Aufgaben from the page prop, Dokumente + their Sprungmarken fetched lazily per Aufgabe
-│   │       └── DraftList.tsx      #   draft list with open/delete
+│   │       └── DraftCatalog.tsx   #   header button („Entwürfe (n)" + the open draft's title) opening the draft list in a native <dialog> — open/delete/filter (#109); no standing list any more
 │   ├── auth/
 │   │   ├── LoginForm.tsx
 │   │   └── RegisterForm.tsx
@@ -220,6 +220,7 @@ src/
 │   │   ├── library-sync.ts        # Formula-library entry sync after formula edits — pure
 │   │   ├── number-format.ts       # German display formatting (formatValue) + the lossless entry pair a student's input box round-trips through (parseGermanEntry / formatGermanEntry) — pure
 │   │   ├── export-filename.ts     # PNG filename builder (Term + 1-based tree ordinals) + Document-title seed — pure
+│   │   ├── draft-filter.ts        # Title filter of the drafts popup (#109): case-insensitive substring, order-preserving — pure
 │   │   ├── export-target.ts       # Seeds the ExportBar's three selects from the draft's remembered `target_task_id` (#106): a stored Task implies its Kurs and Unit, anything unresolvable falls back to the first entry silently — pure
 │   │   ├── png-export.ts          # PNG export pipeline → Blob (SVG raster at 2×, html2canvas; browser-only)
 │   │   ├── mathjax-loader.ts      # Bundled MathJax loader — config set BEFORE the dynamic tex-svg-full import (full build: color macros need it; browser-only)

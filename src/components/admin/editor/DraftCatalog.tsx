@@ -122,10 +122,19 @@ function DraftCatalogDialog({
     }
   }, [])
 
-  // EVERY dismissal goes through the element's own `close()`, so Escape (which
-  // closes natively) and the close button cannot end up in different states —
-  // React unmounts the popup from the one `onClose` all of them produce.
-  const dismiss = () => dialogRef.current?.close()
+  // EVERY dismissal ends here, so Escape, the ✕ and the backdrop cannot end up
+  // in different states — React unmounting the popup is the one thing that
+  // closes it.
+  //
+  // ⚠ IT MUST NOT BE THE ELEMENT'S `close()`, AND `onClose` MUST NOT BE A STATE
+  // INPUT. React runs an effect mount → cleanup → mount in StrictMode (Next's
+  // dev default), and the cleanup below closes the dialog; the `close` event
+  // that fires for it is indistinguishable from a real dismissal, so routing it
+  // into `onClose` unmounted the popup in the same tick it opened — the button
+  // looked dead. Escape is caught as `cancel` instead (DocumentOverlay does the
+  // same, for the same reason), and the element is left to unmount, which takes
+  // it out of the top layer on its own.
+  const dismiss = () => onClose()
 
   /**
    * The one door out of the current draft — opening another one and
@@ -197,7 +206,15 @@ function DraftCatalogDialog({
       // vaguely-named dialog rather than an unnamed one.
       aria-label="Entwürfe"
       aria-labelledby="draftCatalogTitle"
-      onClose={onClose}
+      // Escape, without letting the platform's own close drive React state (see
+      // `dismiss`). `cancel` does not bubble in the DOM, but React replays it
+      // along the COMPONENT tree (#103), so the identity check keeps a dialog
+      // rendered below from closing this one.
+      onCancel={(event) => {
+        if (event.target !== dialogRef.current) return
+        event.preventDefault()
+        dismiss()
+      }}
       // The press decides, not the click: a click's target is the common
       // ancestor of press and release, so releasing past the panel edge after
       // selecting a draft title inside it would otherwise dismiss the popup.

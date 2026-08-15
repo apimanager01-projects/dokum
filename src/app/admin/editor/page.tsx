@@ -23,6 +23,9 @@ export default async function AdminEditorPage({
       title: draft.title,
       content: draft.content,
       publishedDocumentId: draft.published_document_id,
+      // Remembered export target (#106) — NULL when never set or when the Task
+      // was deleted; the ExportBar seeds the first tree entry either way.
+      targetTaskId: draft.target_task_id,
     }
   }
 

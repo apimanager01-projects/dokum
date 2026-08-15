@@ -68,7 +68,7 @@ Kurs (Course)
 | `document_images` | Image collection items | `id`, `document_id` (FK CASCADE), `file_path`, `position`, `created_at` |
 | `audit_logs` | Admin + purchase action log | `id`, `actor_id` (FK auth.users), `action` (`create`\|`update`\|`delete`\|`grant`\|`revoke`), `entity_type` (incl. `entitlement`, `editor_document`, `editor_image`), `entity_id`, `entity_title`, `metadata` (JSONB), `created_at` |
 | `entitlements` | Per-(user, unit) paid access | `id`, `user_id` (FK auth.users), `unit_id` (FK units), `granted_at`, `source` (`purchase`\|`admin`), `stripe_session_id` |
-| `editor_documents` | LaTeX-editor drafts (PRD #28; outside the Kurs hierarchy until published) | `id`, `title`, `content` (JSONB, versioned document JSON), `published_document_id` (FK documents, SET NULL), `created_by` (FK auth.users, SET NULL), `created_at`, `updated_at` (trigger-maintained) |
+| `editor_documents` | LaTeX-editor drafts (PRD #28; outside the Kurs hierarchy until published) | `id`, `title`, `content` (JSONB, versioned document JSON), `published_document_id` (FK documents, SET NULL), `target_task_id` (FK tasks, SET NULL — the remembered export target, #106), `created_by` (FK auth.users, SET NULL), `created_at`, `updated_at` (trigger-maintained) |
 | `editor_images` | Uploaded images of editor drafts (slice 8; never base64 in `content` — blocks store the row id) | `id`, `editor_document_id` (FK CASCADE), `file_path` (in bucket `pdfs` under `editor-images/<draftId>/…`), `created_at` |
 
 ### Row-Level Security (RLS)
@@ -164,9 +164,9 @@ src/
 │   │   ├── AdminTree.tsx          # Generic nested tree visualizer
 │   │   ├── AdminSubpageNav.tsx    # Tab navigation for admin subpages
 │   │   └── editor/                # LaTeX editor React shell (PRD #28)
-│   │       ├── EditorShell.tsx    #   save bar + Term state + imperative mount (controller) + the link picker's promise seam
+│   │       ├── EditorShell.tsx    #   save bar + Term state + export-target state (#106) + imperative mount (controller) + the link picker's promise seam
 │   │       ├── EditorToolbar.tsx  #   rich-text toolbar (uncontrolled → controller)
-│   │       ├── ExportBar.tsx      #   Kurs/Unit/Task targets, Term, filename, PNG download + publish (size guard)
+│   │       ├── ExportBar.tsx      #   Kurs/Unit/Task targets (seeded from the draft's remembered target, #106), Term, filename, PNG download + publish (size guard)
 │   │       ├── LinkTargetPicker.tsx # Link target tree (#72): PUBLISHED Kurse → Einheiten → Aufgaben from the page prop, Dokumente + their Sprungmarken fetched lazily per Aufgabe
 │   │       └── DraftList.tsx      #   draft list with open/delete
 │   ├── auth/
@@ -220,6 +220,7 @@ src/
 │   │   ├── library-sync.ts        # Formula-library entry sync after formula edits — pure
 │   │   ├── number-format.ts       # German display formatting (formatValue) + the lossless entry pair a student's input box round-trips through (parseGermanEntry / formatGermanEntry) — pure
 │   │   ├── export-filename.ts     # PNG filename builder (Term + 1-based tree ordinals) + Document-title seed — pure
+│   │   ├── export-target.ts       # Seeds the ExportBar's three selects from the draft's remembered `target_task_id` (#106): a stored Task implies its Kurs and Unit, anything unresolvable falls back to the first entry silently — pure
 │   │   ├── png-export.ts          # PNG export pipeline → Blob (SVG raster at 2×, html2canvas; browser-only)
 │   │   ├── mathjax-loader.ts      # Bundled MathJax loader — config set BEFORE the dynamic tex-svg-full import (full build: color macros need it; browser-only)
 │   │   ├── mathjax.d.ts           # Minimal type declarations for the bundled MathJax component
@@ -509,12 +510,14 @@ Migrations live in `supabase/`. Apply them in order — first to dev (Supabase S
 | `add_editor_images.sql` | `editor_images` table (admin-only RLS, cascade with draft) + audit `entity_type` extension (`editor_image`); no storage-policy changes needed |
 | `add_document_content.sql` | `documents.content` JSONB (published document snapshot, NULL for legacy rows) + `documents_file_type_check` CHECK adding `interactive`; no RLS changes needed — the row is already entitlement-gated |
 | `add_rls_published_conjunct.sql` | Re-adds the `published` conjunct to the four child SELECT policies (tasks, documents, document_images, `pdfs` storage objects) so an archived Kurs goes dark in the database, not only in app code (#80). No-op for published Kurse; admins unaffected |
+| `add_editor_target_task.sql` | `editor_documents.target_task_id` (FK tasks, SET NULL) + its index — the editor's export target survives a remount instead of resetting to the first tree entry (#106). No RLS changes: the draft policies are column-blind |
 
 **Verification checks** live in `supabase/checks/` — SQL scripts that prove a guarantee against a real database, for guarantees no Vitest seam can reach. Each one runs inside a transaction that ends in `ROLLBACK`. Run them against **dev**, after applying the migration they belong to:
 
 | File | Proves |
 |------|--------|
 | `rls_published_conjunct_check.sql` | An unpublished Kurs is unreadable to an entitled non-admin and to anonymous, fully readable to an admin, and unchanged for a published Kurs (#80). Fails before `add_rls_published_conjunct.sql`, passes after |
+| `editor_target_task_check.sql` | A draft's remembered export target round-trips, an unknown Task id is refused by the FK, deleting the target Task nulls the column while the draft survives, and the admin-only RLS still covers the row (#106) |
 
 ## Common Tasks
 

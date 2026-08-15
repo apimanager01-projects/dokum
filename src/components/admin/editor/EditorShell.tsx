@@ -39,11 +39,21 @@ import { LinkTargetPicker } from './LinkTargetPicker'
  *
  * PNG export (slice 10, #38): the ExportBar between toolbar and editor
  * surface owns the target selection (real Kurs → Unit → Task tree, DAL-fed
- * through the page) and the filename. Only the free Term field is
- * draft-persisted — the shell owns its state, seeds it from the draft's
- * `meta.term` at mount (frozen like parsedDraft; the key-remount reloads it),
- * and injects it into the save payload via `withDocumentMeta`. The
- * Kurs/Unit/Task selection is ephemeral per session (PRD decision).
+ * through the page) and the filename. The free Term field is draft-persisted
+ * inside the document JSON — the shell owns its state, seeds it from the
+ * draft's `meta.term` at mount (frozen like parsedDraft; the key-remount
+ * reloads it), and injects it into the save payload via `withDocumentMeta`.
+ *
+ * The Kurs/Unit/Task selection was ephemeral per session until #106 — which
+ * meant the D6 navigation below silently repointed the publish button at the
+ * first tree entry. It is persisted now, but as a COLUMN on the draft row
+ * (`editor_documents.target_task_id`), NOT in the document JSON: a new
+ * `meta` field would earn a schema version bump (#71 precedent) for something
+ * the student renderer never reads. Only the Task travels — Kurs and Unit are
+ * derived from it. The shell mirrors the ExportBar's live selection into
+ * `targetTaskId` (reported up on mount and on every change) and writes it into
+ * every save payload; the filename stays derived and a hand-typed filename
+ * override stays ephemeral (#106, out of scope).
  *
  * Publish (slice 11, #39): lives entirely in the ExportBar; the shell only
  * threads the SAVED draft identity down. Publishing requires a saved draft —
@@ -66,6 +76,8 @@ export interface EditorShellDraft {
   title: string
   content: unknown
   publishedDocumentId: string | null
+  /** Remembered export target (#106); null = never set or Task deleted. */
+  targetTaskId: string | null
 }
 
 export function EditorShell({
@@ -102,6 +114,15 @@ export function EditorShell({
   // saved and reopened (documented limitation).
   const [term, setTerm] = useState(() =>
     draftDocument?.meta?.term ?? ''
+  )
+  // ExportBar target selection (#106) — persisted on the draft ROW, so unlike
+  // the Term it never touches the document JSON. Seeded from the column and
+  // then mirrored from the ExportBar, which reports the RESOLVED selection: a
+  // stored Task that no longer exists (or none at all) falls back to the first
+  // tree entry, and the fallback is what a save then writes — what the selects
+  // show is always what publishing would target.
+  const [targetTaskId, setTargetTaskId] = useState<string | null>(
+    initialDraft?.targetTaskId ?? null
   )
   const [status, setStatus] = useState<SaveStatus>(() =>
     draftError !== null
@@ -226,6 +247,10 @@ export function EditorShell({
     const formData = new FormData()
     formData.set('title', title.trim() || 'Unbenannt')
     formData.set('content', contentJson)
+    // Always sent, never omitted: the action writes the column on every save,
+    // so a missing field would clear the target instead of leaving it (#106).
+    // The empty string is the degenerate-tree case and becomes NULL.
+    formData.set('target_task_id', targetTaskId ?? '')
     return formData
   }
 
@@ -348,6 +373,8 @@ export function EditorShell({
         targetTree={targetTree}
         term={term}
         onTermChange={setTerm}
+        initialTargetTaskId={initialDraft?.targetTaskId ?? null}
+        onTargetTaskChange={setTargetTaskId}
         draftId={initialDraft?.id ?? null}
         publishedDocumentId={initialDraft?.publishedDocumentId ?? null}
         uploadsPending={pendingUploads > 0}

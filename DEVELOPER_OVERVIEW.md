@@ -164,11 +164,11 @@ src/
 │   │   ├── AdminTree.tsx          # Generic nested tree visualizer
 │   │   ├── AdminSubpageNav.tsx    # Tab navigation for admin subpages
 │   │   └── editor/                # LaTeX editor React shell (PRD #28)
-│   │       ├── EditorShell.tsx    #   save bar + Term state + export-target state (#106) + imperative mount (controller) + the link picker's promise seam
+│   │       ├── EditorShell.tsx    #   save bar + Term state + export-target state (#106) + imperative mount (controller) + the link picker's promise seam + the unsaved-work baseline (#110)
 │   │       ├── EditorToolbar.tsx  #   rich-text toolbar (uncontrolled → controller)
 │   │       ├── ExportBar.tsx      #   Kurs/Unit/Task targets (seeded from the draft's remembered target, #106), Term, filename, PNG download + publish (size guard)
 │   │       ├── LinkTargetPicker.tsx # Link target tree (#72): PUBLISHED Kurse → Einheiten → Aufgaben from the page prop, Dokumente + their Sprungmarken fetched lazily per Aufgabe
-│   │       └── DraftCatalog.tsx   #   header button („Entwürfe (n)" + the open draft's title) opening the draft list in a native <dialog> — open/delete/filter (#109); no standing list any more
+│   │       └── DraftCatalog.tsx   #   header button („Entwürfe (n)" + the open draft's title) opening the draft list in a native <dialog> — open/delete/filter (#109); leaving a dirty editor is confirmed first (#110); no standing list any more
 │   ├── auth/
 │   │   ├── LoginForm.tsx
 │   │   └── RegisterForm.tsx
@@ -222,6 +222,7 @@ src/
 │   │   ├── export-filename.ts     # PNG filename builder (Term + 1-based tree ordinals) + Document-title seed — pure
 │   │   ├── draft-filter.ts        # Title filter of the drafts popup (#109): case-insensitive substring, order-preserving — pure
 │   │   ├── export-target.ts       # Seeds the ExportBar's three selects from the draft's remembered `target_task_id` (#106): a stored Task implies its Kurs and Unit, anything unresolvable falls back to the first entry silently — pure
+│   │   ├── unsaved-changes.ts     # Is there unsaved work (#110)? Pure diff of two save payloads (baseline captured post-load + re-captured per save) + the module-level slot the drafts popup asks before a link navigates
 │   │   ├── png-export.ts          # PNG export pipeline → Blob (SVG raster at 2×, html2canvas; browser-only)
 │   │   ├── mathjax-loader.ts      # Bundled MathJax loader — config set BEFORE the dynamic tex-svg-full import (full build: color macros need it; browser-only)
 │   │   ├── mathjax.d.ts           # Minimal type declarations for the bundled MathJax component
@@ -632,6 +633,7 @@ WHERE k.id = '<the kurs about to be archived>';
 | What links TO a Dokument (delete / „Als neues Dokument" warnings) | `src/lib/editor/backlinks.ts`, `src/actions/admin/backlinks.ts`, `getBacklinkScanRows` in `src/lib/dal.ts`, `handleDelete` in `src/components/admin/AdminTree.tsx`, `confirmOrphaning` in `src/components/admin/editor/ExportBar.tsx` |
 | LaTeX editor core (controller + pure modules) | `src/lib/editor/*` |
 | LaTeX editor UI (page, shell, toolbar, export, drafts) | `src/app/admin/editor/*`, `src/components/admin/editor/*` |
+| Unsaved editor work (confirm before switching drafts) | `src/lib/editor/unsaved-changes.ts`, `baselineRef` in `src/components/admin/editor/EditorShell.tsx`, `handleLeaveDraft` in `src/components/admin/editor/DraftCatalog.tsx` |
 | Standalone reference editor (parity ground truth) | `latexEditor/*.html` |
 | Error/loading boundaries | `src/app/**/error.tsx`, `src/app/**/loading.tsx` |
 

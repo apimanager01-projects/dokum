@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useRef, useState, useTransition, type MouseEvent } from 'react'
 import { deleteEditorDraft } from '@/actions/admin'
 import { filterDraftsByTitle } from '@/lib/editor/draft-filter'
+import { confirmLeaveEditor } from '@/lib/editor/unsaved-changes'
 import type { EditorDocumentListItem } from '@/types'
 
 /**
@@ -129,14 +130,25 @@ function DraftCatalogDialog({
   /**
    * The one door out of the current draft — opening another one and
    * „+ Neuer Entwurf" both go through it, which is why they are the same
-   * function and not two inline handlers. #110 (guarding unsaved work) adds its
-   * confirm here, in front of the close, and needs nothing else moved.
+   * function and not two inline handlers.
+   *
+   * Following either link changes the page's `key`, which remounts EditorShell
+   * and rebuilds the editor from the DB. With no autosave that discards
+   * everything typed since the last „Speichern", so the leave is confirmed
+   * first (#110) — silently when there is nothing unsaved, because a dialog
+   * that fires every time is one people learn to click through. Cancelling
+   * stops at `preventDefault()`: no navigation, no dismiss, so the draft, its
+   * content, its selection and the popup are all exactly as they were.
    */
   function handleLeaveDraft(event: MouseEvent<HTMLAnchorElement>) {
     // A modifier click opens the draft in a NEW tab and leaves this one exactly
     // where it is. Nothing is being left, so the popup stays as it is (and #110
     // must not ask about unsaved work either).
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    if (!confirmLeaveEditor()) {
+      event.preventDefault()
+      return
+    }
     dismiss()
   }
 

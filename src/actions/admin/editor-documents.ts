@@ -12,17 +12,24 @@ import { getAdminUser, parseForm, revalidateAdminPages, removeStorageObjects } f
 // (Ctrl+Z) can resurrect a deleted image block, so rows/objects are removed
 // when a SAVE no longer references them — never at the keystroke that removed
 // the block. Deleting a draft cleans up all its images immediately.
+//
+// The export target (#106) rides along on BOTH save paths: the ExportBar's
+// live Kurs → Unit → Mini Case selection is stored as `target_task_id` on the
+// draft row — a column, not a field in the document JSON (that would earn a
+// schema version bump; `published_document_id` is the precedent). Every save
+// writes it, so the shell must always send the field: a save that omitted it
+// would clear the target rather than leave it alone.
 
 export async function createEditorDraft(formData: FormData): Promise<ActionResult<{ id: string }>> {
   const { supabase, user } = await getAdminUser()
 
-  const parsed = parseForm(EditorDraftFormSchema, formData, ['title', 'content'])
+  const parsed = parseForm(EditorDraftFormSchema, formData, ['title', 'content', 'target_task_id'])
   if (!parsed.ok) return { ok: false, error: parsed.error }
-  const { title, content } = parsed.data
+  const { title, content, target_task_id } = parsed.data
 
   const { data, error } = await supabase
     .from('editor_documents')
-    .insert({ title, content, created_by: user.id })
+    .insert({ title, content, target_task_id, created_by: user.id })
     .select('id')
     .single()
   if (error || !data) {
@@ -37,13 +44,13 @@ export async function createEditorDraft(formData: FormData): Promise<ActionResul
 export async function updateEditorDraft(draftId: string, formData: FormData): Promise<ActionResult> {
   const { supabase, user } = await getAdminUser()
 
-  const parsed = parseForm(EditorDraftFormSchema, formData, ['title', 'content'])
+  const parsed = parseForm(EditorDraftFormSchema, formData, ['title', 'content', 'target_task_id'])
   if (!parsed.ok) return { ok: false, error: parsed.error }
-  const { title, content } = parsed.data
+  const { title, content, target_task_id } = parsed.data
 
   const { data, error } = await supabase
     .from('editor_documents')
-    .update({ title, content })
+    .update({ title, content, target_task_id })
     .eq('id', draftId)
     .select('id')
     .single()

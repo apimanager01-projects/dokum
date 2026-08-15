@@ -56,6 +56,14 @@ export const EditorDraftFormSchema = z.object({
     .trim()
     .min(1, 'Titel ist erforderlich.')
     .max(200, 'Titel darf höchstens 200 Zeichen lang sein.'),
+  // Export target (#106): the ExportBar's live Task selection, persisted on the
+  // draft ROW so a remount cannot silently repoint the publish button at the
+  // first tree entry. The empty string is a real value — a degenerate tree
+  // offers no Task — and becomes NULL, exactly like a target deleted since.
+  target_task_id: z
+    .union([uuidField, z.literal('')])
+    .optional()
+    .transform((v) => v || null),
   content: z
     .string()
     .max(3_000_000, 'Der Entwurf ist zu groß.')

@@ -77,7 +77,7 @@ The dev project is a free playground — break it freely. The prod project has r
 
 ## Database changes
 
-Migrations are plain SQL in [supabase/](supabase/) — apply via the Supabase SQL editor or CLI. Order matters: `migration.sql`, then `add_audit_log.sql`, then `add_entitlements.sql`, then `add_editor_documents.sql`, then `add_editor_images.sql`, then `add_document_content.sql`, then `add_rls_published_conjunct.sql`. There is no migration runner; new migrations must be applied manually.
+Migrations are plain SQL in [supabase/](supabase/) — apply via the Supabase SQL editor or CLI. Order matters: `migration.sql`, then `add_audit_log.sql`, then `add_entitlements.sql`, then `add_editor_documents.sql`, then `add_editor_images.sql`, then `add_document_content.sql`, then `add_rls_published_conjunct.sql`, then `add_editor_target_task.sql`. There is no migration runner; new migrations must be applied manually.
 
 `supabase/checks/` holds SQL verification scripts for guarantees the Vitest suite cannot reach (RLS, mainly). Each runs inside a transaction ending in `ROLLBACK` and aborts with a `… CHECK FAILED — …` message. Run the relevant one against **dev** after applying the migration it belongs to.
 

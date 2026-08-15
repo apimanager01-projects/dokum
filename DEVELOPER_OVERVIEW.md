@@ -68,7 +68,7 @@ Kurs (Course)
 | `document_images` | Image collection items | `id`, `document_id` (FK CASCADE), `file_path`, `position`, `created_at` |
 | `audit_logs` | Admin + purchase action log | `id`, `actor_id` (FK auth.users), `action` (`create`\|`update`\|`delete`\|`grant`\|`revoke`), `entity_type` (incl. `entitlement`, `editor_document`, `editor_image`), `entity_id`, `entity_title`, `metadata` (JSONB), `created_at` |
 | `entitlements` | Per-(user, unit) paid access | `id`, `user_id` (FK auth.users), `unit_id` (FK units), `granted_at`, `source` (`purchase`\|`admin`), `stripe_session_id` |
-| `editor_documents` | LaTeX-editor drafts (PRD #28; outside the Kurs hierarchy until published) | `id`, `title`, `content` (JSONB, versioned document JSON), `published_document_id` (FK documents, SET NULL), `created_by` (FK auth.users, SET NULL), `created_at`, `updated_at` (trigger-maintained) |
+| `editor_documents` | LaTeX-editor drafts (PRD #28; outside the Kurs hierarchy until published) | `id`, `title`, `content` (JSONB, versioned document JSON), `published_document_id` (FK documents, SET NULL), `target_task_id` (FK tasks, SET NULL — the remembered export target, #106), `created_by` (FK auth.users, SET NULL), `created_at`, `updated_at` (trigger-maintained) |
 | `editor_images` | Uploaded images of editor drafts (slice 8; never base64 in `content` — blocks store the row id) | `id`, `editor_document_id` (FK CASCADE), `file_path` (in bucket `pdfs` under `editor-images/<draftId>/…`), `created_at` |
 
 ### Row-Level Security (RLS)
@@ -144,7 +144,7 @@ src/
 │   │   ├── units/new/page.tsx     # Create/edit Unit
 │   │   ├── tasks/new/page.tsx     # Create/edit Task
 │   │   ├── documents/new/page.tsx # Create/edit Document
-│   │   └── editor/                # LaTeX editor (PRD #28): draft list, editor shell, PNG export, publish
+│   │   └── editor/                # LaTeX editor (PRD #28): drafts popup, editor shell, PNG export, publish
 │   │       ├── page.tsx           #   loads draft + target tree via DAL, remounts shell per draftId
 │   │       └── editor.css         #   consolidated editor styles (Dokum-red rebrand)
 │   └── api/
@@ -164,11 +164,11 @@ src/
 │   │   ├── AdminTree.tsx          # Generic nested tree visualizer
 │   │   ├── AdminSubpageNav.tsx    # Tab navigation for admin subpages
 │   │   └── editor/                # LaTeX editor React shell (PRD #28)
-│   │       ├── EditorShell.tsx    #   save bar + Term state + imperative mount (controller) + the link picker's promise seam
+│   │       ├── EditorShell.tsx    #   save bar + Term state + export-target state (#106) + imperative mount (controller) + the link picker's promise seam + the unsaved-work baseline (#110)
 │   │       ├── EditorToolbar.tsx  #   rich-text toolbar (uncontrolled → controller)
-│   │       ├── ExportBar.tsx      #   Kurs/Unit/Task targets, Term, filename, PNG download + publish (size guard)
+│   │       ├── ExportBar.tsx      #   Kurs/Unit/Task targets (seeded from the draft's remembered target, #106), Term, filename, PNG download + publish (size guard)
 │   │       ├── LinkTargetPicker.tsx # Link target tree (#72): PUBLISHED Kurse → Einheiten → Aufgaben from the page prop, Dokumente + their Sprungmarken fetched lazily per Aufgabe
-│   │       └── DraftList.tsx      #   draft list with open/delete
+│   │       └── DraftCatalog.tsx   #   header button („Entwürfe (n)" + the open draft's title) opening the draft list in a native <dialog> — open/delete/filter (#109); leaving a dirty editor is confirmed first (#110); no standing list any more
 │   ├── auth/
 │   │   ├── LoginForm.tsx
 │   │   └── RegisterForm.tsx
@@ -220,6 +220,9 @@ src/
 │   │   ├── library-sync.ts        # Formula-library entry sync after formula edits — pure
 │   │   ├── number-format.ts       # German display formatting (formatValue) + the lossless entry pair a student's input box round-trips through (parseGermanEntry / formatGermanEntry) — pure
 │   │   ├── export-filename.ts     # PNG filename builder (Term + 1-based tree ordinals) + Document-title seed — pure
+│   │   ├── draft-filter.ts        # Title filter of the drafts popup (#109): case-insensitive substring, order-preserving — pure
+│   │   ├── export-target.ts       # Seeds the ExportBar's three selects from the draft's remembered `target_task_id` (#106): a stored Task implies its Kurs and Unit, anything unresolvable falls back to the first entry silently — pure
+│   │   ├── unsaved-changes.ts     # Is there unsaved work (#110)? Pure diff of two save payloads (baseline captured post-load + re-captured per save) + the module-level slot the drafts popup asks before a link navigates
 │   │   ├── png-export.ts          # PNG export pipeline → Blob (SVG raster at 2×, html2canvas; browser-only)
 │   │   ├── mathjax-loader.ts      # Bundled MathJax loader — config set BEFORE the dynamic tex-svg-full import (full build: color macros need it; browser-only)
 │   │   ├── mathjax.d.ts           # Minimal type declarations for the bundled MathJax component
@@ -233,7 +236,7 @@ src/
     └── index.ts                   # TypeScript interfaces + ActionResult<T> union
 ```
 
-Outside `src/`: `supabase/` holds the SQL migrations (see [Database Migrations](#database-migrations)), and `latexEditor/` holds the committed standalone reference editor (PRD #28) — the port's behavioral ground truth, still runnable in a plain browser.
+Outside `src/`: `supabase/` holds the SQL migrations (see [Database Migrations](#database-migrations)), `latexEditor/` holds the committed standalone reference editor (PRD #28) — the port's behavioral ground truth, still runnable in a plain browser — and `docs/document-json-authoring.md` is the authoring guide for the editor's JSON import (#107): a paste-ready LLM prompt, the v1.1 schema reference, and two worked examples that double as the fixtures of `src/lib/editor/document-json-authoring.test.ts`.
 
 ## Key Patterns
 
@@ -509,12 +512,14 @@ Migrations live in `supabase/`. Apply them in order — first to dev (Supabase S
 | `add_editor_images.sql` | `editor_images` table (admin-only RLS, cascade with draft) + audit `entity_type` extension (`editor_image`); no storage-policy changes needed |
 | `add_document_content.sql` | `documents.content` JSONB (published document snapshot, NULL for legacy rows) + `documents_file_type_check` CHECK adding `interactive`; no RLS changes needed — the row is already entitlement-gated |
 | `add_rls_published_conjunct.sql` | Re-adds the `published` conjunct to the four child SELECT policies (tasks, documents, document_images, `pdfs` storage objects) so an archived Kurs goes dark in the database, not only in app code (#80). No-op for published Kurse; admins unaffected |
+| `add_editor_target_task.sql` | `editor_documents.target_task_id` (FK tasks, SET NULL) + its index — the editor's export target survives a remount instead of resetting to the first tree entry (#106). No RLS changes: the draft policies are column-blind |
 
 **Verification checks** live in `supabase/checks/` — SQL scripts that prove a guarantee against a real database, for guarantees no Vitest seam can reach. Each one runs inside a transaction that ends in `ROLLBACK`. Run them against **dev**, after applying the migration they belong to:
 
 | File | Proves |
 |------|--------|
 | `rls_published_conjunct_check.sql` | An unpublished Kurs is unreadable to an entitled non-admin and to anonymous, fully readable to an admin, and unchanged for a published Kurs (#80). Fails before `add_rls_published_conjunct.sql`, passes after |
+| `editor_target_task_check.sql` | A draft's remembered export target round-trips, an unknown Task id is refused by the FK, deleting the target Task nulls the column while the draft survives, and the admin-only RLS still covers the row (#106) |
 
 ## Common Tasks
 
@@ -628,6 +633,7 @@ WHERE k.id = '<the kurs about to be archived>';
 | What links TO a Dokument (delete / „Als neues Dokument" warnings) | `src/lib/editor/backlinks.ts`, `src/actions/admin/backlinks.ts`, `getBacklinkScanRows` in `src/lib/dal.ts`, `handleDelete` in `src/components/admin/AdminTree.tsx`, `confirmOrphaning` in `src/components/admin/editor/ExportBar.tsx` |
 | LaTeX editor core (controller + pure modules) | `src/lib/editor/*` |
 | LaTeX editor UI (page, shell, toolbar, export, drafts) | `src/app/admin/editor/*`, `src/components/admin/editor/*` |
+| Unsaved editor work (confirm before switching drafts) | `src/lib/editor/unsaved-changes.ts`, `baselineRef` in `src/components/admin/editor/EditorShell.tsx`, `handleLeaveDraft` in `src/components/admin/editor/DraftCatalog.tsx` |
 | Standalone reference editor (parity ground truth) | `latexEditor/*.html` |
 | Error/loading boundaries | `src/app/**/error.tsx`, `src/app/**/loading.tsx` |
 

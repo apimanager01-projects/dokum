@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { useState, type RefObject } from 'react'
+import { useEffect, useState, type RefObject } from 'react'
 import { publishEditorDraft, scanDocumentBacklinks } from '@/actions/admin'
 import { MAX_FILE_SIZE_BYTES } from '@/lib/constants'
 import { backlinkRepublishWarning, backlinkScanFailedWarning } from '@/lib/editor/backlinks'
@@ -12,6 +12,7 @@ import {
   documentTitleFromFilename,
   ensurePngFilename,
 } from '@/lib/editor/export-filename'
+import { resolveExportTarget } from '@/lib/editor/export-target'
 import type { EditorTargetKurs } from '@/types'
 
 /**
@@ -26,7 +27,9 @@ import type { EditorTargetKurs } from '@/types'
  * Semantics (reference parity):
  *  • Any Kurs/Unit/Task/Term change REBUILDS and overwrites the filename
  *    (`updateFilename()`, L1221–1227); manual filename edits persist until
- *    the next such change. Built once on mount when a full selection exists.
+ *    the next such change. Built once on mount when a full selection exists —
+ *    from the RESTORED target since #106, by the same rebuild, so a reopened
+ *    draft shows the filename its target implies rather than C1_Unit1_MC1.
  *  • Ordinals are the 1-based index in DAL sort order (what the admin tree
  *    shows), not the raw `position` column.
  *  • Changing a parent select cascades: the child resets to its first entry
@@ -62,8 +65,20 @@ import type { EditorTargetKurs } from '@/types'
  *
  * The Term value is lifted to EditorShell: it persists in the draft JSON as
  * `meta.term` on save (decision D11 reserved it for this slice) and reloads
- * with the draft. The Kurs/Unit/Task selection is deliberately ephemeral per
- * session — only the publish path consumes it live.
+ * with the draft.
+ *
+ * The Kurs/Unit/Task selection was deliberately ephemeral per session until
+ * #106, which made a remount — the D6 `?draftId=…` navigation on the first
+ * save, or any reopen — silently repoint the publish button at the first tree
+ * entry. It now survives on the draft ROW: `initialTargetTaskId` comes from
+ * `editor_documents.target_task_id` (a column, NOT `meta` in the document
+ * JSON — that would earn a schema version bump, #71), `resolveExportTarget`
+ * seeds all three selects from it, and `onTargetTaskChange` reports the live
+ * Task back to the shell, which writes it on every save. Only the Task is
+ * stored; Kurs and Unit are implied by where it sits. A target that no longer
+ * exists falls back to the first entry SILENTLY (#106 decision) — a NULL
+ * column and a deleted Task are indistinguishable on purpose. The FILENAME
+ * stays derived; a hand-typed override is still not persisted.
  */
 
 const LABEL_STYLE = { fontSize: 13, color: '#374151' } as const
@@ -78,6 +93,8 @@ export function ExportBar({
   targetTree,
   term,
   onTermChange,
+  initialTargetTaskId,
+  onTargetTaskChange,
   draftId,
   publishedDocumentId,
   uploadsPending,
@@ -87,6 +104,10 @@ export function ExportBar({
   targetTree: EditorTargetKurs[]
   term: string
   onTermChange: (term: string) => void
+  /** Remembered export target of the draft (#106); null = never set or gone. */
+  initialTargetTaskId: string | null
+  /** Reports the live Task up so the next save persists it (#106). */
+  onTargetTaskChange: (taskId: string | null) => void
   /** Saved-draft id (mount identity) — publish is disabled without one. */
   draftId: string | null
   publishedDocumentId: string | null
@@ -95,14 +116,20 @@ export function ExportBar({
   saveDraft: () => Promise<{ ok: true } | { ok: false; error: string }>
 }) {
   const router = useRouter()
-  // Reference parity: preselect the first Kurs → Unit → Task; the initial
-  // filename is built from that selection (ordinals 1/1/1) when it is
-  // complete, else the reference input default `export.png`.
-  const [kursId, setKursId] = useState(() => targetTree[0]?.id ?? '')
-  const [unitId, setUnitId] = useState(() => targetTree[0]?.units[0]?.id ?? '')
-  const [taskId, setTaskId] = useState(() => targetTree[0]?.units[0]?.tasks[0]?.id ?? '')
-  const [filename, setFilename] = useState(() =>
-    targetTree[0]?.units[0]?.tasks[0] ? buildPngFilename(term, 1, 1, 1) : 'export.png'
+  // Seeded from the draft's remembered target (#106), falling back to the
+  // first Kurs → Unit → Task exactly as before when there is none or it no
+  // longer exists — `resolveExportTarget` owns both rules (and their tests).
+  // The filename is DERIVED from whatever that resolves to, by the same
+  // rebuild a selection change runs; `export.png` (the reference input
+  // default) only when the selection is incomplete.
+  const [initialTarget] = useState(() => resolveExportTarget(targetTree, initialTargetTaskId))
+  const [kursId, setKursId] = useState(initialTarget.kursId)
+  const [unitId, setUnitId] = useState(initialTarget.unitId)
+  const [taskId, setTaskId] = useState(initialTarget.taskId)
+  const [filename, setFilename] = useState(
+    () =>
+      builtFilename(targetTree, initialTarget.kursId, initialTarget.unitId, initialTarget.taskId, term) ??
+      'export.png'
   )
   // ONE guard for download AND publish — both swap the editor DOM during
   // export; a concurrent run would corrupt the swap/restore.
@@ -118,6 +145,14 @@ export function ExportBar({
   const tasks = unit?.tasks ?? []
 
   const canPublish = !busy && !uploadsPending && draftId !== null && taskId !== ''
+
+  // The next save persists whatever the selects currently show (#106) —
+  // reported on mount too, so the RESOLVED seed (a restored target, or the
+  // first-entry fallback of one that vanished) is what gets written. Publish
+  // and save therefore always agree on the target.
+  useEffect(() => {
+    onTargetTaskChange(taskId === '' ? null : taskId)
+  }, [taskId, onTargetTaskChange])
 
   /** Overwrites the filename when the new selection is complete (reference `updateFilename()`). */
   function rebuildFilename(nextKursId: string, nextUnitId: string, nextTaskId: string, nextTerm: string) {

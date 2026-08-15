@@ -113,6 +113,14 @@ export interface EditorDocument {
   /** Versioned document JSON — validated against DocumentJsonSchema at both boundaries. */
   content: unknown
   published_document_id: string | null
+  /**
+   * Remembered export target (#106): the Task the ExportBar's Kurs → Unit →
+   * Mini Case selection points at. A COLUMN, not a `meta` field in the document
+   * JSON — that would earn a schema version bump (#71) for a field the student
+   * renderer never reads. NULL when never set OR when the Task was deleted
+   * (`ON DELETE SET NULL`); both seed the first tree entry, silently.
+   */
+  target_task_id: string | null
   created_by: string | null
   created_at: string
   updated_at: string

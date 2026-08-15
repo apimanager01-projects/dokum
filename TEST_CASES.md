@@ -2,6 +2,8 @@
 
 Test against **dev** (`elnupcpwhvfbmbpcbwrc`) unless explicitly noted. Each case lists the steps, expected result, and (where useful) a SQL check you can run in the Supabase dashboard.
 
+> **This document covers the foundation only** — auth, the proxy, RLS, admin CRUD and uploads. The interactive viewer, cross-document linking and the archive (spec #63) have their own overview and checklist in [QA_INTERACTIVE_VIEWER.md](QA_INTERACTIVE_VIEWER.md).
+
 You'll need:
 - One **regular user** account
 - One **admin** account (`raw_app_meta_data.role = "admin"`)

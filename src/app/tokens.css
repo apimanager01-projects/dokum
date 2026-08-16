@@ -37,7 +37,13 @@
      GRAINED darkest ground, not the flat mean, because a textured ground has a
      luminance range and a WCAG ratio assumes a flat one. */
 
-  --dokum-ground: #f0eae2; /* recessed paper; the app ground and chrome */
+  /* Recessed paper; the app ground and chrome. #118 set this to #f0eae2; QA on
+     the landed set read the sheet-on-ground step as too strong, so the ground
+     was raised toward the sheet — the luminance gap to `--dokum-surface` falls
+     from 12.1pp to 7.4pp. The step is what makes a card read as a sheet, so it
+     is narrowed, never closed. Every ground-measured ratio below RISES with it
+     (a lighter ground under dark ink), so no contrast floor can break here. */
+  --dokum-ground: #f5f0ea;
   --dokum-surface: #fbf7f1; /* the sheet: documents, cards, panels */
   --dokum-hairline: #d9cfc2; /* seams and rules — decorative, no contrast floor */
   --dokum-edge: #8e8980; /* 3.04 on the grained sheet — SC 1.4.11 */
@@ -54,8 +60,11 @@
    *   3:1 for large text and non-text only. Never at body size, on any ground.
    *
    *   `--dokum-ink-muted` IS A CEILING WITH NO MARGIN. #118 measures 4.53;
-   *   #120 re-measured the real composite and got 4.03 / 4.43 / 4.63 depending
-   *   on whether "the darkest point" is a 2x2, 4x4 or 8x8 CSS-pixel window.
+   *   #120 re-measured the real composite against the ORIGINAL #f0eae2 ground
+   *   and got 4.03 / 4.43 / 4.63 depending on whether "the darkest point" is a
+   *   2x2, 4x4 or 8x8 CSS-pixel window. On today's lighter ground the same
+   *   three windows give 4.23 / 4.68 / 4.87 — better, and still short of 4.5 at
+   *   the strictest reading, so the ceiling stands.
    *   Anything lighter fails AA outright. Anything darker must be re-checked at
    *   a STATED window size rather than at "the darkest point".
    */

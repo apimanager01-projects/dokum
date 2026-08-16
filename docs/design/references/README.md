@@ -11,15 +11,16 @@ everything downstream on the map waited on them. Curation happens there, not her
 
 ## Status
 
-> **Partial — 2 references, both material.** The ticket expected 10–20. More pins are
-> welcome; see the gap named below, which is the part that actually constrains #116.
+> **Complete at two.** Fewer than the 10–20 the ticket expected, and deliberately closed
+> there: both are *material* references, and the missing layout evidence is supplied by
+> prototyping Dokum's own screens in #116 rather than by more pins. See "The gap", below.
 
 ## What landed
 
 | File | What it is | Why it was saved |
 | ---- | ---------- | ---------------- |
 | [01-paper-grain-cream.jpg](01-paper-grain-cream.jpg) | Scan of uncoated recycled paper. Warm cream ground, dense fibrous grain, visible flecks and inclusions, no printed content. 691×1024. | The "paper look (granularity)" from the brief, stated directly. A *material* sample, not a layout. |
-| [02-flip-clock-black.jpg](02-flip-clock-black.jpg) | Flip clock reading 5:00 AM. Pure black ground, two rounded-square cards, hairline seam across the numeral, heavy grotesque digits, no colour at all. 736×736. | Saved off a *vision-board / "5am motivation"* pin, per the original filename — so it may have been saved for the message rather than the design. Read as design it still carries signal; read as motivation it carries none. **Worth confirming.** |
+| [02-flip-clock-black.jpg](02-flip-clock-black.jpg) | Flip clock reading 5:00 AM. Pure black ground, two rounded-square cards, hairline seam across the numeral, heavy grotesque digits, no colour at all. 736×736. | **For the design, confirmed** — the original filename came off a "5am motivation" vision-board pin, but the pin was saved for the object, not the message. Treat as real evidence about form. |
 
 ## The pattern across them
 
@@ -60,12 +61,15 @@ hierarchy, a grid, a component, a state, or a piece of running text. So this fol
 hierarchy, type treatment, or how a card, a control or a formula block should look. Those are
 most of what #116 has to decide.
 
-Two ways that closes, and either is fine:
+**Decided: prototypes carry it.** No more pins are being sought. #116 renders the catalog
+two or three ways and the layout direction is settled by looking at **Dokum's own screens**,
+not by analogy to someone else's. The two material references still do real work there — they
+are the *ground* each alternative sits on, and the question they put to each prototype is
+whether it has any weight to it.
 
-1. **More pins**, weighted toward interfaces and editorial layout rather than materials.
-2. **Prototypes carry it instead** — #116 renders the catalog three ways and the layout
-   direction is decided by looking at Dokum's own screens rather than by analogy. The two
-   material references still do real work there, as the *ground* each alternative sits on.
+This is a better division than it might look. Pins are good evidence about material and
+register and poor evidence about density and hierarchy, because a pin is a picture and a
+catalog is a system with state in it. Layout was always going to be decided on real screens.
 
 ## How these got here
 

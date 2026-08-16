@@ -13,10 +13,13 @@ export async function proxy(request: NextRequest) {
   const isAuthPage = pathname.startsWith('/auth')
   const isAdminPage = pathname.startsWith('/admin')
   const isConsentPage = pathname === '/consent'
-  // PROTOTYPE (#117) — throwaway. The type specimen at /type is dev-only
-  // (`notFound()` in production) and has nothing to authenticate against; the
-  // proxy would otherwise bounce it to the login page.
-  const isPrototypePage = process.env.NODE_ENV !== 'production' && pathname === '/type'
+  // PROTOTYPE (#117, #120) — throwaway. The type specimen at /type and the
+  // export bench at /grain-export are dev-only (`notFound()` in production)
+  // and have nothing to authenticate against; the proxy would otherwise
+  // bounce them to the login page.
+  const isPrototypePage =
+    process.env.NODE_ENV !== 'production' &&
+    (pathname === '/type' || pathname === '/grain-export')
   const isPublicPage = pathname === '/' || pathname === '/impressum' || pathname === '/datenschutz' || pathname === '/agb' || isConsentPage || isPrototypePage
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY

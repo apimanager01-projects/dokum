@@ -26,7 +26,7 @@ export default async function SettingsPage() {
     <div className="mx-auto w-full max-w-3xl py-10">
       <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
 
-      <section className="mt-8 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+      <section className="mt-8 rounded-xl border border-hairline bg-surface p-6">
         <h2 className="text-sm font-semibold text-gray-900">Account</h2>
         <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-2">
           <div>
@@ -40,7 +40,7 @@ export default async function SettingsPage() {
         </dl>
       </section>
 
-      <section className="mt-4 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+      <section className="mt-4 rounded-xl border border-hairline bg-surface p-6">
         <h2 className="text-sm font-semibold text-gray-900">Session</h2>
         <p className="mt-2 max-w-xl text-sm leading-relaxed text-gray-600">
           Sign out of this device. You can sign in again at any time with your account credentials.
@@ -55,7 +55,7 @@ export default async function SettingsPage() {
         </form>
       </section>
 
-      <section className="mt-4 rounded-xl border border-red-200 bg-white p-6 shadow-sm">
+      <section className="mt-4 rounded-xl border border-red-200 bg-surface p-6">
         <h2 className="text-sm font-semibold text-red-900">Danger zone</h2>
         <p className="mt-2 max-w-xl text-sm leading-relaxed text-gray-600">
           Delete your account permanently. This requires an extra confirmation step.

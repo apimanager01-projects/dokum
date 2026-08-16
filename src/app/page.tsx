@@ -14,7 +14,10 @@ function CaseCard({
   className: string
 }) {
   return (
-    <article className={`flex min-h-[342px] flex-col items-center rounded-[32px] border border-gray-700/80 bg-[#fffdf8] px-7 pb-5 pt-8 text-center shadow-[0_13px_0_#070707] ${className}`}>
+    /* Only the cream moves to a token here (#122). The hard offset shadow and
+       the heavy border are the brutalist register #116 retired, and they come
+       out with the landing rewrite — this ticket lands values, not layouts. */
+    <article className={`flex min-h-[342px] flex-col items-center rounded-[32px] border border-gray-700/80 bg-surface px-7 pb-5 pt-8 text-center shadow-[0_13px_0_#070707] ${className}`}>
       <p className="mb-3 font-mono text-sm font-bold text-brand">{number}</p>
       <h2 className="max-w-[210px] text-[1.55rem] font-black leading-[1.08] tracking-[0] text-black">
         {title}
@@ -31,7 +34,10 @@ function CaseCard({
 
 export default function HomePage() {
   return (
-    <div className="-mx-4 -mt-px flex flex-col bg-[#fffdf8] text-black sm:-mx-8 md:h-[calc(100svh-45px)] md:overflow-hidden">
+    /* The cream ground is gone — <body> paints the paper (#116/#122). The bleed
+       stays: unlike the catalog pages this one really is edge-to-edge, and its
+       register is the landing rewrite's to settle. */
+    <div className="-mx-4 -mt-px flex flex-col sm:-mx-8 md:h-[calc(100svh-45px)] md:overflow-hidden">
       <section className="mx-auto flex h-full w-full max-w-[1480px] flex-col items-center px-5 pt-8 text-center sm:px-8 lg:pt-9">
         <h1
           className="max-w-[1420px] font-mono font-semibold tracking-[0]"

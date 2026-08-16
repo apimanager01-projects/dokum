@@ -101,15 +101,21 @@ export function DocumentOverlay({
       onClick={(event) => {
         if (pressedBackdrop.current && event.target === dialogRef.current) dismiss()
       }}
-      className="m-auto h-dvh max-h-none w-full max-w-none rounded-none border-0 bg-[#fffdf8] p-0 backdrop:bg-black/40 sm:h-auto sm:max-h-[90vh] sm:w-[92vw] sm:max-w-5xl sm:rounded-xl sm:shadow-2xl"
+      /* The cream becomes the sheet (#118) and the header loses its blur: #119
+         forbids blur here for the same reason it took it off the navbar, and
+         with more force — a blurred header smears the document the student is
+         still working in. The geometry #119 decided (a centred sheet at
+         `--dokum-page`, inset from the top, source page visible above and
+         below) is the document restyle's, not this ticket's. */
+      className="m-auto h-dvh max-h-none w-full max-w-none rounded-none border-0 bg-surface p-0 backdrop:bg-black/40 sm:h-auto sm:max-h-[90vh] sm:w-[92vw] sm:max-w-5xl sm:rounded-xl sm:shadow-2xl"
     >
       <div className="flex h-full max-h-[inherit] flex-col">
-        <div className="flex shrink-0 justify-end border-b border-gray-200 bg-[#fffdf8]/95 px-4 py-3 backdrop-blur-sm sm:px-6">
+        <div className="flex shrink-0 justify-end border-b border-hairline bg-surface px-4 py-3 sm:px-6">
           <button
             type="button"
             onClick={dismiss}
             aria-label="Dokument schließen"
-            className="rounded-md px-3 py-1.5 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
+            className="rounded-md px-3 py-1.5 text-sm font-medium text-ink-muted transition-colors hover:bg-ground hover:text-ink"
           >
             Schließen ✕
           </button>

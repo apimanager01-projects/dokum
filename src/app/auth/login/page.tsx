@@ -8,7 +8,10 @@ export default async function LoginPage({ searchParams }: Props) {
   const { message } = await searchParams
 
   return (
-    <main className="-mx-4 flex flex-col items-center justify-center bg-[#fffdf8] px-4 py-10 sm:-mx-8" style={{ minHeight: 'calc(100svh - 66px)' }}>
+    /* Ground and bleed dropped (#116/#122) — <body> paints the paper. The
+       min-height stays: here it is what centres the form, not what makes the
+       ground reach the fold. */
+    <main className="flex flex-col items-center justify-center px-4 py-10" style={{ minHeight: 'calc(100svh - 66px)' }}>
       <section className="w-full max-w-[430px]">
         <div className="mb-10 text-center">
           <h1 className="text-[2rem] font-black tracking-tight text-gray-950">Welcome to DOKUM</h1>

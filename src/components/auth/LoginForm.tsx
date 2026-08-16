@@ -79,7 +79,7 @@ export function LoginForm({ message }: { message?: string }) {
             placeholder="Type your email"
             aria-invalid={Boolean(fieldErrors.email)}
             aria-describedby={fieldErrors.email ? 'email-error' : undefined}
-            className="h-11 rounded-md border border-gray-300 bg-white px-3 text-sm shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10 aria-invalid:border-red-300 aria-invalid:bg-red-50/40"
+            className="h-11 rounded-md border border-gray-300 bg-white px-3 text-sm shadow-sm placeholder:text-gray-400 aria-invalid:border-red-300 aria-invalid:bg-red-50/40"
           />
           {fieldErrors.email && (
             <p id="email-error" className="text-sm font-medium text-red-600">
@@ -100,7 +100,7 @@ export function LoginForm({ message }: { message?: string }) {
             placeholder="Type your password"
             aria-invalid={Boolean(fieldErrors.password)}
             aria-describedby={fieldErrors.password ? 'password-error' : undefined}
-            className="h-11 rounded-md border border-gray-300 bg-white px-3 text-sm shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10 aria-invalid:border-red-300 aria-invalid:bg-red-50/40"
+            className="h-11 rounded-md border border-gray-300 bg-white px-3 text-sm shadow-sm placeholder:text-gray-400 aria-invalid:border-red-300 aria-invalid:bg-red-50/40"
           />
           {fieldErrors.password && (
             <p id="password-error" className="text-sm font-medium text-red-600">

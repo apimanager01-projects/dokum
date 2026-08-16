@@ -39,8 +39,19 @@ export default function RootLayout({
   modal: React.ReactNode
 }>) {
   return (
-    <html lang="de">
-      <body className={`${geist.variable} ${geistMono.variable} antialiased bg-gray-50 text-gray-900 flex flex-col min-h-screen`}>
+    /*
+     * The font variables sit on <html>, not <body> (#117, landed by #122).
+     * Tailwind emits `--font-sans: var(--font-geist-sans)` at `:root`, so with
+     * next/font's variables scoped to <body> the `font-sans` utility resolved
+     * to nothing and the product had no chosen typeface — #113 found it, #117
+     * decided the fix. CSS variables inherit, so nothing else moves.
+     *
+     * The ground and the ink come from `body` in globals.css rather than from
+     * utilities here: the ground carries a grain tile, which wants the
+     * `background` shorthand, and it must have exactly one author.
+     */
+    <html lang="de" className={`${geist.variable} ${geistMono.variable}`}>
+      <body className="dokum-ground antialiased flex flex-col min-h-screen">
         <Navbar />
         <main className="flex-1 w-full px-4 sm:px-8">{children}</main>
         {modal}

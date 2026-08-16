@@ -12,40 +12,39 @@ export default async function KursePage() {
   const recentDocuments = getRecentDocuments(allKurse, recentIds)
 
   return (
-    <div
-      className="-mx-4 border-t border-gray-200 bg-[#fffdf8] text-black sm:-mx-8"
-      style={{ minHeight: 'calc(100svh - 66px)' }}
-    >
-      <main className="mx-auto max-w-5xl px-8 py-10 sm:px-12 lg:px-16">
-        <section id="kurse" className="flex flex-col gap-8">
-          <div>
-            <h1 className="text-4xl font-black tracking-[0] text-black">Courses</h1>
-            <p className="mt-3 max-w-2xl text-base leading-relaxed text-gray-600">
-              Select a course to browse its units, tasks, and mini cases.
-            </p>
+    /* The full-bleed ground wrapper is gone (#116/#118/#119, landed by #122):
+       <body> paints the paper, so there is nothing to bleed, nothing to push to
+       the fold, and no rule under the navbar — an edge now means „you can act
+       on this". Widths and gutters are the chrome pass's, not this one's. */
+    <main className="mx-auto max-w-5xl px-8 py-10 sm:px-12 lg:px-16">
+      <section id="kurse" className="flex flex-col gap-8">
+        <div>
+          <h1 className="text-4xl font-black tracking-[0]">Courses</h1>
+          <p className="mt-3 max-w-2xl text-base leading-relaxed text-ink-muted">
+            Select a course to browse its units, tasks, and mini cases.
+          </p>
+        </div>
+
+        {allKurse.length === 0 ? (
+          <div className="rounded-xl border border-hairline bg-surface p-8 text-sm font-medium text-ink-muted">
+            No courses available.
           </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-8">
+            {allKurse.map((kurs) => (
+              <KursCard
+                key={kurs.id}
+                kurs={kurs}
+                unitCount={kurs.units.length}
+                miniCaseCount={countMiniCases(kurs)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
 
-          {allKurse.length === 0 ? (
-            <div className="rounded-xl border border-gray-200 bg-white p-8 text-sm font-medium text-gray-500">
-              No courses available.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-8">
-              {allKurse.map((kurs) => (
-                <KursCard
-                  key={kurs.id}
-                  kurs={kurs}
-                  unitCount={kurs.units.length}
-                  miniCaseCount={countMiniCases(kurs)}
-                />
-              ))}
-            </div>
-          )}
-        </section>
-
-        <RecentMiniCases initialItems={recentDocuments} />
-      </main>
-    </div>
+      <RecentMiniCases initialItems={recentDocuments} />
+    </main>
   )
 }
 

@@ -23,17 +23,28 @@
   overflow-wrap: break-word;
 }
 
+/*
+ * Headings are INK, not red (#118, landed by #122). This reverses #113's accent
+ * choice deliberately: red is spent twice in this product and separated by
+ * surface rather than by shade, so ON THE LEARNING SURFACE RED ONLY EVER MEANS
+ * SOMETHING IS WRONG. A red heading spends the one signal an error needs.
+ *
+ * The `var(--brand, #00338d)` fallback chain goes with it. That blue belonged to
+ * no brand — it was the default this file shipped with and what the surface
+ * actually rendered until #113 defined `--brand`. Nothing in the product should
+ * be able to fall back to it again.
+ */
 .dokum-document h1 {
   font-size: 1.6em;
   font-weight: 700;
-  color: var(--brand, #00338d);
+  color: var(--dokum-ink);
   margin: 0 0 0.5em;
 }
 
 .dokum-document h2 {
   font-size: 1.3em;
   font-weight: 700;
-  color: var(--brand, #00338d);
+  color: var(--dokum-ink);
   margin: 1em 0 0.4em;
 }
 
@@ -82,11 +93,19 @@
 
 /* ---------------------------------------------------- formula/image blocks */
 
+/*
+ * The accent bar cannot be brand red for the same reason the headings cannot
+ * (#118), so it takes the hairline — a rule that separates, which is what it
+ * was doing all along. The rest of this block is knowingly left alone: #118
+ * names the cool blue gradient as the largest cold object on the learning
+ * surface, but recolouring a block is a restyle decision and the document
+ * restyle owns it. #122 only takes the `--brand` fallbacks out.
+ */
 .dokum-document .formula-block,
 .dokum-document .image-block {
   margin: 1em 0;
   padding: 14px 16px;
-  border-left: 4px solid var(--brand, #00338d);
+  border-left: 4px solid var(--dokum-hairline);
   border-radius: 12px;
   background: linear-gradient(180deg, #fbfdff, #f5f8fc);
   box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06);
@@ -199,18 +218,26 @@
   /* Sits inline: no browser default shadow, no spinner, no rounding away. */
   appearance: none;
   box-shadow: none;
-  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+  transition: border-color var(--dokum-dur-micro) var(--dokum-ease-standard);
 }
 
 .dokum-document .student-input:hover {
   border-color: #d97706;
 }
 
-.dokum-document .student-input:focus {
-  outline: none;
-  border-color: #b45309;
-  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.45);
-}
+/*
+ * NO FOCUS RULE HERE, ON PURPOSE (#119, landed by #122).
+ *
+ * There were four invented focus treatments in this file — two amber rings on
+ * the student input, an indigo `#4338ca` on a link and an amber `#b45309` on a
+ * locked one. None of them was a brand colour and none of them agreed with
+ * another. The product now has ONE ring, declared once in tokens.css as a bare
+ * `:focus-visible`, and it is INK: a red ring would sit on an input next to an
+ * oxblood error, on the one surface where those two must not meet (#118).
+ *
+ * Anything added below that restyles focus per component re-opens exactly the
+ * drift this deleted.
+ */
 
 /* Text that is not a number. The same red an unresolvable output wears, and it
    has to exist: the resolver substitutes an unparseable value as 0 rather than
@@ -220,11 +247,6 @@
   background: #fee2e2;
   color: #991b1b;
   border-color: #f87171;
-}
-
-.dokum-document .student-input.is-error:focus {
-  border-color: #b91c1c;
-  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.45);
 }
 
 /* ------------------------------------------------------------- Link-Chips */
@@ -258,17 +280,14 @@
      the whole chip onto the next one. */
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
-  transition: background-color 0.12s ease;
+  transition: background-color var(--dokum-dur-micro) var(--dokum-ease-standard);
 }
 
 .dokum-document .doc-link:hover {
   background: #e0e7ff;
 }
 
-.dokum-document .doc-link:focus-visible {
-  outline: 2px solid #4338ca;
-  outline-offset: 2px;
-}
+/* Focus is the one ink ring from tokens.css — see the note on `.student-input`. */
 
 /* The glyph is drawn from the attribute the renderer stamps (document-render,
    `replaceWithLinkAnchor`), which reads the one map in lib/editor/links.ts. A
@@ -297,10 +316,6 @@
 
 .dokum-document .doc-link[data-link-state='locked']:hover {
   background: #fef3c7;
-}
-
-.dokum-document .doc-link[data-link-state='locked']:focus-visible {
-  outline-color: #b45309;
 }
 
 /* A link whose target is archived or deleted (#74). NOT a chip: it is plain

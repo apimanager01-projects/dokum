@@ -14,7 +14,21 @@ export function KursCard({
   return (
     <Link
       href={`/kurse/${kurs.id}`}
-      className="group relative flex flex-col overflow-hidden rounded-xl border border-gray-200 bg-white p-6 shadow-[0_8px_20px_rgb(0_0_0_/_0.04)] transition-all hover:-translate-y-0.5 hover:border-brand/30 hover:shadow-[0_14px_30px_rgb(0_0_0_/_0.08)] animate-slide-up"
+      /*
+       * #119's hover rule, landed: border-colour only, at `--dokum-dur-micro`,
+       * with no transform and no shadow. The lift plus the 30px shadow bloom
+       * was the register #116 retired, and `box-shadow` is paint-bound where
+       * `transform`/`opacity` are composited — so it cost frames as well as
+       * taste. `transition-all` goes with them: it was animating properties
+       * nobody had chosen.
+       *
+       * Hairline at rest, `--dokum-edge` on hover. #118 says an edge means „you
+       * can act on this" — a card IS something you can act on, so revealing the
+       * edge under the pointer states the grammar rather than bending it.
+       *
+       * The card's geometry — radius, the seam, the numeral slot — is #121's.
+       */
+      className="group relative flex flex-col overflow-hidden rounded-xl border border-hairline bg-surface p-6 transition-colors duration-[var(--dokum-dur-micro)] ease-[var(--dokum-ease-standard)] hover:border-edge animate-slide-up"
     >
       {!kurs.published && (
         <span className="absolute right-5 top-5 rounded-md bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-700">

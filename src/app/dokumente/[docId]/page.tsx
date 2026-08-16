@@ -34,14 +34,16 @@ export default async function DocumentPage({ params }: Props) {
   const backHref = `/kurse/${kurs.id}/units/${unit.id}?openTask=${task.id}`
 
   return (
-    <div
-      className="-mx-4 border-t border-gray-200 bg-[#fffdf8] sm:-mx-8"
-      style={{ minHeight: 'calc(100svh - 66px)' }}
-    >
-      <div className="mx-auto max-w-5xl px-8 py-10 sm:px-12 lg:px-16">
+    /* The cream that used to bleed full-width is now <body>'s ground, and the
+       document becomes what #118 calls the sheet — surface on ground. Only the
+       ground literal moves here: the sheet's geometry (width to `--dokum-page`,
+       its inset, and matching the overlay's centred sheet) is the document
+       restyle's, not this ticket's. */
+    <div className="py-10">
+      <div className="mx-auto max-w-5xl rounded-xl bg-surface px-8 py-10 sm:px-12 lg:px-16">
         <Link
           href={backHref}
-          className="mb-8 inline-block text-sm font-medium text-gray-500 hover:text-gray-700"
+          className="mb-8 inline-block text-sm font-medium text-ink-muted hover:text-ink"
         >
           ← {unit.title}
         </Link>

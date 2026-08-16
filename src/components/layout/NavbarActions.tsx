@@ -54,7 +54,7 @@ export function NavbarActions({
           </button>
 
           {open && (
-            <div className="absolute right-0 top-full z-50 mt-1.5 min-w-[180px] overflow-hidden rounded-md border border-gray-200 bg-white shadow-lg">
+            <div className="absolute right-0 top-full z-50 mt-1.5 min-w-[180px] overflow-hidden rounded-md border border-hairline bg-surface shadow-lg">
               <Link
                 href="/settings"
                 onClick={() => setOpen(false)}

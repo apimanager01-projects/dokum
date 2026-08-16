@@ -9,7 +9,7 @@ interface Props {
 
 export default function UnitPaywall({ unitId, title, description, canceled }: Props) {
   return (
-    <div className="mx-auto mt-8 max-w-xl rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
+    <div className="mx-auto mt-8 max-w-xl rounded-xl border border-hairline bg-surface p-8">
       <div className="flex items-center gap-3">
         <span aria-hidden className="text-2xl">🔒</span>
         <h2 className="text-lg font-semibold text-gray-900">Einheit gesperrt</h2>

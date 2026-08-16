@@ -9,10 +9,11 @@ export default function KursError({
   reset: () => void
 }) {
   return (
-    <div className="-mx-4 border-t border-gray-200 bg-[#fffdf8] sm:-mx-8" style={{ minHeight: 'calc(100svh - 66px)' }}>
+    /* Ground wrapper retired (#116/#118/#119, landed by #122) — see kurse/page.tsx. */
+    <div>
       <div className="mx-auto max-w-5xl px-8 py-20 text-center sm:px-12 lg:px-16">
-        <h2 className="text-2xl font-black tracking-[0] text-black">This course couldn&apos;t be loaded.</h2>
-        <p className="mt-3 text-base text-gray-600">Please try again or go back to the overview.</p>
+        <h2 className="text-2xl font-black tracking-[0]">This course couldn&apos;t be loaded.</h2>
+        <p className="mt-3 text-base text-ink-muted">Please try again or go back to the overview.</p>
         <div className="mt-8 flex justify-center gap-4">
           <button
             onClick={reset}

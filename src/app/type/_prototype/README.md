@@ -2,8 +2,14 @@
 
 > Five candidate type systems on one specimen, at <http://localhost:3000/type>.
 
+**DECIDED — System A. Geist and Geist Mono, everywhere, including the document.** The board and
+the reasoning stay below because the *loss* is the useful part: D proves the pairing problem is
+sans rather than Geist, and A's accepted cost — a formula reads visually foreign inside a
+grotesque, because MathJax v3 can only draw Computer Modern — is recorded so it is not
+rediscovered as a surprise. See the [resolution](https://github.com/dokumtastisch/dokum/issues/117#issuecomment-5307190762).
+
 Throwaway. Nothing here is production code — prototype rules (no tests, no error handling, no
-abstractions). Whatever wins gets written properly when the tokens land.
+abstractions). The winner gets written properly when the tokens land.
 
 ## Run it
 
@@ -16,7 +22,7 @@ Then <http://localhost:3000/type>. `←` / `→` or `1`–`5` switch system, `G`
 
 | | System | Chrome | Document | Mono |
 | --- | --- | --- | --- | --- |
-| **A** | Geist | Geist | Geist | Geist Mono |
+| **A** ✅ | **Geist** | Geist | Geist | Geist Mono |
 | **B** | Plex | IBM Plex Sans | **IBM Plex Serif** | IBM Plex Mono |
 | **C** | Geist + Literata | Geist | **Literata** | Geist Mono |
 | **D** | Schibsted Grotesk | Schibsted Grotesk | Schibsted Grotesk | IBM Plex Mono |

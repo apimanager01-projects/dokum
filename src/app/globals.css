@@ -17,6 +17,16 @@
   --color-brand-dark: #a6281c;
 }
 
+/*
+ * `--brand` is what interactive-document.css asks for at every accent (#113).
+ * It was never defined, so the learning surface fell back to a `#00338d` blue
+ * that belongs to no brand. Aliased rather than re-stated so the red has one
+ * literal in the codebase — `--color-brand` above.
+ */
+:root {
+  --brand: var(--color-brand);
+}
+
 @keyframes slide-up {
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -36,7 +46,17 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /*
+   * layout.tsx loads Geist through next/font and this rule used to throw it
+   * away with an Arial declaration that landed after Tailwind's preflight
+   * (#113) — so the product had no chosen typeface at all. Deleting the line
+   * is not enough: preflight sets `ui-sans-serif` on <html>, and body would
+   * inherit that. The variable is referenced directly rather than through
+   * Tailwind's `--font-sans`, which resolves at `:root` where next/font's
+   * variables are not in scope. This records current intent, not a decision —
+   * the typeface itself is #117's to make.
+   */
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
 /* Prevent iOS Safari auto-zoom on input focus (triggers when font-size < 16px) */

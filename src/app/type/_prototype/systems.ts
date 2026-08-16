@@ -163,6 +163,25 @@ export const SYSTEMS: TypeSystem[] = [
       'The direct answer to “is the problem Geist, or is the problem sans?”',
     ],
   },
+  {
+    key: 'E',
+    name: 'Geist + Plex Serif',
+    thesis: 'Same minimal change as C, different serif — so “which serif” can be judged against a fixed chrome.',
+    ui: `var(--pt-geist), ${SANS_FALLBACK}`,
+    doc: `var(--pt-plex-serif), ${SERIF_FALLBACK}`,
+    mono: `var(--pt-geist-mono), ${MONO_FALLBACK}`,
+    docSize: 17,
+    docLeading: 1.6,
+    numWeight: 700,
+    displayTracking: '-0.035em',
+    displayWeight: 700,
+    docWeight: 400,
+    notes: [
+      'Added after A–D were rendered: once the document went serif, chrome and serif became separable axes, and C vs B conflated them.',
+      'Plex Serif is narrower and crisper than Literata; Literata is warmer and has the larger x-height.',
+      'Costs less than C — Plex Serif at two weights plus italic is 62 KB against Literata’s 123 KB variable file.',
+    ],
+  },
 ]
 
 export function systemFor(key: string | undefined): TypeSystem {

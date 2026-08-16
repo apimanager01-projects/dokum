@@ -1,6 +1,6 @@
 # PROTOTYPE — typeface system (#117)
 
-> Four candidate type systems on one specimen, at <http://localhost:3000/type>.
+> Five candidate type systems on one specimen, at <http://localhost:3000/type>.
 
 Throwaway. Nothing here is production code — prototype rules (no tests, no error handling, no
 abstractions). Whatever wins gets written properly when the tokens land.
@@ -11,7 +11,7 @@ abstractions). Whatever wins gets written properly when the tokens land.
 npm run dev
 ```
 
-Then <http://localhost:3000/type>. `←` / `→` or `1`–`4` switch system, `G` toggles the grain,
+Then <http://localhost:3000/type>. `←` / `→` or `1`–`5` switch system, `G` toggles the grain,
 `+` / `−` nudge the document reading size.
 
 | | System | Chrome | Document | Mono |
@@ -20,6 +20,12 @@ Then <http://localhost:3000/type>. `←` / `→` or `1`–`4` switch system, `G`
 | **B** | Plex | IBM Plex Sans | **IBM Plex Serif** | IBM Plex Mono |
 | **C** | Geist + Literata | Geist | **Literata** | Geist Mono |
 | **D** | Schibsted Grotesk | Schibsted Grotesk | Schibsted Grotesk | IBM Plex Mono |
+| **E** | Geist + Plex Serif | Geist | **IBM Plex Serif** | Geist Mono |
+
+**E was added after A–D had been rendered**, and the reason is the finding itself: once it was
+clear the document wants a serif, "which chrome" and "which serif" became separable axes, and
+B vs C conflated them. E holds the chrome constant at today's Geist so the two serifs can be
+compared on their own.
 
 The system lives in React state, **not** in the URL: switching must not remount, because the
 whole method here is to hold your eye on one paragraph and flip the family under it. Scroll
@@ -86,7 +92,7 @@ Measured latin payload per family, as actually downloaded by the page:
 | Literata (variable, roman + italic) | 123 |
 | Schibsted Grotesk (variable) | 46 |
 
-Per system that is roughly A ≈ 102 KB, B ≈ 239 KB, C ≈ 225 KB, D ≈ 66 KB — upper bounds, since
+Per system that is roughly A ≈ 102 KB, B ≈ 239 KB, C ≈ 225 KB, D ≈ 66 KB, E ≈ 164 KB — upper bounds, since
 Plex's weight count is a choice and `next/font` splits by unicode-range so a German reader pulls
 only the subsets they need.
 

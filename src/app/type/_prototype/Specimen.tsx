@@ -54,7 +54,7 @@ export function Specimen({
       if (e.key === 'ArrowRight') step(1)
       else if (e.key === 'ArrowLeft') step(-1)
       else if (e.key.toLowerCase() === 'g') setGrain((g) => !g)
-      else if (/^[1-4]$/.test(e.key)) { setIndex(Number(e.key) - 1); setSizeDelta(0) }
+      else if (/^[1-5]$/.test(e.key)) { setIndex(Number(e.key) - 1); setSizeDelta(0) }
       else if (e.key === '+' || e.key === '=') setSizeDelta((d) => Math.min(4, d + 1))
       else if (e.key === '-') setSizeDelta((d) => Math.max(-3, d - 1))
     }
@@ -497,7 +497,7 @@ function Bar({
       <button onClick={() => setGrain((g) => !g)} className={grain ? 'on' : ''}>
         Grain {grain ? 'on' : 'off'}
       </button>
-      <span className="hint">← → · 1–4 · G · +/−</span>
+      <span className="hint">← → · 1–5 · G · +/−</span>
       <span className="hint now">{sys.name}</span>
     </div>
   )
@@ -606,7 +606,7 @@ body:has(.ts) > main { padding: 0 !important; }
 .ts .compound { background: var(--panel); border-radius: 14px; padding: 14px 16px; font-size: 19px; font-weight: 700; letter-spacing: -0.025em; overflow-wrap: break-word; hyphens: auto; }
 
 /* bar */
-.ts .bar { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; background: rgba(20,20,23,0.92); color: #fff; padding: 7px 9px; border-radius: 999px; font-size: 12px; z-index: 50; backdrop-filter: blur(6px); }
+.ts .bar { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); display: flex; flex-wrap: nowrap; white-space: nowrap; max-width: calc(100vw - 32px); overflow-x: auto; align-items: center; gap: 6px; background: rgba(20,20,23,0.92); color: #fff; padding: 7px 9px; border-radius: 999px; font-size: 12px; z-index: 50; backdrop-filter: blur(6px); }
 .ts .bar button { color: rgba(255,255,255,0.62); padding: 5px 11px; border-radius: 999px; font: inherit; cursor: pointer; white-space: nowrap; }
 .ts .bar button.on { background: #fff; color: #141417; font-weight: 600; }
 .ts .bar .sep { width: 1px; height: 18px; background: rgba(255,255,255,0.22); margin: 0 4px; }

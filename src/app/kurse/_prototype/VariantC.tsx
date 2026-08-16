@@ -21,8 +21,12 @@ import { PROTOTYPE_KURSE } from './prototype-data'
 
 const css = `
 .pv-c {
-  --ground: #f1f0ed;
-  --panel: #ffffff;
+  /* WARMED after the decision (#116): the ground was a cool grey #f1f0ed and
+     moved into the paper family, because what won was C's STRUCTURE over A's
+     MATERIAL, not C's palette. The exact values are #118's to fix — these are
+     placed so the decision is something you can look at. */
+  --ground: #f0eae2;
+  --panel: #fffefb;
   --ink: #141417;
   --ink-soft: #6b6b73;
   --seam: rgba(20, 20, 23, 0.12);
@@ -87,7 +91,7 @@ const css = `
 }
 .pv-c .chip {
   margin-left: auto; align-self: center;
-  background: #ececea; border-radius: 999px;
+  background: #ebe4da; border-radius: 999px;
   padding: 4px 10px; font-size: 11px; font-weight: 600; color: var(--ink-soft);
 }
 
@@ -141,8 +145,10 @@ export function VariantC() {
     <div className="pv-c">
       <style>{css}</style>
       <div className="wrap">
+        {/* Red dot, chosen over the rounded-square tile this variant proposed
+            (#116). The tile is kept in the specimen below as the runner-up. */}
         <div className="mark">
-          dokum<i className="tile" />
+          dokum<span style={{ color: '#db3627' }}>.</span>
         </div>
 
         <h1>Kurse</h1>
@@ -175,14 +181,19 @@ export function VariantC() {
           <div className="marks">
             <span>
               dokum<span style={{ color: '#db3627' }}>.</span>
-              <small>roter Punkt</small>
+              <small>roter Punkt — gewählt</small>
             </span>
             <span>
               dokum.
               <small>einfacher Schlusspunkt</small>
             </span>
-            <span className="mark" style={{ fontSize: 30 }}>
-              dokum<i className="tile" />
+            <span>
+              {/* .mark is inline-flex, so the caption has to sit outside it or
+                  it becomes a flex child and lands on the same line. */}
+              <span className="mark" style={{ fontSize: 30 }}>
+                dokum
+                <i className="tile" />
+              </span>
               <small>rote Karte</small>
             </span>
           </div>

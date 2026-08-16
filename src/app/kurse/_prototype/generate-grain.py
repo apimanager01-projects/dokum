@@ -59,10 +59,13 @@ for i in range(SIZE * SIZE):
     # BOTH ways around the ground rather than only darkening it — flat cream
     # with specks subtracted reads as dirt; paper reads as fibre catching light.
     d = (128 - fibre_px[i]) / 128 * 0.62 + (128 - cloud_px[i]) / 128 * 0.38
+    # 0.24 and 0.32 are the first pass's 0.30/0.40 at 80%: Jakob looked at the
+    # rendered catalog and asked for ~20% less. Amplitude is the only thing
+    # that changed — grain size, seed and fleck count are as they were.
     colour = INK if d >= 0 else LIT
-    a = abs(d) * 0.30
+    a = abs(d) * 0.24
     if (x, y) in flecks:
-        colour, a = INK, 0.40
+        colour, a = INK, 0.32
     px.append((*colour, round(min(a, 1.0) * 255)))
 out.putdata(px)
 out.save("public/prototype/paper-grain.png")

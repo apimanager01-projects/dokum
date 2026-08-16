@@ -2,9 +2,21 @@ import { cookies } from 'next/headers'
 import { getPublishedKurseDeep } from '@/lib/dal'
 import { KursCard } from '@/components/kurse/KursCard'
 import { RecentMiniCases } from '@/components/kurse/RecentMiniCases'
+import { PrototypeCatalog } from './_prototype/PrototypeCatalog'
 import type { KursWithUnits } from '@/types'
 
-export default async function KursePage() {
+export default async function KursePage({
+  searchParams,
+}: {
+  // PROTOTYPE (#116) — `?variant=A|B|C` swaps the whole page for a throwaway
+  // personality variant. Dev only, and the production path below is untouched.
+  searchParams: Promise<{ variant?: string; grain?: string }>
+}) {
+  const { variant, grain } = await searchParams
+  if (process.env.NODE_ENV !== 'production' && variant) {
+    return <PrototypeCatalog variant={variant} grain={grain} />
+  }
+
   const allKurse = await getPublishedKurseDeep()
   const cookieStore = await cookies()
   const raw = cookieStore.get('recent_minicases')?.value

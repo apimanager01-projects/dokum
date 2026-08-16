@@ -53,6 +53,13 @@ hairline seam, and the reductive austerity of showing exactly one thing.
 is the fallback every student sees when live MathJax rendering fails (§9). Grain on the
 catalog with a flat document ground is a legitimate answer.
 
+That constraint is not a preference, though — the stated intent is grain **product-wide**
+(landing included, possibly as *the* general design element). The map's Notes carry the full
+brief and what it costs: CSP already permits it, it forces the single ground token, and the
+implementation choice — tiled scan vs. seamless noise tile vs. `feTurbulence` — is #116's to
+make deliberately. Read [#112](https://github.com/dokumtastisch/dokum/issues/112) before
+acting on this paragraph.
+
 ### The gap
 
 **There is no layout evidence here at all.** Neither reference shows a screen, a type

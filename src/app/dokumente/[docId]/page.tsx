@@ -2,15 +2,10 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { DocumentArticle } from '@/components/documents/DocumentArticle'
-import { PrototypeSwitcher } from '@/components/documents/PrototypeSwitcher'
-import { normaliseVariant } from '@/components/documents/prototype-124-variants'
 import { loadDocumentSurface } from '@/lib/document-surface'
-import '@/components/documents/prototype-124-variants.css'
 
 interface Props {
   params: Promise<{ docId: string }>
-  /* PROTOTYPE — #124. THROWAWAY, along with everything `proto` below. */
-  searchParams: Promise<Record<string, string | string[] | undefined>>
 }
 
 /**
@@ -27,9 +22,8 @@ interface Props {
  * someone who cannot read them; telling a student "this is in Einheit 3,
  * unlock it" is a separate, deliberately server-side surface (#74).
  */
-export default async function DocumentPage({ params, searchParams }: Props) {
+export default async function DocumentPage({ params }: Props) {
   const { docId } = await params
-  const variant = normaliseVariant((await searchParams)['variant'])
 
   const surface = await loadDocumentSurface(docId)
   if (!surface) notFound()
@@ -40,18 +34,34 @@ export default async function DocumentPage({ params, searchParams }: Props) {
   const backHref = `/kurse/${kurs.id}/units/${unit.id}?openTask=${task.id}`
 
   return (
-    /* PROTOTYPE GEOMETRY. The sheet's width, inset, radius and whether it is a
-       sheet at all is #124's open question 4, so the shape lives in the variant
-       stylesheet rather than in classes here. The winner comes back as real
-       Tailwind on this element. */
-    <div className="proto-124" data-proto={variant}>
-      <div className="proto-sheet">
-        <Link href={backHref} className="proto-back">
+    /*
+     * THE PAPER IS THE PAGE — THERE IS NO SHEET (#124).
+     *
+     * Nothing here paints a background, so `body`'s grained ground (#116) runs
+     * straight under the prose and the document is written ON the paper rather
+     * than laid on top of it. Which also disposes of #120's „white slab on
+     * paper" by removing the slab: the only sheets left in a document are the
+     * blocks a machine made, and those are `.formula-block` / `.image-block`.
+     *
+     * It satisfies #123's container rule as a side effect. That rule asks the
+     * live document and the PNG fallback to be children of ONE ground-painting
+     * element so the transparent picture cannot start a fresh grain tile at its
+     * own edge — here that element is `body`, and both are inside it.
+     *
+     * Width is `--dokum-page` (#119) — the same 1024 the navbar's inner
+     * container still has to collapse to; the measure inside is `70ch` and
+     * lives in `interactive-document.css`.
+     */
+    <div className="py-12">
+      <div className="mx-auto max-w-[var(--dokum-page)] px-[var(--dokum-gutter)]">
+        <Link
+          href={backHref}
+          className="mb-8 inline-block text-[length:var(--dokum-text-ui)] font-medium text-ink-muted hover:text-ink"
+        >
           ← {unit.title}
         </Link>
         <DocumentArticle view={surface.view} watermarkId={surface.watermarkId} />
       </div>
-      <PrototypeSwitcher current={variant} />
     </div>
   )
 }
@@ -59,6 +69,13 @@ export default async function DocumentPage({ params, searchParams }: Props) {
 // A bookmark is only useful if it carries the document's name. It falls back
 // to the layout's title whenever the page itself would 404 — metadata must not
 // become a way to learn a title the page refuses to show.
+//
+// #69 evaluated that rule as though the reader were never an admin, to avoid
+// an auth round-trip here. Sharing the loader with the page removes the reason:
+// it is `cache`d per request, so the auth call and the query happen once for
+// both. The visible consequence is that an admin now gets the real tab title
+// for a document in an ARCHIVED Kurs, matching the page they are looking at
+// instead of contradicting it.
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { docId } = await params
   const surface = await loadDocumentSurface(docId)

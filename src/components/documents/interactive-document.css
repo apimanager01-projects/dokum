@@ -44,11 +44,26 @@
   margin: 0 0 0.5em;
 }
 
+/*
+ * THE SEAM TRAVELS, AND THIS IS WHERE IT LANDS (#116, settled by #124).
+ *
+ * #116 named two candidate uses inside a document — dividing a heading from
+ * its body, or marking a step boundary in a derivation — and left the choice
+ * to a rendered document. It is the heading: a derivation's steps are not
+ * addressable in the schema (a `formula` block is one block, not a sequence of
+ * steps), so a step boundary has nothing to attach to, while a section boundary
+ * has an `h2` waiting for it.
+ *
+ * It is the flip card's split at document scale, which is what keeps the one
+ * memorable move (#121) from being a thing only the catalog does.
+ */
 .dokum-document h2 {
   font-size: 1.3em;
   font-weight: var(--dokum-weight-bold);
   color: var(--dokum-ink);
   margin: 1.6em 0 0.4em;
+  padding-bottom: var(--dokum-space-2);
+  border-bottom: 1px solid var(--dokum-hairline);
 }
 
 /*
@@ -105,33 +120,89 @@
 /* ---------------------------------------------------- formula/image blocks */
 
 /*
- * The cool `#fbfdff → #f5f8fc` gradient is gone — #118 names it the largest
- * cold object on the learning surface. WHAT REPLACES IT IS THE VARIANT
- * QUESTION (#124 open question 1), so the shared rules here carry only what
- * every answer agrees on: the vertical rhythm, the full page width, and the
- * fact that a dense derivation scrolls itself rather than widening the page.
+ * A SHEET ON THE PAPER (#124). The cool `#fbfdff → #f5f8fc` gradient is gone —
+ * #118 names it the largest cold object on the learning surface — and what
+ * replaces it is the only sheet left in a document.
+ *
+ * The logic is the page's, inverted: prose is written ON the paper, so the
+ * blocks a MACHINE made — a typeset formula, a stored image — are the things
+ * laid on top of it. That is the whole distinction the surface has to draw, and
+ * it draws it with the ground the student is already reading against rather
+ * than with a colour.
+ *
+ * The accent bar goes with the gradient. It was the editor's furniture and #122
+ * only kept it alive by recolouring it to the hairline; a card with an edge on
+ * one side is a card that lost three.
+ *
+ * NO SHADOW. #119 forbids the lift, and on a grained ground a soft shadow
+ * fights the grain instead of sitting on it — the hairline does the work.
  */
 .dokum-document .formula-block,
 .dokum-document .image-block {
   margin: 1.75em 0;
+  padding: var(--dokum-space-5) var(--dokum-space-4);
+  background: var(--dokum-surface);
+  border: 1px solid var(--dokum-hairline);
+  border-radius: 14px;
 }
 
-/* A dense derivation must not widen the page on a phone — it scrolls itself. */
+/*
+ * The row a formula sits in. A dense derivation must not widen the page on a
+ * phone — it scrolls itself.
+ *
+ * RESERVED HEIGHT (#119). MathJax swaps the LaTeX source for an SVG after first
+ * paint and the two are not the same height, so a document full of formulas
+ * reflows under the reader. The row holds 2.2em open from the first frame.
+ *
+ * 2.2em AND NOT 3em, AND THE ROW CENTRES ITS CONTENT — the two go together.
+ * A reservation can only be right for one formula height, and the product's
+ * range is wide: a measured `21 · 2 = 42` is 15.5px while a sum over a fraction
+ * is ~55px. At 3em a short formula sat at the top of 51px of reserved space
+ * with 35px of nothing under it, which is invisible on a bare page and reads as
+ * a bug once #124 put a card around it. Centring spends the same reservation as
+ * symmetrical padding instead of as a gap.
+ *
+ * The residual cost is written down rather than tuned away: a formula taller
+ * than 2.2em still grows the row when it typesets. No single number fixes that
+ * — only baking the typeset geometry into the snapshot would, and #119 ruled
+ * that past this map's destination.
+ */
 .dokum-document .render-target {
+  display: flex;
+  align-items: center;
   overflow-x: auto;
   overflow-y: hidden;
-  text-align: center;
-  /*
-   * RESERVED HEIGHT (#119). MathJax swaps the LaTeX source for an SVG after
-   * first paint, and the two are not the same height — a document full of
-   * formulas visibly reflows under the reader. One display formula is about
-   * 3em, so the row holds that much open from the first frame and only a
-   * taller-than-average formula moves anything.
-   */
-  min-height: 3em;
+  min-height: 2.2em;
+}
+
+/*
+ * `margin: auto` on the child, NOT `justify-content: center` — a formula wider
+ * than the page is the case that separates them. Centring via `justify-content`
+ * makes an overflowing flex item unreachable on its left edge when the row is
+ * scrolled; `auto` margins collapse to zero once the item overflows, so it
+ * scrolls from its true start. Centred when it fits, scrollable when it does
+ * not.
+ */
+.dokum-document .render-target > * {
+  margin: auto;
+}
+
+/*
+ * MathJax centres display math itself — but only through the stylesheet its
+ * startup pipeline injects, and we never run that pipeline (see the
+ * `mjx-assistive-mml` note in globals.css: every call site goes straight to
+ * `tex2svgPromise`). So `mjx-container` arrives with UA defaults, and the SVG
+ * inside it is block-level at width auto — which is why a display formula
+ * rendered flush left until this rule, inside a card the full width of the page.
+ */
+.dokum-document .render-target mjx-container {
+  display: block;
+  width: 100%;
 }
 
 .dokum-document .render-target svg {
+  display: block;
+  margin-inline: auto;
   max-width: 100%;
   height: auto;
 }
@@ -172,11 +243,14 @@
 /* ----------------------------------------------------- input/output fields */
 
 /*
- * Amber and blue both left the product (#118). The grammar that replaces them
- * is fixed — AN EDGE MEANS YOU CAN ACT ON IT, an output is machine-produced and
- * carries no edge, red only ever means wrong — but the DRAWING of it is #124's
- * open question 2, so it lives in the variant sheet. Shared below: the shape in
- * the line, and the numerals.
+ * Amber and blue both left the product (#118), and what replaces them draws the
+ * grammar rather than colouring it (#124): AN EDGE MEANS YOU CAN ACT ON IT, an
+ * output is machine-produced and carries no edge, red only ever means wrong.
+ *
+ * Both wear the SHEET on a page that is paper, for the same reason a formula
+ * block does — a field is a thing placed on the document, not written into it.
+ * What separates them is the edge and nothing else, which is the point: a
+ * student can tell what they may touch without first learning a colour.
  */
 .dokum-document .input-field,
 .dokum-document .output-field {
@@ -186,6 +260,29 @@
   font-weight: var(--dokum-weight-medium);
   font-size: 0.92em;
   user-select: text;
+  background: var(--dokum-surface);
+  color: var(--dokum-ink);
+  border-radius: 6px;
+}
+
+/* The edge — and `--dokum-edge` at #8e8980 is heavier than a hairline, which
+   #118 wrote down in advance and is the accepted cost of a system with no spare
+   hue. It is the one mark on this surface that says „you". */
+.dokum-document .input-field {
+  border: 1px solid var(--dokum-edge);
+}
+
+/* A value carried in from elsewhere rather than typed here. */
+.dokum-document .input-field.is-ref {
+  border-style: dashed;
+}
+
+/* No edge: nobody can act on it. The weight and the tabular numerals are the
+   whole distinction, and they are enough because the edge is doing the other
+   half of the job further up the line. */
+.dokum-document .output-field {
+  border: 0;
+  font-weight: var(--dokum-weight-semibold);
 }
 
 /* Tabular lining numerals (#117): a value that changes under the student must
@@ -235,10 +332,22 @@
   min-width: 3.5em;
   text-align: center;
   cursor: text;
+  /* The same sheet and the same edge as the static `.input-field` it replaces —
+     a variable does not change what it looks like when it becomes typeable, it
+     only becomes typeable. */
+  background: var(--dokum-surface);
+  color: var(--dokum-ink);
+  border: 1px solid var(--dokum-edge);
+  border-radius: 6px;
   /* Sits inline: no browser default shadow, no spinner, no rounding away. */
   appearance: none;
   box-shadow: none;
   transition: border-color var(--dokum-dur-micro) var(--dokum-ease-standard);
+}
+
+/* Ink, not a second colour: hover darkens the edge that is already there. */
+.dokum-document .student-input:hover {
+  border-color: var(--dokum-ink);
 }
 
 /*

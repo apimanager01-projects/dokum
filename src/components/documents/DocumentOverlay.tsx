@@ -117,11 +117,23 @@ export function DocumentOverlay({
        * here than on the navbar, because a blurred header smears both #116's
        * grain and the document the student is still working in. The backdrop is
        * INK at low alpha rather than black: one warm ramp, end to end (#118).
+       *
+       * THE SHEET IS PAPER, NOT SURFACE (#124). The standalone page dropped its
+       * sheet so the grain runs under the prose; a `bg-surface` dialog would
+       * have made the two surfaces disagree about the one thing a document is
+       * written on, and the overlay is where a student notices, because it opens
+       * over the page it contradicts. `.dokum-ground` also keeps #123's rule
+       * true in here: the live document and the PNG fallback are both children
+       * of THIS element, so the transparent picture cannot start a grain tile of
+       * its own at its edge.
        */
-      className="m-auto h-dvh max-h-none w-full max-w-none rounded-none border-0 bg-surface p-0 backdrop:bg-[rgb(25_21_18/0.45)] sm:h-auto sm:max-h-[84vh] sm:w-[92vw] sm:max-w-[var(--dokum-page)] sm:rounded-[14px] sm:border sm:border-hairline sm:shadow-[0_12px_40px_rgb(25_21_18/0.18)]"
+      className="dokum-ground m-auto h-dvh max-h-none w-full max-w-none rounded-none border-0 p-0 backdrop:bg-[rgb(25_21_18/0.45)] sm:h-auto sm:max-h-[84vh] sm:w-[92vw] sm:max-w-[var(--dokum-page)] sm:rounded-[14px] sm:border sm:border-hairline sm:shadow-[0_12px_40px_rgb(25_21_18/0.18)]"
     >
       <div className="flex h-full max-h-[inherit] flex-col">
-        <div className="flex shrink-0 justify-end border-b border-hairline bg-surface px-4 py-3 sm:px-6">
+        {/* Transparent, so the dialog's grain runs unbroken behind it — the bar
+            never overlaps scrolling content (it is a flex row above the scroll
+            container, not a sticky layer), so it has nothing to hide. */}
+        <div className="flex shrink-0 justify-end border-b border-hairline px-4 py-3 sm:px-6">
           <button
             type="button"
             onClick={dismiss}

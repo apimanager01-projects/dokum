@@ -31,6 +31,21 @@ export interface PngExportOptions {
    * determines the final pixel dimensions.
    */
   scale?: number
+  /**
+   * Fill painted behind the export area. **Default `null` — transparent**
+   * (#123/#125): the published picture carries no ground, so the app supplies
+   * one and the picture can never drift out of step with the document it sits
+   * in. The *download* path is the opt-out and passes `'#ffffff'`, because a
+   * file that leaves the app has to work in Word, on a projector and in a
+   * print queue.
+   *
+   * Transparency here is only half of it — `.exporting` (editor.css) strips
+   * the topbar, border, radius and viewport-tall `min-height` at the same
+   * time. Filled white those four read as *a page*; filled with nothing the
+   * same four read as a framed card with a red bar sitting on the student's
+   * sheet, which is why the frame goes with the fill.
+   */
+  background?: string | null
 }
 
 /**
@@ -102,11 +117,14 @@ export function svgToPngDataUrl(
  *  2. hide the drag handles (previous inline display stashed, like the
  *     reference),
  *  3. `.exporting` on — field pills print as plain text, reduced block
- *     padding (editor.css),
+ *     padding, and the editor's own frame (topbar, border, radius, the
+ *     viewport-tall min-height and both white fills) leaves the picture
+ *     (editor.css, #125),
  *  4. rasterize every MathJax SVG and swap the WHOLE render-target content
  *     for a PNG <img> (awaiting load before insertion; per-SVG failures are
  *     logged and skipped, reference L1324–1326),
- *  5. html2canvas over the export area (white background, `useCORS: true` —
+ *  5. html2canvas over the export area (background per `options.background` —
+ *     transparent unless the caller opts into a fill, #123; `useCORS: true` —
  *     harmless: editor images stream through the same-origin
  *     /api/editor-image/ proxy, so the canvas is never tainted),
  *  6. restore the DOM — always, on success AND failure, before the Blob
@@ -183,7 +201,10 @@ export async function exportAreaToPngBlob(
     // async chunk that only ever loads on the first export.
     const { default: html2canvas } = await import('html2canvas')
     const canvas = await html2canvas(exportArea, {
-      backgroundColor: '#ffffff',
+      // null = keep the alpha channel. The published document is this
+      // pipeline's reason to exist, so transparent is the default and the
+      // download opts out (#123).
+      backgroundColor: options.background ?? null,
       scale,
       useCORS: true,
       logging: false,

@@ -263,8 +263,13 @@
  * SC 2.2.2 is Level A and is the only accessibility item on this map with real
  * BFSG exposure, so the reduce block lives with the tokens rather than in any
  * one stylesheet: re-pointing the durations at `:root` reaches all three
- * consumers at once, and the two named animations are the only looping motion
- * in the product.
+ * consumers at once.
+ *
+ * IT ONLY REACHES A STYLESHEET THAT CONSUMES THE DURATIONS, which is why
+ * `editor.css` was re-pointed off its hard-coded `0.1s` (= `--dokum-dur-micro`,
+ * so no value moved). An `infinite` animation is the case no duration can
+ * shorten, and each one is disabled where it is declared — `editor.css` owns
+ * the drop caret, the two below are Tailwind's.
  */
 @media (prefers-reduced-motion: reduce) {
   :root {

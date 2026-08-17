@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import type { DocumentWithAncestry } from '@/types'
 import { DocumentBody } from './DocumentBody'
 
@@ -7,11 +8,7 @@ import { DocumentBody } from './DocumentBody'
  * page (#69) and the intercepted overlay (#70).
  *
  * The pair below `DocumentBody`: that component owns "which render path does
- * this file_type take", this one owns "what surrounds it at page scale". The
- * Unit accordion shares only the first, because it shows a document at list
- * scale with its own heading; these two surfaces share both, and are therefore
- * identical apart from the chrome the caller wraps around them — a back link
- * on the page, a close button on the overlay.
+ * this file_type take", this one owns "what surrounds it at page scale".
  *
  * The breadcrumb is not decoration. Someone arriving from a bookmark or a
  * classmate's link has no history behind them, and someone reading the overlay
@@ -22,24 +19,59 @@ export function DocumentArticle({
   view,
   watermarkId,
   titleId,
+  linkAncestors = true,
 }: {
   view: DocumentWithAncestry
   watermarkId: string
   /** Set by the overlay, which labels its dialog with the document's title. */
   titleId?: string
+  /**
+   * Whether the breadcrumb's ancestors are links — TRUE ON THE STANDALONE PAGE,
+   * FALSE IN THE OVERLAY (#119, applied by #124).
+   *
+   * The research asks for linked ancestors so a reader can climb out of a
+   * document they arrived at cold. #119 then made the overlay a centred sheet
+   * with the source page visible above and below — which DISSOLVES the reason
+   * here rather than trading it away: the page the student came from is on
+   * screen, so the overlay's ancestors would be links out of a document that is
+   * deliberately sitting on top of the very context they lead to, and following
+   * one would discard everything typed into it (#70).
+   */
+  linkAncestors?: boolean
 }) {
   const { document, task, unit, kurs } = view
+  const unitHref = `/kurse/${kurs.id}/units/${unit.id}`
+
+  const crumbs: { key: string; label: string; href: string }[] = [
+    { key: 'kurs', label: kurs.title, href: `/kurse/${kurs.id}` },
+    { key: 'unit', label: unit.title, href: unitHref },
+    { key: 'task', label: task.title, href: `${unitHref}?openTask=${task.id}` },
+  ]
 
   return (
     <article>
-      <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
-        {kurs.title} · {unit.title} · {task.title}
+      <p className="text-[length:var(--dokum-text-micro)] font-medium uppercase leading-[var(--dokum-leading-micro)] tracking-wide text-ink-muted">
+        {crumbs.map((crumb, i) => (
+          <span key={crumb.key}>
+            {i > 0 && <span aria-hidden="true"> · </span>}
+            {linkAncestors ? (
+              <Link href={crumb.href} className="underline-offset-2 hover:underline">
+                {crumb.label}
+              </Link>
+            ) : (
+              crumb.label
+            )}
+          </span>
+        ))}
       </p>
-      <h1 id={titleId} className="mt-1 text-4xl font-black tracking-[0] text-black">
+      <h1
+        id={titleId}
+        className="mt-2 text-[length:var(--dokum-text-display)] font-bold leading-[var(--dokum-leading-display)] tracking-[var(--dokum-track-display)] text-ink"
+      >
         {document.title}
       </h1>
       {document.description && (
-        <p className="mt-3 max-w-2xl text-base leading-relaxed text-gray-600">
+        <p className="mt-3 max-w-[var(--dokum-measure-short)] text-[length:var(--dokum-text-ui)] leading-[var(--dokum-leading-ui)] text-ink-muted">
           {document.description}
         </p>
       )}
@@ -58,9 +90,9 @@ export function DocumentArticle({
 export function DocumentArticleSkeleton() {
   return (
     <>
-      <div className="h-3 w-56 animate-pulse rounded bg-gray-100" />
-      <div className="mt-2 h-9 w-80 max-w-full animate-pulse rounded-md bg-gray-100" />
-      <div className="mt-8 h-64 animate-pulse rounded-md bg-gray-100" />
+      <div className="h-3 w-56 animate-pulse rounded bg-hairline/50" />
+      <div className="mt-2 h-9 w-80 max-w-full animate-pulse rounded-md bg-hairline/50" />
+      <div className="mt-8 h-64 animate-pulse rounded-md bg-hairline/50" />
     </>
   )
 }

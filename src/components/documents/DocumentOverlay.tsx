@@ -101,13 +101,24 @@ export function DocumentOverlay({
       onClick={(event) => {
         if (pressedBackdrop.current && event.target === dialogRef.current) dismiss()
       }}
-      /* The cream becomes the sheet (#118) and the header loses its blur: #119
-         forbids blur here for the same reason it took it off the navbar, and
-         with more force — a blurred header smears the document the student is
-         still working in. The geometry #119 decided (a centred sheet at
-         `--dokum-page`, inset from the top, source page visible above and
-         below) is the document restyle's, not this ticket's. */
-      className="m-auto h-dvh max-h-none w-full max-w-none rounded-none border-0 bg-surface p-0 backdrop:bg-black/40 sm:h-auto sm:max-h-[90vh] sm:w-[92vw] sm:max-w-5xl sm:rounded-xl sm:shadow-2xl"
+      /*
+       * A CENTRED SHEET WITH THE SOURCE PAGE VISIBLE ABOVE AND BELOW (#119,
+       * applied by #124) — `--dokum-page` wide, capped at 84vh so roughly 8vh
+       * of the page the student came from shows at each end. That visible strip
+       * is not decoration: it is what says the page underneath is still there
+       * and still holds what was typed into it (#70), which a full-bleed panel
+       * said only by implication. It is also what dissolved the case for linked
+       * breadcrumb ancestors in here — see `DocumentArticle`.
+       *
+       * Below `sm` the sheet still fills the viewport: 8vh of context is not
+       * worth 16vh of a phone's reading height.
+       *
+       * NO BLUR ON THE BACKDROP AND NONE ON THE HEADER (#119) — with more force
+       * here than on the navbar, because a blurred header smears both #116's
+       * grain and the document the student is still working in. The backdrop is
+       * INK at low alpha rather than black: one warm ramp, end to end (#118).
+       */
+      className="m-auto h-dvh max-h-none w-full max-w-none rounded-none border-0 bg-surface p-0 backdrop:bg-[rgb(25_21_18/0.45)] sm:h-auto sm:max-h-[84vh] sm:w-[92vw] sm:max-w-[var(--dokum-page)] sm:rounded-[14px] sm:border sm:border-hairline sm:shadow-[0_12px_40px_rgb(25_21_18/0.18)]"
     >
       <div className="flex h-full max-h-[inherit] flex-col">
         <div className="flex shrink-0 justify-end border-b border-hairline bg-surface px-4 py-3 sm:px-6">

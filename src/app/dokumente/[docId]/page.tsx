@@ -2,10 +2,15 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { DocumentArticle } from '@/components/documents/DocumentArticle'
+import { PrototypeSwitcher } from '@/components/documents/PrototypeSwitcher'
+import { normaliseVariant } from '@/components/documents/prototype-124-variants'
 import { loadDocumentSurface } from '@/lib/document-surface'
+import '@/components/documents/prototype-124-variants.css'
 
 interface Props {
   params: Promise<{ docId: string }>
+  /* PROTOTYPE — #124. THROWAWAY, along with everything `proto` below. */
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 }
 
 /**
@@ -22,8 +27,9 @@ interface Props {
  * someone who cannot read them; telling a student "this is in Einheit 3,
  * unlock it" is a separate, deliberately server-side surface (#74).
  */
-export default async function DocumentPage({ params }: Props) {
+export default async function DocumentPage({ params, searchParams }: Props) {
   const { docId } = await params
+  const variant = normaliseVariant((await searchParams)['variant'])
 
   const surface = await loadDocumentSurface(docId)
   if (!surface) notFound()
@@ -34,21 +40,18 @@ export default async function DocumentPage({ params }: Props) {
   const backHref = `/kurse/${kurs.id}/units/${unit.id}?openTask=${task.id}`
 
   return (
-    /* The cream that used to bleed full-width is now <body>'s ground, and the
-       document becomes what #118 calls the sheet — surface on ground. Only the
-       ground literal moves here: the sheet's geometry (width to `--dokum-page`,
-       its inset, and matching the overlay's centred sheet) is the document
-       restyle's, not this ticket's. */
-    <div className="py-10">
-      <div className="mx-auto max-w-5xl rounded-xl bg-surface px-8 py-10 sm:px-12 lg:px-16">
-        <Link
-          href={backHref}
-          className="mb-8 inline-block text-sm font-medium text-ink-muted hover:text-ink"
-        >
+    /* PROTOTYPE GEOMETRY. The sheet's width, inset, radius and whether it is a
+       sheet at all is #124's open question 4, so the shape lives in the variant
+       stylesheet rather than in classes here. The winner comes back as real
+       Tailwind on this element. */
+    <div className="proto-124" data-proto={variant}>
+      <div className="proto-sheet">
+        <Link href={backHref} className="proto-back">
           ← {unit.title}
         </Link>
         <DocumentArticle view={surface.view} watermarkId={surface.watermarkId} />
       </div>
+      <PrototypeSwitcher current={variant} />
     </div>
   )
 }
@@ -56,13 +59,6 @@ export default async function DocumentPage({ params }: Props) {
 // A bookmark is only useful if it carries the document's name. It falls back
 // to the layout's title whenever the page itself would 404 — metadata must not
 // become a way to learn a title the page refuses to show.
-//
-// #69 evaluated that rule as though the reader were never an admin, to avoid
-// an auth round-trip here. Sharing the loader with the page removes the reason:
-// it is `cache`d per request, so the auth call and the query happen once for
-// both. The visible consequence is that an admin now gets the real tab title
-// for a document in an ARCHIVED Kurs, matching the page they are looking at
-// instead of contradicting it.
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { docId } = await params
   const surface = await loadDocumentSurface(docId)

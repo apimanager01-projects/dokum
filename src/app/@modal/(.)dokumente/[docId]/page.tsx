@@ -50,18 +50,25 @@ async function OverlayDocument({ docId }: { docId: string }) {
   // this one.
   if (!surface) return <OverlayNotFound />
 
+  // Plain-text ancestors in here, links on the standalone page (#119, applied
+  // by #124) — the reason is on `DocumentArticle`'s `linkAncestors` prop.
   return (
-    <DocumentArticle view={surface.view} watermarkId={surface.watermarkId} titleId={TITLE_ID} />
+    <DocumentArticle
+      view={surface.view}
+      watermarkId={surface.watermarkId}
+      titleId={TITLE_ID}
+      linkAncestors={false}
+    />
   )
 }
 
 function OverlayNotFound() {
   return (
     <div className="py-10 text-center">
-      <h1 id={TITLE_ID} className="text-xl font-semibold text-gray-900">
+      <h1 id={TITLE_ID} className="text-xl font-semibold text-ink">
         Dokument nicht gefunden
       </h1>
-      <p className="mt-2 text-sm text-gray-500">
+      <p className="mt-2 text-sm text-ink-muted">
         Dieses Dokument existiert nicht oder ist für dich nicht freigeschaltet.
       </p>
     </div>

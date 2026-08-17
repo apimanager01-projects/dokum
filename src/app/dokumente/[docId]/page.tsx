@@ -34,14 +34,29 @@ export default async function DocumentPage({ params }: Props) {
   const backHref = `/kurse/${kurs.id}/units/${unit.id}?openTask=${task.id}`
 
   return (
-    <div
-      className="-mx-4 border-t border-gray-200 bg-[#fffdf8] sm:-mx-8"
-      style={{ minHeight: 'calc(100svh - 66px)' }}
-    >
-      <div className="mx-auto max-w-5xl px-8 py-10 sm:px-12 lg:px-16">
+    /*
+     * THE PAPER IS THE PAGE — THERE IS NO SHEET (#124).
+     *
+     * Nothing here paints a background, so `body`'s grained ground (#116) runs
+     * straight under the prose and the document is written ON the paper rather
+     * than laid on top of it. Which also disposes of #120's „white slab on
+     * paper" by removing the slab: the only sheets left in a document are the
+     * blocks a machine made, and those are `.formula-block` / `.image-block`.
+     *
+     * It satisfies #123's container rule as a side effect. That rule asks the
+     * live document and the PNG fallback to be children of ONE ground-painting
+     * element so the transparent picture cannot start a fresh grain tile at its
+     * own edge — here that element is `body`, and both are inside it.
+     *
+     * Width is `--dokum-page` (#119) — the same 1024 the navbar's inner
+     * container still has to collapse to; the measure inside is `70ch` and
+     * lives in `interactive-document.css`.
+     */
+    <div className="py-12">
+      <div className="mx-auto max-w-[var(--dokum-page)] px-[var(--dokum-gutter)]">
         <Link
           href={backHref}
-          className="mb-8 inline-block text-sm font-medium text-gray-500 hover:text-gray-700"
+          className="mb-8 inline-block text-[length:var(--dokum-text-ui)] font-medium text-ink-muted hover:text-ink"
         >
           ← {unit.title}
         </Link>

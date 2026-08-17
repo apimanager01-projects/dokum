@@ -607,6 +607,37 @@
   font-weight: inherit !important;
 }
 
+/* #125: Das veröffentlichte PNG trägt keinen Grund (#123) — die App liefert
+   ihn, damit das Bild nie aus dem Takt mit dem Dokument gerät, in dem es
+   sitzt. Transparenz allein wäre dabei eine Verschlechterung: die vier Stücke
+   Autoren-Mobiliar unten lesen sich weiß gefüllt als *Seite*, leer gefüllt
+   aber als gerahmte Karte mit rotem Balken auf dem Blatt der Studierenden.
+   Der Rahmen geht deshalb mit der Füllung — dieselbe Begründung, aus der
+   png-export.ts die Ziehgriffe und das Bild-Lösch-✕ ausblendet. (Der 6px-
+   Balken ist zusätzlich ein #118-Verstoß, der bisher in jedem PNG steckte.)
+   Der Download holt sich sein Weiß über PngExportOptions.background zurück,
+   nicht hier: nur die Fläche ist verhandelbar, der Rahmen nie. */
+.latex-editor #exportArea.exporting {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  min-height: 0 !important;
+}
+
+.latex-editor .exporting .topbar {
+  display: none !important;
+}
+
+/* #editor malt sein eigenes Weiß und ist ein Nachfahre — bleibt diese zweite
+   Füllung stehen, wird nur der Rand durchsichtig und die Transparenz sieht
+   schlicht kaputt aus. Das min-height fällt aus demselben Grund wie oben:
+   sonst wird ein zweizeiliges Dokument als bildschirmhohe Seite exportiert. */
+.latex-editor .exporting #editor {
+  background: transparent !important;
+  min-height: 0 !important;
+}
+
 /* --------------------------------------------- library sidebar (slice 4) */
 
 .latex-editor #formulaLibrary {

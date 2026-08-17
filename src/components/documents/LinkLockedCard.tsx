@@ -106,7 +106,7 @@ export function LinkLockedCard({
       }}
       className="m-auto w-[92vw] max-w-lg rounded-xl border-0 bg-transparent p-0 backdrop:bg-black/40"
     >
-      <div className="rounded-xl bg-[#fffdf8] p-1 shadow-2xl">
+      <div className="rounded-xl bg-surface p-1 shadow-2xl">
         <div className="flex justify-end px-3 pt-2">
           <button
             type="button"

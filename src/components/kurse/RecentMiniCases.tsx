@@ -82,7 +82,7 @@ export function RecentMiniCases({ initialItems }: { initialItems: RecentItem[] }
               key={item.id}
               href={`/kurse/${item.kursId}/units/${item.unitId}?openTask=${item.taskId}`}
               onContextMenu={(e) => handleContextMenu(e, item.id)}
-              className="flex min-h-20 items-center gap-5 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm transition-colors hover:border-brand/40 select-none"
+              className="flex min-h-20 items-center gap-5 rounded-lg border border-hairline bg-surface px-4 py-3 transition-colors duration-[var(--dokum-dur-micro)] ease-[var(--dokum-ease-standard)] hover:border-edge select-none"
             >
               <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-brand/10 font-mono text-sm font-black text-brand">
                 {getInitials(item.kursTitle)}
@@ -101,11 +101,11 @@ export function RecentMiniCases({ initialItems }: { initialItems: RecentItem[] }
         <div
           ref={menuRef}
           style={{ position: 'fixed', top: menu.y, left: menu.x, zIndex: 50 }}
-          className="min-w-36 overflow-hidden rounded-md border border-gray-200 bg-white py-1 shadow-lg"
+          className="min-w-36 overflow-hidden rounded-md border border-hairline bg-surface py-1 shadow-lg"
         >
           <button
             onClick={() => handleRemove(menu.itemId)}
-            className="flex w-full items-center gap-2.5 px-3 py-2 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-50 hover:text-brand focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/20"
+            className="flex w-full items-center gap-2.5 px-3 py-2 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-50 hover:text-brand"
           >
             <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M3 6h18" />

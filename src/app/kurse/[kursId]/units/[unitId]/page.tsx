@@ -54,14 +54,18 @@ export default async function UnitPage({ params, searchParams }: Props) {
   const watermarkId = user.id.slice(0, 8).toUpperCase()
 
   return (
-    <div className="-mx-4 border-t border-gray-200 bg-[#fffdf8] sm:-mx-8" style={{ minHeight: 'calc(100svh - 66px)' }}>
+    /* The bleed and the min-height are exactly what #119 named: with one ground
+       token there is nothing to bleed and nothing to push to the fold, and the
+       rule under the navbar goes with them (#118 — an edge means „you can act
+       on this"). Landed by #122. */
+    <div>
       <div className="mx-auto max-w-5xl px-8 py-10 sm:px-12 lg:px-16">
-        <Link href={`/kurse/${kursId}`} className="mb-8 inline-block text-sm font-medium text-gray-500 hover:text-gray-700">
+        <Link href={`/kurse/${kursId}`} className="mb-8 inline-block text-sm font-medium text-ink-muted hover:text-ink">
           ← Back to course
         </Link>
-        <h1 className="text-4xl font-black tracking-[0] text-black">{unit.title}</h1>
+        <h1 className="text-4xl font-black tracking-[0]">{unit.title}</h1>
         {unit.description && (
-          <p className="mt-3 max-w-2xl text-base leading-relaxed text-gray-600">{unit.description}</p>
+          <p className="mt-3 max-w-2xl text-base leading-relaxed text-ink-muted">{unit.description}</p>
         )}
       {purchased === '1' && (
         <p className="mt-4 rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">

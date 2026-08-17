@@ -19,8 +19,19 @@ export async function Navbar() {
     null
 
   return (
+    /*
+     * Sticky, opaque, and no blur (#119). `backdrop-blur-sm` was the one effect
+     * that actively fought #116's material decision — `backdrop-filter` smears
+     * the grain it sits over, and it repaints every scroll frame of a long
+     * document. The translucency went with it: 95% of the ground over the
+     * ground is a needless composite.
+     *
+     * Still no hairline under it, deliberately. #118 made an edge mean „you can
+     * act on this"; a full-width rule across the chrome would be the first lie
+     * in that grammar. Separation is space and the sheet.
+     */
     <nav
-      className="sticky top-0 z-50 bg-[#fffdf8]/95 backdrop-blur-sm"
+      className="dokum-ground sticky top-0 z-50"
       style={{ height: 66, paddingTop: 16 }}
     >
       <div className="mx-auto flex max-w-[1420px] items-start justify-between px-5 sm:px-8 lg:px-12">

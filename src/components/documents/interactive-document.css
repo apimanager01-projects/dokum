@@ -1,12 +1,15 @@
 /*
- * Student-facing styling for a live interactive document (#67).
+ * Student-facing styling for a live interactive document (#67), restyled on the
+ * tokens (#124 — the map's proof).
  *
  * Scoped to `.dokum-document`, deliberately NOT a reuse of the admin editor's
  * stylesheet: that one styles an editing surface (hover affordances, drag
  * handles, caption placeholders, a fixed-width page) and the student surface
- * has none of that and has to work on a phone. What IS shared is the visual
- * language — the same accent-bar formula block and the same input/output pill
- * colours — so a student recognises the document the author built.
+ * has none of that and has to work on a phone.
+ *
+ * EVERY VALUE HERE IS A TOKEN OR A RATIO, and each is cited to the ticket that
+ * decided it. This file CONSUMES `tokens.css` through `:root` and must never
+ * import it (#122).
  *
  * Tailwind preflight zeroes the element margins and list styles this content
  * relies on, so the block defaults are restored explicitly, exactly as the
@@ -14,63 +17,97 @@
  */
 
 .dokum-document {
-  font-size: 17px;
-  line-height: 1.55;
-  color: #111827;
+  font-size: var(--dokum-text-body);
+  /* 1.55, not the scale's 1.6 — running text a student reads at length has its
+     own leading (#117/#119, reconciled in tokens.css). */
+  line-height: var(--dokum-leading-reading);
+  /* Was `#111827` — cold ink on a warm sheet, the last two-temperature value
+     #122 knowingly left inside this file. */
+  color: var(--dokum-ink);
   /* Real, selectable, copyable text is a deliberate product choice for
      interactive documents; the watermark is a deterrent, not a lock. */
   user-select: text;
   overflow-wrap: break-word;
 }
 
+/*
+ * Headings are INK, not red (#118, landed by #122). This reverses #113's accent
+ * choice deliberately: red is spent twice in this product and separated by
+ * surface rather than by shade, so ON THE LEARNING SURFACE RED ONLY EVER MEANS
+ * SOMETHING IS WRONG. A red heading spends the one signal an error needs.
+ */
 .dokum-document h1 {
   font-size: 1.6em;
-  font-weight: 700;
-  color: var(--brand, #00338d);
+  font-weight: var(--dokum-weight-bold);
+  letter-spacing: var(--dokum-track-display);
+  color: var(--dokum-ink);
   margin: 0 0 0.5em;
 }
 
+/*
+ * THE SEAM TRAVELS, AND THIS IS WHERE IT LANDS (#116, settled by #124).
+ *
+ * #116 named two candidate uses inside a document — dividing a heading from
+ * its body, or marking a step boundary in a derivation — and left the choice
+ * to a rendered document. It is the heading: a derivation's steps are not
+ * addressable in the schema (a `formula` block is one block, not a sequence of
+ * steps), so a step boundary has nothing to attach to, while a section boundary
+ * has an `h2` waiting for it.
+ *
+ * It is the flip card's split at document scale, which is what keeps the one
+ * memorable move (#121) from being a thing only the catalog does.
+ */
 .dokum-document h2 {
   font-size: 1.3em;
-  font-weight: 700;
-  color: var(--brand, #00338d);
-  margin: 1em 0 0.4em;
+  font-weight: var(--dokum-weight-bold);
+  color: var(--dokum-ink);
+  margin: 1.6em 0 0.4em;
+  padding-bottom: var(--dokum-space-2);
+  border-bottom: 1px solid var(--dokum-hairline);
 }
 
-/* Running text, and the only place a link chip can meet another one on the
-   line below. At 1.55 the line box is narrower than the 24px-tall chip (#101)
-   and two stacked pills touch, which reads as one dense block rather than two
-   separate targets — so the lines that can carry a chip get the room the chip
-   needs. A heading needs none of this: its line-height scales with its own
-   larger font and already clears the pill. */
+/*
+ * THE MEASURE (#119). 70ch and not 55, because German. It sits on `p`/`li`
+ * alone: a formula and an image are not read left-to-right at length and #119
+ * leaves them at full page width, so capping them here would be the one thing
+ * that rule forbids.
+ *
+ * Leading reverts to 1.55 (#119). It was 1.65 to clear the 24px link chip
+ * (#101) — the chip is gone, so the room it needed goes back.
+ */
 .dokum-document p,
 .dokum-document li {
-  line-height: 1.65;
+  line-height: var(--dokum-leading-reading);
+  max-width: var(--dokum-measure);
 }
 
+/* Paragraph rhythm 1.25em (#119). Adjacent margins collapse, so this is the
+   gap between two paragraphs and not twice it. Written down there and again
+   here: it fails the STRICT reading of SC 1.4.8, which is Level AAA and not
+   this map's target. */
 .dokum-document p {
-  margin: 0.8em 0;
+  margin: 1.25em 0;
 }
 
 .dokum-document ul {
   list-style: disc;
-  margin: 0.8em 0;
+  margin: 1.25em 0;
   padding-left: 1.6em;
 }
 
 .dokum-document ol {
   list-style: decimal;
-  margin: 0.8em 0;
+  margin: 1.25em 0;
   padding-left: 1.6em;
 }
 
 .dokum-document pre {
-  background: #f1f4f8;
-  border: 1px solid #d7dce2;
+  background: var(--dokum-ground);
+  border: 1px solid var(--dokum-hairline);
   border-radius: 8px;
   padding: 10px 14px;
-  margin: 0.8em 0;
-  font-family: Consolas, monospace;
+  margin: 1.25em 0;
+  font-family: var(--dokum-font-mono);
   font-size: 0.85em;
   overflow-x: auto;
 }
@@ -82,24 +119,90 @@
 
 /* ---------------------------------------------------- formula/image blocks */
 
+/*
+ * A SHEET ON THE PAPER (#124). The cool `#fbfdff → #f5f8fc` gradient is gone —
+ * #118 names it the largest cold object on the learning surface — and what
+ * replaces it is the only sheet left in a document.
+ *
+ * The logic is the page's, inverted: prose is written ON the paper, so the
+ * blocks a MACHINE made — a typeset formula, a stored image — are the things
+ * laid on top of it. That is the whole distinction the surface has to draw, and
+ * it draws it with the ground the student is already reading against rather
+ * than with a colour.
+ *
+ * The accent bar goes with the gradient. It was the editor's furniture and #122
+ * only kept it alive by recolouring it to the hairline; a card with an edge on
+ * one side is a card that lost three.
+ *
+ * NO SHADOW. #119 forbids the lift, and on a grained ground a soft shadow
+ * fights the grain instead of sitting on it — the hairline does the work.
+ */
 .dokum-document .formula-block,
 .dokum-document .image-block {
-  margin: 1em 0;
-  padding: 14px 16px;
-  border-left: 4px solid var(--brand, #00338d);
-  border-radius: 12px;
-  background: linear-gradient(180deg, #fbfdff, #f5f8fc);
-  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06);
+  margin: 1.75em 0;
+  padding: var(--dokum-space-5) var(--dokum-space-4);
+  background: var(--dokum-surface);
+  border: 1px solid var(--dokum-hairline);
+  border-radius: 14px;
 }
 
-/* A dense derivation must not widen the page on a phone — it scrolls itself. */
+/*
+ * The row a formula sits in. A dense derivation must not widen the page on a
+ * phone — it scrolls itself.
+ *
+ * RESERVED HEIGHT (#119). MathJax swaps the LaTeX source for an SVG after first
+ * paint and the two are not the same height, so a document full of formulas
+ * reflows under the reader. The row holds 2.2em open from the first frame.
+ *
+ * 2.2em AND NOT 3em, AND THE ROW CENTRES ITS CONTENT — the two go together.
+ * A reservation can only be right for one formula height, and the product's
+ * range is wide: a measured `21 · 2 = 42` is 15.5px while a sum over a fraction
+ * is ~55px. At 3em a short formula sat at the top of 51px of reserved space
+ * with 35px of nothing under it, which is invisible on a bare page and reads as
+ * a bug once #124 put a card around it. Centring spends the same reservation as
+ * symmetrical padding instead of as a gap.
+ *
+ * The residual cost is written down rather than tuned away: a formula taller
+ * than 2.2em still grows the row when it typesets. No single number fixes that
+ * — only baking the typeset geometry into the snapshot would, and #119 ruled
+ * that past this map's destination.
+ */
 .dokum-document .render-target {
+  display: flex;
+  align-items: center;
   overflow-x: auto;
   overflow-y: hidden;
-  text-align: center;
+  min-height: 2.2em;
+}
+
+/*
+ * `margin: auto` on the child, NOT `justify-content: center` — a formula wider
+ * than the page is the case that separates them. Centring via `justify-content`
+ * makes an overflowing flex item unreachable on its left edge when the row is
+ * scrolled; `auto` margins collapse to zero once the item overflows, so it
+ * scrolls from its true start. Centred when it fits, scrollable when it does
+ * not.
+ */
+.dokum-document .render-target > * {
+  margin: auto;
+}
+
+/*
+ * MathJax centres display math itself — but only through the stylesheet its
+ * startup pipeline injects, and we never run that pipeline (see the
+ * `mjx-assistive-mml` note in globals.css: every call site goes straight to
+ * `tex2svgPromise`). So `mjx-container` arrives with UA defaults, and the SVG
+ * inside it is block-level at width auto — which is why a display formula
+ * rendered flush left until this rule, inside a card the full width of the page.
+ */
+.dokum-document .render-target mjx-container {
+  display: block;
+  width: 100%;
 }
 
 .dokum-document .render-target svg {
+  display: block;
+  margin-inline: auto;
   max-width: 100%;
   height: auto;
 }
@@ -118,192 +221,217 @@
 .dokum-document .block-caption {
   margin-top: 10px;
   font-size: 0.9em;
-  color: #374151;
+  color: var(--dokum-ink-muted);
   text-align: left;
 }
 
 /* A formula MathJax could not typeset keeps its source visible rather than
-   collapsing to nothing — the document is still readable around it. */
+   collapsing to nothing — the document is still readable around it. Oxblood on
+   the error tint, the learning surface's only chroma (#118). */
 .dokum-document .formula-error {
-  color: #991b1b;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  color: var(--dokum-error);
+  background: var(--dokum-error-tint);
+  border: 1px solid var(--dokum-error);
   border-radius: 8px;
   padding: 8px 10px;
-  font-family: Consolas, monospace;
+  font-family: var(--dokum-font-mono);
   font-size: 0.8em;
   white-space: pre-wrap;
   text-align: left;
 }
 
-/* ------------------------------------------------------ input/output pills */
+/* ----------------------------------------------------- input/output fields */
 
+/*
+ * Amber and blue both left the product (#118), and what replaces them draws the
+ * grammar rather than colouring it (#124): AN EDGE MEANS YOU CAN ACT ON IT, an
+ * output is machine-produced and carries no edge, red only ever means wrong.
+ *
+ * Both wear the SHEET on a page that is paper, for the same reason a formula
+ * block does — a field is a thing placed on the document, not written into it.
+ * What separates them is the edge and nothing else, which is the point: a
+ * student can tell what they may touch without first learning a colour.
+ */
 .dokum-document .input-field,
 .dokum-document .output-field {
   display: inline-block;
   padding: 1px 7px;
   margin: 0 2px;
-  border-radius: 999px;
-  font-weight: 500;
+  font-weight: var(--dokum-weight-medium);
   font-size: 0.92em;
   user-select: text;
+  background: var(--dokum-surface);
+  color: var(--dokum-ink);
+  border-radius: 6px;
 }
 
+/* The edge — and `--dokum-edge` at #8e8980 is heavier than a hairline, which
+   #118 wrote down in advance and is the accepted cost of a system with no spare
+   hue. It is the one mark on this surface that says „you". */
 .dokum-document .input-field {
-  background: #fef3c7;
-  color: #92400e;
-  border: 1px solid #fbbf24;
+  border: 1px solid var(--dokum-edge);
 }
 
+/* A value carried in from elsewhere rather than typed here. */
 .dokum-document .input-field.is-ref {
   border-style: dashed;
 }
 
+/* No edge: nobody can act on it. The weight and the tabular numerals are the
+   whole distinction, and they are enough because the edge is doing the other
+   half of the job further up the line. */
 .dokum-document .output-field {
-  background: #dbeafe;
-  color: #1e40af;
-  border: 1px solid #60a5fa;
+  border: 0;
+  font-weight: var(--dokum-weight-semibold);
 }
 
-.dokum-document .output-field.is-error {
-  background: #fee2e2;
-  color: #991b1b;
-  border-color: #fca5a5;
+/* Tabular lining numerals (#117): a value that changes under the student must
+   not shift the words around it. */
+.dokum-document .output-field,
+.dokum-document .student-input {
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/*
+ * The one place red is allowed on this surface, and it says exactly one thing.
+ * Three carriers, not one, because hue alone fails SC 1.4.1: oxblood, a
+ * doubled border, and a wavy underline (#118).
+ */
+.dokum-document .output-field.is-error,
+.dokum-document .student-input.is-error {
+  color: var(--dokum-error);
+  background: var(--dokum-error-tint);
+  border-color: var(--dokum-error);
+  border-style: double;
+  border-width: 3px;
+  text-decoration: underline wavy var(--dokum-error);
+  text-underline-offset: 0.2em;
 }
 
 /* ------------------------------------------------------- student controls */
 
 /*
- * The one thing in a document a student may change (#68). It keeps the input
- * pill's colours so the variable still reads as a variable, and adds the marks
- * of a control: a heavier border, a text cursor, a focus ring.
+ * The one thing in a document a student may change (#68).
  *
  * `font-size: 1em` is load-bearing on iOS — Safari zooms the whole page when a
  * focused field is under 16px, which on a document full of inline fields is
- * unusable. The tap target is raised the same way, with padding rather than a
- * fixed height, so the control still sits on the text baseline of its
- * sentence. Width comes from the `size` attribute the renderer keeps in step
+ * unusable. Width comes from the `size` attribute the renderer keeps in step
  * with the value.
+ *
+ * The control tightened from `min-height: 2.1em` to 1.8em with 4px 8px padding
+ * (#124): at 2.1em an inline field pushed its own line taller than the 1.55
+ * leading around it, which showed up as soon as the leading came back down.
  */
 .dokum-document .student-input {
   font-family: inherit;
   font-size: 1em;
-  font-weight: 600;
+  font-weight: var(--dokum-weight-semibold);
   line-height: 1.2;
-  padding: 5px 10px;
-  min-height: 2.1em;
+  padding: 4px 8px;
+  min-height: 1.8em;
   min-width: 3.5em;
   text-align: center;
-  border-width: 2px;
   cursor: text;
+  /* The same sheet and the same edge as the static `.input-field` it replaces —
+     a variable does not change what it looks like when it becomes typeable, it
+     only becomes typeable. */
+  background: var(--dokum-surface);
+  color: var(--dokum-ink);
+  border: 1px solid var(--dokum-edge);
+  border-radius: 6px;
   /* Sits inline: no browser default shadow, no spinner, no rounding away. */
   appearance: none;
   box-shadow: none;
-  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+  transition: border-color var(--dokum-dur-micro) var(--dokum-ease-standard);
 }
 
+/* Ink, not a second colour: hover darkens the edge that is already there. */
 .dokum-document .student-input:hover {
-  border-color: #d97706;
+  border-color: var(--dokum-ink);
 }
-
-.dokum-document .student-input:focus {
-  outline: none;
-  border-color: #b45309;
-  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.45);
-}
-
-/* Text that is not a number. The same red an unresolvable output wears, and it
-   has to exist: the resolver substitutes an unparseable value as 0 rather than
-   failing, so without this the document would quietly compute with a zero the
-   student never typed. */
-.dokum-document .student-input.is-error {
-  background: #fee2e2;
-  color: #991b1b;
-  border-color: #f87171;
-}
-
-.dokum-document .student-input.is-error:focus {
-  border-color: #b91c1c;
-  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.45);
-}
-
-/* ------------------------------------------------------------- Link-Chips */
 
 /*
- * A link inside a sentence (#73). It reads as a word, not as a button: the
- * label carries the meaning and the glyph says how far the link travels — a
- * Kurs, an Einheit, a Dokument or a Sprungmarke inside one.
+ * NO FOCUS RULE HERE, ON PURPOSE (#119, landed by #122).
  *
- * THERE IS NO HOVER PREVIEW AND THERE IS NOT MEANT TO BE. The peek was dropped
- * (spec §6): the overlay shows the target one click away with everything the
- * student typed intact, so a hover would only make the product quietly
- * different on a touch screen. The colour shift below is the ordinary
- * this-is-clickable feedback, and it is all a pointer gets.
+ * The product has ONE ring, declared once in tokens.css as a bare
+ * `:focus-visible`, and it is INK: a red ring would sit on an input next to an
+ * oxblood error, on the one surface where those two must not meet (#118).
+ *
+ * Anything added below that restyles focus per component re-opens exactly the
+ * drift this deleted.
+ */
+
+/* ------------------------------------------------------------------- links */
+
+/*
+ * A link inside a sentence (#73), now UNDERLINED TEXT rather than a chip (#118,
+ * applied by #124).
+ *
+ * The chip carried an indigo pill, a 1px border and an emoji, and #118 removed
+ * all three: emoji leave the product entirely as a consequence of the map's „no
+ * illustration language", and indigo was never a Dokum colour. What is left is
+ * what a link in running prose has always been — the author's words, underlined
+ * — which is also what hands back the 1.55 leading (#101's 24px chip is what
+ * forced 1.65).
+ *
+ * THE COLOUR STAYS INK. On the learning surface red only ever means wrong
+ * (#118), so a link cannot be coloured to say „clickable"; the underline is the
+ * whole affordance, and it is why the thickness rather than the hue answers
+ * hover.
+ *
+ * WHAT THE GLYPH USED TO SAY still reaches a screen reader — the renderer
+ * writes `linkTargetKindLabel()` into `aria-label` and always did (#73), so
+ * dropping the `::before` costs a sighted reader the kind distinction and costs
+ * an assistive one nothing.
+ *
+ * THERE IS NO HOVER PREVIEW AND THERE IS NOT MEANT TO BE (spec §6).
  */
 .dokum-document .doc-link {
   display: inline;
-  /* 3px, not 1px, so the chip clears 24px tall — WCAG 2.2 AA 2.5.8, and a
-     thumb on a phone, where this is the only way to follow a link (#101).
-     `display: inline` means the extra padding overflows the line box instead
-     of pushing the lines apart, so paragraph rhythm is untouched. */
-  padding: 3px 7px;
-  margin: 0 1px;
-  border-radius: 999px;
-  background: #eef2ff;
-  color: #3730a3;
-  border: 1px solid #c7d2fe;
-  font-weight: 500;
-  text-decoration: none;
-  /* Wraps at the end of a line like the words around it rather than pushing
-     the whole chip onto the next one. */
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+  /* Wraps at the end of a line like the words around it. */
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
-  transition: background-color 0.12s ease;
+  transition: text-decoration-thickness var(--dokum-dur-micro) var(--dokum-ease-standard);
 }
 
 .dokum-document .doc-link:hover {
-  background: #e0e7ff;
+  text-decoration-thickness: 2px;
 }
 
-.dokum-document .doc-link:focus-visible {
-  outline: 2px solid #4338ca;
-  outline-offset: 2px;
+/* Focus is the one ink ring from tokens.css — see the note on `.student-input`. */
+
+/*
+ * A link into an Einheit the student has not bought (#74) — THE ONLY DRAWN MARK
+ * IN A DOCUMENT (#118).
+ *
+ * A monochrome mask rather than an `<img>` or a glyph: it inherits
+ * `currentColor`, so it is ink here and would be ink on any ground the document
+ * is ever given, and it never lands in the text a student selects and copies
+ * out. The chip's amber is gone with everything else amber — locked is NOT
+ * dimmed and NOT recoloured (#118); the mark alone carries it, and the words
+ * stay exactly as the author wrote them.
+ */
+.dokum-document .doc-link[data-link-state='locked']::before {
+  content: '';
+  display: inline-block;
+  width: 0.85em;
+  height: 0.85em;
+  margin-right: 0.25em;
+  vertical-align: -0.08em;
+  background-color: currentColor;
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.9 7.2V5.1a3.1 3.1 0 0 1 6.2 0v2.1' fill='none' stroke='%23000' stroke-width='1.6'/%3E%3Crect x='3' y='7.2' width='10' height='6.6' rx='1.6' fill='%23000'/%3E%3C/svg%3E");
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4.9 7.2V5.1a3.1 3.1 0 0 1 6.2 0v2.1' fill='none' stroke='%23000' stroke-width='1.6'/%3E%3Crect x='3' y='7.2' width='10' height='6.6' rx='1.6' fill='%23000'/%3E%3C/svg%3E");
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
 }
 
-/* The glyph is drawn from the attribute the renderer stamps (document-render,
-   `replaceWithLinkAnchor`), which reads the one map in lib/editor/links.ts. A
-   pseudo-element keeps it out of `textContent`, so a student copying the
-   sentence gets the words and not the emoji.
-
-   The separator is a NO-BREAK space (#100). With `box-decoration-break: clone`
-   an ordinary space lets the line break between glyph and label, and the glyph
-   is left behind as its own rounded pill — an empty chip that says nothing,
-   exactly where the reader needs to know how far the link travels. The label
-   itself still wraps freely. */
-.dokum-document .doc-link::before {
-  content: attr(data-link-icon) '\00a0';
-}
-
-/* A link into an Einheit the student has not bought (#74). Still a chip and
-   still clickable — it opens the unlock card — but it wears the amber of the
-   paywall rather than the blue of a link that goes somewhere now, so „I can
-   read this" and „I can buy this" are not the same colour. The lock glyph comes
-   through the same `data-link-icon` attribute the kind glyphs do. */
-.dokum-document .doc-link[data-link-state='locked'] {
-  background: #fffbeb;
-  color: #92400e;
-  border-color: #fcd34d;
-}
-
-.dokum-document .doc-link[data-link-state='locked']:hover {
-  background: #fef3c7;
-}
-
-.dokum-document .doc-link[data-link-state='locked']:focus-visible {
-  outline-color: #b45309;
-}
-
-/* A link whose target is archived or deleted (#74). NOT a chip: it is plain
+/* A link whose target is archived or deleted (#74). NOT a link: it is plain
    text now, because the one thing it must not do is look like something worth
    clicking. The author's words stay exactly as they were written so the
    sentence still reads, and the note beside them is real text — quiet, but read
@@ -313,7 +441,7 @@
 }
 
 .dokum-document .doc-link-gone-note {
-  color: #6b7280;
+  color: var(--dokum-ink-muted);
   font-size: 0.85em;
   white-space: nowrap;
 }
@@ -330,16 +458,10 @@
     font-size: 16px;
   }
 
-  .dokum-document .formula-block,
-  .dokum-document .image-block {
-    padding: 12px;
-    border-radius: 10px;
-  }
-
   /* Fingers, not a mouse: the 44px target the platform guidelines ask for, and
      room around it in a line of text so neighbouring controls are not one
-     mis-tap apart. A line holding a control is taller than one that does not —
-     accepted, the alternative is a control too small to hit. */
+     mis-tap apart. #124 tightened the desktop control and left this floor
+     exactly where it was — a thumb did not get smaller. */
   .dokum-document .student-input {
     padding: 9px 12px;
     min-height: 44px;

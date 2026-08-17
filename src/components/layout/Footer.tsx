@@ -12,7 +12,9 @@ export function Footer() {
   }
 
   return (
-    <footer className="border-t border-gray-200 bg-[#fffdf8]">
+    /* The ground comes from <body> now (#116/#122); the rule above it stays,
+       because a footer is the one place separation cannot come from space. */
+    <footer className="border-t border-hairline">
       <div className="mx-auto flex max-w-[1420px] items-center justify-between px-5 py-7 text-base font-medium text-gray-500 sm:px-8 lg:px-12">
         <span>© {year} DOKUM</span>
         <div className="flex gap-12">

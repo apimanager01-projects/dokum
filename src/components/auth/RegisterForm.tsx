@@ -71,7 +71,7 @@ export function RegisterForm() {
               onChange={(event) => setEmail(event.target.value)}
               aria-invalid={Boolean(fieldErrors.email)}
               aria-describedby={fieldErrors.email ? 'register-email-error' : undefined}
-              className="h-11 rounded-md border border-gray-300 bg-white px-3 text-sm shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10 aria-invalid:border-red-300 aria-invalid:bg-red-50/40"
+              className="h-11 rounded-md border border-gray-300 bg-white px-3 text-sm shadow-sm placeholder:text-gray-400 aria-invalid:border-red-300 aria-invalid:bg-red-50/40"
             />
             {fieldErrors.email && (
               <p id="register-email-error" className="text-sm font-medium text-red-600">
@@ -133,7 +133,7 @@ export function RegisterForm() {
               placeholder="Type your name"
               aria-invalid={Boolean(fieldErrors.fullName)}
               aria-describedby={fieldErrors.fullName ? 'full-name-error' : undefined}
-              className="h-11 rounded-md border border-gray-300 bg-white px-3 text-sm shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10 aria-invalid:border-red-300 aria-invalid:bg-red-50/40"
+              className="h-11 rounded-md border border-gray-300 bg-white px-3 text-sm shadow-sm placeholder:text-gray-400 aria-invalid:border-red-300 aria-invalid:bg-red-50/40"
             />
             {fieldErrors.fullName && (
               <p id="full-name-error" className="text-sm font-medium text-red-600">
@@ -154,7 +154,7 @@ export function RegisterForm() {
               placeholder="Create a password"
               aria-invalid={Boolean(fieldErrors.password)}
               aria-describedby={fieldErrors.password ? 'register-password-error' : undefined}
-              className="h-11 rounded-md border border-gray-300 bg-white px-3 text-sm shadow-sm placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-900/10 aria-invalid:border-red-300 aria-invalid:bg-red-50/40"
+              className="h-11 rounded-md border border-gray-300 bg-white px-3 text-sm shadow-sm placeholder:text-gray-400 aria-invalid:border-red-300 aria-invalid:bg-red-50/40"
             />
             {fieldErrors.password && (
               <p id="register-password-error" className="text-sm font-medium text-red-600">

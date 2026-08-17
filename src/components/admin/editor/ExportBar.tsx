@@ -40,7 +40,10 @@ import type { EditorTargetKurs } from '@/types'
  *  • Download: controller.exportToPng() → Blob → temporary object URL →
  *    <a download> (the reference used a data URL; the Blob is the PRD's
  *    shared pipeline for the publish path). Failures alert in German
- *    (reference L1351).
+ *    (reference L1351). This is also where the two paths DIVERGE (#123):
+ *    the download passes `background: '#ffffff'`, publish passes nothing and
+ *    inherits the transparent default, because only the published picture
+ *    gets its ground from the app.
  *
  * Publish (slice 11, #39 — no reference counterpart): „Als Dokument
  * speichern" sends the same 2×-rendered PNG to publishEditorDraft, targeting
@@ -193,7 +196,10 @@ export function ExportBar({
     if (!controller || busy) return
     setBusy('download')
     try {
-      const blob = await controller.exportToPng()
+      // The ONE call site that opts out of the transparent default (#123): a
+      // file that leaves the app has to work in Word, on a projector and in a
+      // print queue, none of which supply a ground.
+      const blob = await controller.exportToPng({ background: '#ffffff' })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.download = ensurePngFilename(filename)
@@ -237,9 +243,13 @@ export function ExportBar({
         return
       }
 
-      // Render at the default 2× scale, then the size guard (slice 11): an
-      // oversized request must never leave the browser — the Vercel body
-      // ceiling makes raising the 4-MB limit impossible (PRD decision).
+      // Render at the default 2× scale AND the default transparent ground
+      // (#123 — both publish calls below deliberately pass no `background`),
+      // then the size guard (slice 11): an oversized request must never leave
+      // the browser — the Vercel body ceiling makes raising the 4-MB limit
+      // impossible (PRD decision). #120 measured transparency at 2.15 MB
+      // against white's 2.10 at 20 formulas / 2×, so the ceiling and the 1×
+      // retry behave as before.
       let blob: Blob
       try {
         blob = await controller.exportToPng()

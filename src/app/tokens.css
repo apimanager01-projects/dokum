@@ -1,0 +1,285 @@
+/*
+ * ============================================================================
+ * The Dokum design tokens (#122)
+ * ============================================================================
+ *
+ * ONE declaration site. Imported by globals.css, which the root layout loads on
+ * every route — so `:root` is already populated wherever a stylesheet renders.
+ * `interactive-document.css` and `editor.css` therefore CONSUME these and must
+ * never import this file: a second import would emit the whole set twice and
+ * hand us two places to change a value.
+ *
+ * Every number here was decided by a ticket on map #112 and is cited to it.
+ * Change one and you are reversing that ticket — say so in the commit.
+ *
+ *   #116  ground, grain, the seam       #118  colour and the grammar of state
+ *   #117  type                          #119  page, measure, space, motion, states
+ *
+ * NAMING IS SEMANTIC, NEVER LITERAL (map #112, Notes): `--dokum-surface`, never
+ * `--dokum-white`. Dark mode is out of scope for this map and this naming is
+ * what keeps reversing it cheap.
+ *
+ * The canonical names are `--dokum-*` in plain `:root`. The `@theme inline`
+ * block below aliases the COLOURS — and only the colours — into Tailwind's
+ * `--color-*` namespace so `bg-surface` / `text-ink` / `border-hairline` exist
+ * as utilities. `inline` means Tailwind emits `var(--dokum-…)` rather than
+ * copying the literal, so there is still exactly one literal per value.
+ *
+ * Spacing and duration are deliberately NOT wired into Tailwind's `--spacing-*`
+ * / `--ease-*` namespaces: #119 froze the spacing scale rather than re-basing it
+ * precisely so no existing `p-4` changes meaning underneath the product.
+ */
+
+:root {
+  /* ------------------------------------------------------------- colour (#118)
+     Nine tokens, one warm ramp, and the only chroma family is red — spent twice
+     and separated by SURFACE, not by shade. Ratios are measured against the
+     GRAINED darkest ground, not the flat mean, because a textured ground has a
+     luminance range and a WCAG ratio assumes a flat one. */
+
+  /* Recessed paper; the app ground and chrome. #118 set this to #f0eae2; QA on
+     the landed set read the sheet-on-ground step as too strong, so the ground
+     was raised toward the sheet — the luminance gap to `--dokum-surface` falls
+     from 12.1pp to 7.4pp. The step is what makes a card read as a sheet, so it
+     is narrowed, never closed. Every ground-measured ratio below RISES with it
+     (a lighter ground under dark ink), so no contrast floor can break here. */
+  --dokum-ground: #f5f0ea;
+  --dokum-surface: #fbf7f1; /* the sheet: documents, cards, panels */
+  --dokum-hairline: #d9cfc2; /* seams and rules — decorative, no contrast floor */
+  --dokum-edge: #8e8980; /* 3.04 on the grained sheet — SC 1.4.11 */
+  --dokum-ink: #191512; /* 14.12 ground / 15.86 sheet */
+  --dokum-ink-muted: #68655e; /* 4.53 on the grained ground — see the caveat */
+  --dokum-brand: #db3627; /* 3.58 ground / 4.02 sheet — CHROME ONLY */
+  --dokum-error: #8c2318; /* oxblood, 6.90 ground — the learning surface's only chroma */
+  --dokum-error-tint: #f7ebe7; /* errored field ground; oxblood on it: 7.60 */
+
+  /*
+   * Two rules the ramp cannot enforce, so they are written where they are read:
+   *
+   *   `--dokum-brand` HAS NO HEADROOM. At 4.02 on the grained sheet it clears
+   *   3:1 for large text and non-text only. Never at body size, on any ground.
+   *
+   *   `--dokum-ink-muted` IS A CEILING WITH NO MARGIN. #118 measures 4.53;
+   *   #120 re-measured the real composite against the ORIGINAL #f0eae2 ground
+   *   and got 4.03 / 4.43 / 4.63 depending on whether "the darkest point" is a
+   *   2x2, 4x4 or 8x8 CSS-pixel window. On today's lighter ground the same
+   *   three windows give 4.23 / 4.68 / 4.87 — better, and still short of 4.5 at
+   *   the strictest reading, so the ceiling stands.
+   *   Anything lighter fails AA outright. Anything darker must be re-checked at
+   *   a STATED window size rather than at "the darkest point".
+   */
+
+  /* `--brand-dark` predates the ramp and #118 does not name it. It survives as
+     the chrome's pressed/hover shade on a solid brand button and nowhere else;
+     the admin sweep decides whether it stays. */
+  --dokum-brand-dark: #a6281c;
+
+  /* -------------------------------------------------------------- ground (#116)
+     The paper is a GENERATED seamless 200x200 tile at 80% amplitude, not the
+     scan tiled (691x1024 shows an obvious repeat across a page) and not
+     `feTurbulence` (expensive over large areas, browser-dependent). Regenerate
+     with `python scripts/generate-grain.py`; the generator's docstring lists
+     what re-tuning it invalidates. No CSP change — `img-src 'self'` covers it. */
+
+  --dokum-grain: url('/paper-grain.png');
+  --dokum-grain-size: 200px;
+
+  /* ---------------------------------------------------------------- type (#117)
+     Geist and Geist Mono, everywhere, including the document. The variables
+     come from next/font in layout.tsx and sit on <html> so they are in scope
+     HERE — moving them off <body> is what made Tailwind's `--font-sans` live
+     again (#113's catch, settled by #117, landed by #122). */
+
+  --dokum-font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --dokum-font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --dokum-weight-regular: 400;
+  --dokum-weight-medium: 500;
+  --dokum-weight-semibold: 600;
+  --dokum-weight-bold: 700;
+
+  /* Seven steps. Fewer is not enough; more will not be kept to. */
+  --dokum-text-display: 40px;
+  --dokum-leading-display: 1.05;
+  --dokum-weight-display: var(--dokum-weight-bold);
+  --dokum-track-display: -0.035em; /* the wordmark's tracking, and h1's */
+
+  --dokum-text-section: 26px;
+  --dokum-leading-section: 1.2;
+  --dokum-weight-section: var(--dokum-weight-bold);
+
+  --dokum-text-card: 19px;
+  --dokum-leading-card: 1.2;
+  --dokum-weight-card: var(--dokum-weight-bold);
+
+  --dokum-text-body: 17px;
+  --dokum-leading-body: 1.6;
+  --dokum-weight-body: var(--dokum-weight-regular);
+
+  --dokum-text-ui: 15px;
+  --dokum-leading-ui: 1.5;
+  --dokum-weight-ui: var(--dokum-weight-regular);
+
+  --dokum-text-meta: 13.5px;
+  --dokum-leading-meta: 1.5;
+  --dokum-weight-meta: var(--dokum-weight-regular);
+
+  --dokum-text-micro: 11.5px;
+  --dokum-leading-micro: 1.4;
+  --dokum-weight-micro: var(--dokum-weight-medium);
+
+  /*
+   * The reading surface's leading is 1.55, not the scale's 1.6. Both are
+   * decided and they are not the same number by accident: #117 fixes
+   * `.dokum-document` at "17px / 1.55 unchanged" and #119 reverts `p`/`li` from
+   * 1.65 to 1.55, while the scale's Body row reads 1.6. So the scale governs
+   * chrome prose and this governs running text a student reads at length.
+   * Recorded here rather than reconciled, because reconciling it silently would
+   * overrule one of two closed tickets.
+   */
+  --dokum-leading-reading: 1.55;
+
+  /* --------------------------------------------------- page and measure (#119) */
+
+  --dokum-page: 1024px; /* EVERY student surface, the navbar's inner container included */
+  --dokum-measure: 70ch; /* running prose (p, li) — 70 and not 55, because German */
+  --dokum-measure-short: 46ch; /* card and page descriptions: scan, don't read */
+
+  /* Responsive page gutter: 24 / 40 / 64, stepped at Tailwind's sm and lg. */
+  --dokum-gutter: 24px;
+
+  /* ---------------------------------------------------------------- space (#119)
+     FROZEN, not re-based. The problem was never the arithmetic, it was that the
+     set was open. Vertical rhythm keys to the TYPE scale above, not to this one:
+     space between a heading and its content is a function of the heading's size.
+     Keeping the two jobs apart is what stops seven type steps from being quietly
+     overridden by ad-hoc margins. */
+
+  --dokum-space-1: 4px;
+  --dokum-space-2: 8px;
+  --dokum-space-3: 12px;
+  --dokum-space-4: 16px;
+  --dokum-space-5: 24px;
+  --dokum-space-6: 32px;
+  --dokum-space-7: 48px;
+  --dokum-space-8: 64px;
+  --dokum-space-9: 96px;
+
+  /* --------------------------------------------------------------- motion (#119)
+     Motion is permitted (1) under the pointer or keyboard, on the element being
+     acted on, (2) between activities — route change, overlay open/close, card
+     state advance — and (3) NOWHERE ELSE. Nothing loops, nothing autoplays, and
+     nothing inside `.dokum-document` animates except as the direct consequence
+     of the student's own keystroke.
+
+     Material 3's table as published. The `reduce` fallback at the bottom of this
+     file re-points every duration to 1ms — never `0s`, because `0s` can suppress
+     `transitionend` and DocumentOverlay may key off it. */
+
+  --dokum-dur-micro: 100ms; /* hover, focus, colour under the pointer */
+  --dokum-dur-quick: 150ms;
+  --dokum-dur-short: 200ms;
+  --dokum-dur-medium: 300ms; /* the card entrance; overlay open */
+  --dokum-dur-long: 500ms;
+
+  --dokum-ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --dokum-ease-enter: cubic-bezier(0, 0, 0, 1);
+  --dokum-ease-exit: cubic-bezier(0.3, 0, 1, 1);
+  --dokum-ease-emph-in: cubic-bezier(0.05, 0.7, 0.1, 1);
+
+  /* ------------------------------------------------------- interaction (#119)
+     One ring, everywhere, including the document, never restyled per component.
+     It is INK and never red (#118): a brand-red ring would sit on an input next
+     to an oxblood error, on the one surface where those two must not meet. */
+
+  --dokum-focus-width: 2px;
+  --dokum-focus-offset: 2px;
+  --dokum-focus-color: var(--dokum-ink);
+}
+
+@media (min-width: 640px) {
+  :root {
+    --dokum-gutter: 40px;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --dokum-gutter: 64px;
+  }
+}
+
+/*
+ * The colours, and only the colours, as Tailwind utilities. `inline` keeps the
+ * literal in `:root` above rather than copying it here.
+ */
+@theme inline {
+  --color-ground: var(--dokum-ground);
+  --color-surface: var(--dokum-surface);
+  --color-hairline: var(--dokum-hairline);
+  --color-edge: var(--dokum-edge);
+  --color-ink: var(--dokum-ink);
+  --color-ink-muted: var(--dokum-ink-muted);
+  --color-brand: var(--dokum-brand);
+  --color-brand-dark: var(--dokum-brand-dark);
+  --color-error: var(--dokum-error);
+  --color-error-tint: var(--dokum-error-tint);
+
+  --font-sans: var(--dokum-font-sans);
+  --font-mono: var(--dokum-font-mono);
+}
+
+/*
+ * The paper. Anything that has to paint the ground OPAQUELY — the sticky
+ * navbar over scrolling content, a page that cannot let `body` through — wears
+ * this rather than a flat `bg-ground`, so the grain never stops mid-screen.
+ * `body` wears it too, which is what makes it the app ground; every page that
+ * used to paint its own cream behind a negative margin now paints nothing.
+ */
+.dokum-ground {
+  background: var(--dokum-ground) var(--dokum-grain) repeat 0 0 /
+    var(--dokum-grain-size) var(--dokum-grain-size);
+}
+
+/*
+ * The one focus ring, applied once. Declared here rather than per stylesheet
+ * because "identical on every surface" is only true if it has one author — the
+ * two invented rings in `interactive-document.css` and the accent rings in
+ * `editor.css` are what this replaces. `:focus-visible` only: a mouse click on
+ * a button does not draw it, a keyboard tab and a text field always do.
+ *
+ * A per-component `focus:outline-none` DEFEATS THIS RULE — it is not overridden
+ * by it, it deletes it. #122 removed every such override on a student-facing
+ * surface. Twenty-one survive in the admin forms and three more as
+ * `focus:border-brand focus:outline-none` in the editor; they belong to the
+ * admin sweep, and until then admin keeps its red rings. Do not add a new one.
+ */
+:focus-visible {
+  outline: var(--dokum-focus-width) solid var(--dokum-focus-color);
+  outline-offset: var(--dokum-focus-offset);
+}
+
+/*
+ * SC 2.2.2 is Level A and is the only accessibility item on this map with real
+ * BFSG exposure, so the reduce block lives with the tokens rather than in any
+ * one stylesheet: re-pointing the durations at `:root` reaches all three
+ * consumers at once, and the two named animations are the only looping motion
+ * in the product.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dokum-dur-micro: 1ms;
+    --dokum-dur-quick: 1ms;
+    --dokum-dur-short: 1ms;
+    --dokum-dur-medium: 1ms;
+    --dokum-dur-long: 1ms;
+  }
+
+  /* `animate-pulse` loops forever on six loading skeletons — that is the Level A
+     item. `animate-slide-up` is a one-shot entrance and stops for the same
+     reason. Both settle at their end state, so nothing is left invisible. */
+  .animate-pulse,
+  .animate-slide-up {
+    animation: none;
+  }
+}

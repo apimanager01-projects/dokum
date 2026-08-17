@@ -1,62 +1,44 @@
 @import "tailwindcss";
-
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@theme {
-  --color-brand: #db3627;
-  --color-brand-dark: #a6281c;
-}
-
 /*
- * `--brand` is what interactive-document.css asks for at every accent (#113).
- * It was never defined, so the learning surface fell back to a `#00338d` blue
- * that belongs to no brand. Aliased rather than re-stated so the red has one
- * literal in the codebase — `--color-brand` above.
+ * Every colour, size, duration and easing in the product is declared once, in
+ * tokens.css, and cited to the ticket that decided it (#122). Nothing else
+ * imports it: this file is loaded by the root layout on every route, so `:root`
+ * is populated before `interactive-document.css` or `editor.css` renders.
  */
-:root {
-  --brand: var(--color-brand);
-}
+@import "./tokens.css";
 
 @keyframes slide-up {
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* 650ms was an invented number; #119 puts a route-change entrance at
+   `--dokum-dur-medium` (300ms) on the M3 table. Stops entirely under
+   `prefers-reduced-motion` — see tokens.css. */
 .animate-slide-up {
-  animation: slide-up 0.65s ease-out both;
+  animation: slide-up var(--dokum-dur-medium) var(--dokum-ease-enter) both;
 }
 
 .btn-brand {
-  transition: box-shadow 0.15s ease, background-color 0.15s ease;
+  transition: box-shadow var(--dokum-dur-quick) var(--dokum-ease-standard),
+    background-color var(--dokum-dur-quick) var(--dokum-ease-standard);
 }
 .btn-brand:hover {
-  box-shadow: 0 0 0 3px rgb(219 54 39 / 0.25);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--dokum-brand) 25%, transparent);
 }
 
+/*
+ * The ground itself is `.dokum-ground` in tokens.css and is applied to <body>
+ * in layout.tsx — one declaration, reused by the sticky navbar so the grain
+ * never stops mid-screen.
+ *
+ * Geist reaches here through Tailwind's `--font-sans`, which is finally live:
+ * `layout.tsx` moved `geist.variable` from <body> to <html> (#117), so
+ * next/font's variables are in scope at `:root` where Tailwind resolves them.
+ */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  /*
-   * layout.tsx loads Geist through next/font and this rule used to throw it
-   * away with an Arial declaration that landed after Tailwind's preflight
-   * (#113) — so the product had no chosen typeface at all. Deleting the line
-   * is not enough: preflight sets `ui-sans-serif` on <html>, and body would
-   * inherit that. The variable is referenced directly rather than through
-   * Tailwind's `--font-sans`, which resolves at `:root` where next/font's
-   * variables are not in scope. This records current intent, not a decision —
-   * the typeface itself is #117's to make.
-   */
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  color: var(--dokum-ink);
+  font-family: var(--font-sans);
 }
 
 /* Prevent iOS Safari auto-zoom on input focus (triggers when font-size < 16px) */

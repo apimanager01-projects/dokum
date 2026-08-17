@@ -127,7 +127,7 @@ export function DocumentOverlay({
        * of THIS element, so the transparent picture cannot start a grain tile of
        * its own at its edge.
        */
-      className="dokum-ground m-auto h-dvh max-h-none w-full max-w-none rounded-none border-0 p-0 backdrop:bg-[rgb(25_21_18/0.45)] sm:h-auto sm:max-h-[84vh] sm:w-[92vw] sm:max-w-[var(--dokum-page)] sm:rounded-[14px] sm:border sm:border-hairline sm:shadow-[0_12px_40px_rgb(25_21_18/0.18)]"
+      className="dokum-ground m-auto h-dvh max-h-none w-full max-w-none rounded-none border-0 p-0 backdrop:bg-ink/45 sm:h-auto sm:max-h-[84vh] sm:w-[92vw] sm:max-w-[var(--dokum-page)] sm:rounded-[14px] sm:border sm:border-hairline sm:shadow-[0_12px_40px_color-mix(in_oklab,var(--dokum-ink)_18%,transparent)]"
     >
       <div className="flex h-full max-h-[inherit] flex-col">
         {/* Transparent, so the dialog's grain runs unbroken behind it — the bar

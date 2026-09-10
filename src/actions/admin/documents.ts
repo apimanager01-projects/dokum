@@ -2,6 +2,7 @@
 
 import { STORAGE_BUCKET, MAX_FILE_SIZE_BYTES, ALLOWED_IMAGE_MIMES, ALLOWED_FILE_MIMES, MIME_TO_EXT } from '@/lib/constants'
 import { DocumentMetaSchema, DocumentUpdateMetaSchema } from '@/lib/schemas'
+import { METADATA_ONLY_FILE_TYPES } from '@/lib/document-view'
 import type { ActionResult } from '@/types'
 import { logAdminAction } from '@/lib/audit'
 import { getAdminUser, parseForm, revalidateAdminPages, collectStoragePaths, sanitise, removeStorageObjects, type DocumentFileRef } from './_shared'
@@ -114,7 +115,12 @@ export async function updateDocument(docId: string, formData: FormData): Promise
   // document whose row disagrees with itself. Re-publishing the draft is the
   // only way to change an interactive document's file. This is also the
   // shape update-document collapses to entirely under #82.
-  if (currentDoc.file_type === 'image_collection' || currentDoc.file_type === 'interactive') {
+  //
+  // `lesson` (#107) joins them for the same reason and a starker one: a
+  // Lernseite has NO file at all — it is its `content` — so an upload here
+  // would invent a file_path, flip the row to 'pdf' and strand a written page
+  // that nothing would ever render again.
+  if (METADATA_ONLY_FILE_TYPES.has(currentDoc.file_type)) {
     const { error } = await supabase.from('documents').update({ title, description, position }).eq('id', docId)
     if (error) return { ok: false, error: error.message }
     await logAdminAction({ actorId: user.id, action: 'update', entityType: 'document', entityId: docId, entityTitle: title })

@@ -12,7 +12,27 @@ export interface Kurs {
   published: boolean
   position: number
   created_at: string
+  /**
+   * Which of the two kinds of Kurs this is (#107). Mirrors the
+   * `kurse_kurs_type_check` CHECK — the two must list the same values.
+   *
+   * `musterloesung` — a Unit holds a handful of solutions (images, PDFs).
+   * `lernkurs`      — a Unit is a Lernseite: prose, formulas, worked examples.
+   */
+  kurs_type: KursType
+  /**
+   * What a checkout sells (#107). Mirrors `kurse_sold_as_check`.
+   *
+   * ⚠ NOT an access gate. It says what is for sale; what a reader may open is
+   * decided by `entitlements` and RLS. The scoped entitlement that makes a
+   * whole-course purchase real does not exist yet, so `'kurs'` currently
+   * describes an intention, not a working checkout.
+   */
+  sold_as: KursSoldAs
 }
+
+export type KursType = 'musterloesung' | 'lernkurs'
+export type KursSoldAs = 'kurs' | 'unit'
 
 export interface Unit {
   id: string
@@ -40,11 +60,18 @@ export interface Document {
   file_path: string | null
   /**
    * Mirrors the `documents_file_type_check` CHECK constraint
-   * (supabase/add_document_content.sql) — the two must list the same values.
-   * `'interactive'` is a published editor document; the legacy values are
-   * kept because file_type is the restoration key for archived rows.
+   * (supabase/add_lessons.sql, which superseded add_document_content.sql) —
+   * the two must list the same values. `'interactive'` is a published editor
+   * document, `'lesson'` a Lernseite (#107); the legacy values are kept
+   * because file_type is the restoration key for archived rows.
+   *
+   * It is also the DISCRIMINATOR for `content`: an `interactive` row holds
+   * editor-document JSON, a `lesson` row holds lesson JSON. Nothing sniffs the
+   * blob's shape to tell them apart, and nothing should — both are versioned
+   * discriminated unions, so a guess would make a malformed lesson look like a
+   * malformed document.
    */
-  file_type: 'pdf' | 'image' | 'image_collection' | 'interactive'
+  file_type: 'pdf' | 'image' | 'image_collection' | 'interactive' | 'lesson'
   position: number
   created_at: string
   /**
@@ -96,6 +123,49 @@ export interface DocumentWithAncestry {
 
 export interface UnitWithTasks extends Unit {
   tasks: TaskWithDocuments[]
+}
+
+// ── Kurs navigation tree ────────────────────────────────────────────────────
+//
+// What the Kurs sidebar shows and NOTHING else: the whole hierarchy down to
+// Dokument, reduced to what a label needs. No `content` (the sidebar renders
+// no document — see the DAL's rule), no `file_path`, no `description` below
+// Unit level, and no `position`/`created_at` — those are consumed by the DAL's
+// sort and dropped before the tree crosses to the browser, where it is a
+// client component's prop and therefore serialised into the HTML.
+//
+// The tree is deliberately NOT the lock state. Whether a Unit is locked is
+// decided per reader (`KursNavUnit.locked`, filled in by the layout), and a
+// locked Unit simply arrives with `tasks: []` — RLS on `tasks` requires an
+// entitlement, so the sidebar cannot list the contents of something unpaid
+// even by accident.
+
+export interface KursNavDocument {
+  id: string
+  title: string
+  file_type: Document['file_type']
+}
+
+export interface KursNavTask {
+  id: string
+  title: string
+  documents: KursNavDocument[]
+}
+
+export interface KursNavUnit {
+  id: string
+  title: string
+  description: string | null
+  tasks: KursNavTask[]
+}
+
+export interface KursNavTree {
+  id: string
+  title: string
+  description: string | null
+  /** Decides whether Einheiten are numbered — see `unitNumberPath`. */
+  kurs_type: KursType
+  units: KursNavUnit[]
 }
 
 export interface KursWithUnits extends Kurs {

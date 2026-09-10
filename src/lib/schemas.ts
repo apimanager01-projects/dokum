@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { DocumentJsonSchema } from '@/lib/editor/document-json'
+import { LessonJsonSchema } from '@/lib/lessons/lesson-json'
 
 // ── Shared field definitions ────────────────────────────────────────────────
 
@@ -16,6 +17,19 @@ export const KursFormSchema = z.object({
   description: descriptionField,
   position: positionField,
   published: z.enum(['true', 'false']).optional().transform((v) => v === 'true'),
+  // #107. Both default to what every pre-existing Kurs already is, so a form
+  // that omits them (or an older cached page) cannot silently retype a Kurs.
+  kurs_type: z.enum(['musterloesung', 'lernkurs']).default('musterloesung'),
+  sold_as: z.enum(['kurs', 'unit']).default('unit'),
+})
+
+// Editing course metadata must not implicitly change visibility. Publishing is
+// a separate, explicit action in the course workspace.
+export const KursMetadataFormSchema = KursFormSchema.omit({ published: true })
+
+export const KursPublishedSchema = z.object({
+  kurs_id: uuidField,
+  published: z.boolean(),
 })
 
 export const UnitFormSchema = z.object({
@@ -92,6 +106,51 @@ export const EditorPublishSchema = z.object({
   mode: z.enum(['update', 'new']).default('update'),
 })
 
+// Lernseiten (#107). The workspace saves a whole page at once: the block JSON
+// arrives as a string in FormData and is validated against the versioned
+// lesson schema before it reaches the DB, exactly as an editor draft is.
+//
+// The two JSON columns are told apart by `file_type` and never by their shape,
+// so this schema must be the LESSON one — validating a lesson against
+// DocumentJsonSchema (or the reverse) would accept nothing and blame the
+// author's content for a wiring mistake.
+export const LessonSaveSchema = z.object({
+  document_id: uuidField,
+  title: titleField,
+  content: z
+    .string()
+    .max(3_000_000, 'Die Lernseite ist zu groß.')
+    .transform((raw, ctx) => {
+      try {
+        return JSON.parse(raw) as unknown
+      } catch {
+        ctx.addIssue({ code: 'custom', message: 'Ungültiges Lernseiten-JSON.' })
+        return z.NEVER
+      }
+    })
+    .pipe(LessonJsonSchema),
+})
+
+// Reordering the Lernseiten of one Einheit (#107). The client sends the ids in
+// their new order; `position` is derived from the array index, so the two can
+// never disagree about what „third" means.
+//
+// The Einheit rides along so the action can verify that every id named actually
+// belongs to it — a request listing a page from somewhere else must not be able
+// to renumber it.
+export const LessonReorderSchema = z.object({
+  unit_id: uuidField,
+  document_ids: z.array(uuidField).min(1, 'Es wurde keine Reihenfolge übergeben.'),
+})
+
+// Creating the Lernseite of a Unit (#107). Only the Unit is named: the
+// invisible Aufgabe and the Document row are the action's business, because
+// the author is not supposed to know either exists.
+export const LessonCreateSchema = z.object({
+  unit_id: uuidField,
+  title: titleField,
+})
+
 // The link picker's lazy fourth level (#72). Not a FormData action — the
 // picker calls it with a plain Task id on expand — but the input is still
 // validated before it reaches the DB, like every other server-action input.
@@ -122,6 +181,7 @@ export const SignUpSchema = z.object({
 // ── Inferred types ──────────────────────────────────────────────────────────
 
 export type KursFormData = z.infer<typeof KursFormSchema>
+export type KursMetadataFormData = z.infer<typeof KursMetadataFormSchema>
 export type UnitFormData = z.infer<typeof UnitFormSchema>
 export type TaskFormData = z.infer<typeof TaskFormSchema>
 export type DocumentMetaData = z.infer<typeof DocumentMetaSchema>
@@ -129,3 +189,6 @@ export type DocumentUpdateMetaData = z.infer<typeof DocumentUpdateMetaSchema>
 export type EditorDraftFormData = z.infer<typeof EditorDraftFormSchema>
 export type EditorImageUploadData = z.infer<typeof EditorImageUploadSchema>
 export type EditorPublishData = z.infer<typeof EditorPublishSchema>
+export type LessonSaveData = z.infer<typeof LessonSaveSchema>
+export type LessonCreateData = z.infer<typeof LessonCreateSchema>
+export type LessonReorderData = z.infer<typeof LessonReorderSchema>

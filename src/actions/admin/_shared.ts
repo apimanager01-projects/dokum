@@ -46,11 +46,12 @@ export function parseForm<T>(
 }
 
 export function revalidateAdminPages() {
-  revalidatePath('/admin/kurse/new')
+  revalidatePath('/admin/kurse')
   revalidatePath('/admin/units/new')
   revalidatePath('/admin/tasks/new')
   revalidatePath('/admin/documents/new')
   revalidatePath('/admin/editor')
+  revalidatePath('/admin/lernseiten')
   revalidatePath('/', 'layout')
 }
 

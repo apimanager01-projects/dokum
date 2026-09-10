@@ -254,7 +254,7 @@ function composeWarning(scan: BacklinkScan, lead: string): string | null {
  * about to be left behind.
  */
 export function backlinkScanFailedWarning(
-  subject: 'dieses Dokument' | 'das bisherige Dokument',
+  subject: 'dieses Dokument' | 'das bisherige Dokument' | 'diese Lernseite',
   error?: string
 ): string {
   const reason = error ? ` (${error})` : ''

@@ -6,7 +6,7 @@ const cards = [
   {
     label: 'Kurse verwalten',
     subtitle: null,
-    href: '/admin/kurse/new',
+    href: '/admin/kurse',
   },
   {
     label: 'Units verwalten',

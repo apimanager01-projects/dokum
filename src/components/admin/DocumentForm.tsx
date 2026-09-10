@@ -5,7 +5,11 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createDocument, updateDocument } from '@/actions/admin'
 import type { Task, Unit, Kurs } from '@/types'
+// Aliased: the global DOM `Document` is in scope in a client component, and an
+// unaliased import would shadow it in a file that also touches the DOM.
+import type { Document as DokumentRow } from '@/types'
 import type { ActionResult } from '@/types'
+import { METADATA_ONLY_FILE_TYPES } from '@/lib/document-view'
 
 type FormState = ActionResult | null
 
@@ -13,15 +17,29 @@ const initialState: FormState = null
 
 type TaskWithUnit = Task & { units: Unit & { kurse: Pick<Kurs, 'title'> } }
 
-/** The kinds this form can actually upload — `interactive` is authored in the editor. */
+/**
+ * The kinds this form can actually upload — `interactive` is authored in the
+ * editor, `lesson` in the Lernseiten workspace (#107).
+ */
 type UploadableType = 'pdf' | 'image' | 'image_collection'
+
+/**
+ * Narrows a stored file_type to one the type selector can stand on. Everything
+ * else falls back to 'pdf', which is only ever read on the create path — the
+ * selector and the file input are hidden while editing a metadata-only kind.
+ */
+function isUploadable(
+  fileType: DokumentRow['file_type'] | undefined
+): fileType is UploadableType {
+  return fileType === 'pdf' || fileType === 'image' || fileType === 'image_collection'
+}
 
 type DefaultValues = {
   title: string
   description: string | null
   position: number
   file_path?: string | null
-  file_type?: UploadableType | 'interactive'
+  file_type?: DokumentRow['file_type']
 }
 
 export function DocumentForm({
@@ -43,7 +61,7 @@ export function DocumentForm({
   // hidden while editing a metadata-only kind), so an `interactive` default
   // just falls back to the same 'pdf' the create form starts on.
   const [docType, setDocType] = useState<UploadableType>(
-    defaultValues?.file_type === 'interactive' ? 'pdf' : (defaultValues?.file_type ?? 'pdf')
+    isUploadable(defaultValues?.file_type) ? defaultValues.file_type : 'pdf'
   )
   const [state, action, pending] = useActionState(
     async (_prev: FormState, formData: FormData): Promise<FormState> => {
@@ -69,14 +87,11 @@ export function DocumentForm({
 
   // Kinds whose file `updateDocument` refuses to replace — the form must not
   // offer an upload the action silently discards while reporting success
-  // (#86). `image_collection` because its pages are uploaded as a set;
-  // `interactive` because its file IS the published PNG of an editor draft,
-  // and replacing it would flip file_type away while the content JSON and the
-  // re-homed document_images stayed behind. Mirrors the server-side branch in
-  // actions/admin/documents.ts — keep the two lists in step.
+  // (#86). The list and the reasoning now live in ONE place that both this
+  // form and the server action read, instead of two that had to be kept in
+  // step by hand (see METADATA_ONLY_FILE_TYPES).
   const editingFileType = editId ? defaultValues?.file_type : undefined
-  const isMetadataOnly =
-    editingFileType === 'image_collection' || editingFileType === 'interactive'
+  const isMetadataOnly = editingFileType !== undefined && METADATA_ONLY_FILE_TYPES.has(editingFileType)
 
   return (
     <form action={action} className="flex flex-col gap-5">

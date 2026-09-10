@@ -36,6 +36,20 @@ Tests run via Vitest ([vitest.config.ts](vitest.config.ts)): colocated `*.test.t
 
 Next.js 16 (App Router) · React 19 · TypeScript 5 (strict) · Tailwind 4 · Supabase (Postgres + Auth + Storage) · Zod for input validation. The UI is German.
 
+## Design: [DESIGN.md](DESIGN.md) is binding
+
+**Read [DESIGN.md](DESIGN.md) before touching anything visual.** It describes the design as it should be — the brand and paper colours, the 66px navbar, the tree row, the micro-label, the Lernseiten forms — and it is the reference, not a suggestion.
+
+**Never install a design library.** A shadcn install once rewrote `globals.css` — including `--foreground`, which `body` reads — and a component library silently became the app's design. Buying *behaviour* is fine (`radix-ui`, `@dnd-kit`, `lucide-react`); it gets styled with DESIGN.md's classes in `src/components/ui/`. Buying *looks* is not. Note the failure mode: classes from a removed plugin (`data-open:`, `animate-in`, `bg-popover`) do not error — Tailwind just never generates them, so the component renders unstyled while every check stays green.
+
+**Style is never changed in passing.** Not spacing, colours, sizes, weights, radii, hover or focus states. When a task is „add a column", „make the row clickable", „fix the scroll target", the deliverable is that behaviour and nothing else.
+
+This has gone wrong repeatedly and always the same way: a structural edit — a `<p>` becoming a `<Link>`, a wrapper becoming a `<section>` — arrives carrying classes nobody asked for. **When markup must change for a functional reason, carry the old classes over verbatim.**
+
+The one exception, kept minimal: the accessibility the new behaviour actually needs — a focus ring on a new control, `cursor-pointer` on a newly clickable row. Nothing more. And never harmonise two things that look different; the difference may be intentional.
+
+If a task cannot be done without a visual decision, **ask**. Changing the design is a separate, deliberate act: edit DESIGN.md first, on purpose.
+
 ## Architecture invariants
 
 These are load-bearing and easy to violate accidentally:
@@ -77,7 +91,7 @@ The dev project is a free playground — break it freely. The prod project has r
 
 ## Database changes
 
-Migrations are plain SQL in [supabase/](supabase/) — apply via the Supabase SQL editor or CLI. Order matters: `migration.sql`, then `add_audit_log.sql`, then `add_entitlements.sql`, then `add_editor_documents.sql`, then `add_editor_images.sql`, then `add_document_content.sql`, then `add_rls_published_conjunct.sql`. There is no migration runner; new migrations must be applied manually.
+Migrations are plain SQL in [supabase/](supabase/) — apply via the Supabase SQL editor or CLI. Order matters: `migration.sql`, then `add_audit_log.sql`, then `add_entitlements.sql`, then `add_editor_documents.sql`, then `add_editor_images.sql`, then `add_document_content.sql`, then `add_rls_published_conjunct.sql`, then `add_lessons.sql`. There is no migration runner; new migrations must be applied manually.
 
 `supabase/checks/` holds SQL verification scripts for guarantees the Vitest suite cannot reach (RLS, mainly). Each runs inside a transaction ending in `ROLLBACK` and aborts with a `… CHECK FAILED — …` message. Run the relevant one against **dev** after applying the migration it belongs to.
 

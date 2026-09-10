@@ -118,8 +118,9 @@ src/
 │   ├── impressum/                 # Legal info
 │   ├── kurse/
 │   │   └── [kursId]/
-│   │       ├── page.tsx           # Kurs detail (unit cards)
-│   │       ├── error.tsx
+│   │       ├── layout.tsx         # Kurs shell (#106): KursSidebar + content column — mounted ONCE for every page below
+│   │       ├── page.tsx           # Kurs intro + locked-Einheit teaser (no unit cards any more)
+│   │       ├── error.tsx          #   both boundaries are content-only — the shell is already painted
 │   │       ├── loading.tsx
 │   │       └── units/[unitId]/
 │   │           ├── page.tsx       # Unit detail (expandable task/document tree)
@@ -140,13 +141,14 @@ src/
 │   │   ├── page.tsx               # Admin hub (4-card grid)
 │   │   ├── error.tsx
 │   │   ├── loading.tsx
-│   │   ├── kurse/new/page.tsx     # Create/edit Kurs
+│   │   ├── kurse/page.tsx         # „Kurse verwalten" (#108): table of Kurse (Einheiten-Zahl, Art, Veröffentlicht/Privat) + create/edit in a modal
 │   │   ├── units/new/page.tsx     # Create/edit Unit
 │   │   ├── tasks/new/page.tsx     # Create/edit Task
 │   │   ├── documents/new/page.tsx # Create/edit Document
 │   │   └── editor/                # LaTeX editor (PRD #28): draft list, editor shell, PNG export, publish
 │   │       ├── page.tsx           #   loads draft + target tree via DAL, remounts shell per draftId
 │   │       └── editor.css         #   consolidated editor styles (Dokum-red rebrand)
+│   │   └── lernseiten/page.tsx    # Lernseiten workspace (#107): whole Kurs tree + block editor + live preview
 │   └── api/
 │       ├── file/[docId]/route.ts          # Auth-gated file proxy (PDFs/images)
 │       ├── image/[imageId]/route.ts       # Auth-gated image collection proxy
@@ -174,7 +176,15 @@ src/
 │   │   └── RegisterForm.tsx
 │   ├── kurse/
 │   │   ├── KursCard.tsx
-│   │   └── UnitCard.tsx
+│   │   ├── KursSidebar.tsx         # The Kurs navigation tree (#106) — client component, mounted by the Kurs LAYOUT so it survives navigation
+│   │   ├── document-reveal.tsx     # Context from the sidebar to the Einheit accordion (#106): click a Dokument → unfold + scroll to it in the main column, no navigation
+│   ├── lessons/                    # Lernseiten (#107) — the second document model, deliberately beside the LaTeX editor rather than inside it
+│   │   ├── LessonView.tsx          #   student renderer: ordinary server-rendered React (a lesson holds no state React must not discard)
+│   │   ├── LessonMath.tsx          #   the one browser-side piece: swaps LaTeX source for typeset SVG
+│   │   ├── BlockEditor.tsx         #   the block list — textareas + inline-markup, NOT a contenteditable
+│   │   └── LessonWorkspace.tsx     #   tree left, editor + live preview right; holds the open page's draft in state
+│   │   ├── RecentMiniCases.tsx
+│   │   └── UnitPaywall.tsx
 │   ├── documents/
 │   │   ├── DocumentBody.tsx        # A document's body for every file_type — the ONE render path shared by the Unit accordion and the full-page route (callers supply the heading)
 │   │   ├── DocumentArticle.tsx     # Breadcrumb + title + description + body at page scale — shared by the full page and the overlay, which differ only in their chrome
@@ -224,6 +234,15 @@ src/
 │   │   ├── mathjax-loader.ts      # Bundled MathJax loader — config set BEFORE the dynamic tex-svg-full import (full build: color macros need it; browser-only)
 │   │   ├── mathjax.d.ts           # Minimal type declarations for the bundled MathJax component
 │   │   └── *.test.ts              # Colocated Vitest golden tests (parity contract with the standalone editor)
+│   ├── lessons/                   # Lernseiten (#107) — the SECOND document model. Beside lib/editor, never inside it: that schema's parity is pinned by goldens, and a lesson is prose, not a calculation sheet
+│   │   ├── lesson-json.ts         # Versioned Zod schema (v1.0): heading/paragraph/formula/calculation/example/divider/video. Blocks nest exactly ONE level — an example holds leaves, so no recursive schema, renderer or drop target
+│   │   ├── lesson-version.ts      # Upgrade-on-read + readLessonJson. Reuses upgradeThroughChain from the document ladder rather than copying its subtle parts
+│   │   ├── lesson-meta.ts         # The header facts nobody typed: „3.3" from the tree path, „12 min" from the word count (180 wpm; a formula counts as one word)
+│   │   ├── lesson-example.ts      # The design's reference page as data — the specification, and the proof the model can express it
+│   │   ├── inline-markup.ts       # `**fett**` / `$LaTeX$` / `[[Begriff|Erklärung]]` ⇄ inline nodes. Round-trip-tested, which is what stands between an author and content corrupted on the second save
+│   │   ├── lesson-task.ts         # LESSON_TASK_TITLE — the invisible Aufgabe's name. Its own module because a 'use server' file may export only actions, and both halves need one spelling
+│   │   ├── unit-lessons.ts        # splitUnitLessons(): which of a Unit's documents are Lernseiten and what is left for the accordion — including removing the hidden Aufgabe. Pure, tested
+│   │   └── *.test.ts              # Colocated Vitest tests
 │   ├── supabase/
 │   │   ├── server.ts              # Supabase SSR client (server/proxy)
 │   │   └── client.ts              # Supabase browser client
@@ -243,12 +262,14 @@ All Supabase data reads go through `src/lib/dal.ts`. Page components and API rou
 
 ```ts
 // In a page component:
-import { getKursWithUnits } from '@/lib/dal'
-const kurs = await getKursWithUnits(kursId)
-if (!kurs) notFound()
+import { getUnitWithTasks } from '@/lib/dal'
+const unit = await getUnitWithTasks(unitId)
+if (!unit) notFound()
 ```
 
 The DAL is marked `import 'server-only'` — importing it in a client component causes a build error. Sorting (position ASC, created_at ASC) is applied inside each DAL function.
+
+**Two reads are memoised with React `cache()`**, and only those two: `getKursNavTree()` and `getKursViewerAccess()` (#106). A layout cannot pass props to the page it wraps, so the Kurs shell and the Kurs page inside it necessarily ask the same two questions in one render; `cache()` is what stops that from being two round trips. It is not a general policy — every other DAL function runs when it is called.
 
 **One read bypasses RLS**, and it is the only one: `getLinkTargetOwnership()` uses the service-role client, because the link resolver (#74) has to tell an *unentitled* student which Einheit to buy — and that is exactly the row `documents` SELECT withholds from them. Three properties keep it safe and all three are in the function: it selects only the columns a refusal may name (no `content`, no `file_path`), it never learns who is asking (no user id, no role — so it cannot leak per-reader data), and its result must pass through `describeLinkTarget()` before crossing to the browser. It has exactly one caller.
 
@@ -284,7 +305,9 @@ Records are written to the `audit_logs` table with RLS — admins can read, nobo
 
 ### Admin Subpage Layout
 
-Each admin page (`/admin/{kurse,units,tasks,documents}/new`) follows a **70/30 two-column grid**:
+**`/admin/kurse` is the exception, and the direction of travel (#108):** a table of what exists, with creating and editing as a modal over it. The old `/admin/kurse/new` put an empty form on the left of the catalogue, so the first thing an admin saw was a form rather than their courses. The table shows Kursname, Einheiten-Zahl, Kursart and a Veröffentlicht/Privat badge; `getAllKurseWithUnits()` already returns every column it needs, so the edit modal opens with values in hand instead of navigating to `?editId=` and re-reading. `?editId=` still works — the admin tree on the other pages links with it — and opens the modal on load.
+
+The remaining three (`/admin/{units,tasks,documents}/new`) still follow the **70/30 two-column grid**:
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -298,6 +321,71 @@ Each admin page (`/admin/{kurse,units,tasks,documents}/new`) follows a **70/30 t
 ```
 
 Pages support both create mode (no `?editId`) and edit mode (`?editId=<uuid>`). The form renders with `defaultValues` pre-filled when editing.
+
+### Kurs Shell (#106)
+
+Everything under `/kurse/[kursId]` renders into a two-column shell owned by `app/kurse/[kursId]/layout.tsx`: the navigation tree on the left, the page on the right.
+
+```
+┌───────────────────┬─────────────────────────────────┐
+│ KursSidebar       │  page.tsx      → Kurs intro     │
+│  Einheit          │                  + locked-unit  │
+│   └ Aufgabe       │                    teaser       │
+│      └ Dokument   │  units/[unitId] → Aufgaben-     │
+│  Einheit    €3    │                   akkordeon     │
+└───────────────────┴─────────────────────────────────┘
+```
+
+**It is a layout, not a component each page imports**, and that is the whole design: moving between Einheiten re-renders only the content column, so the tree keeps its scroll offset and `getKursNavTree()` does not run again.
+
+**The two levels unfold differently, and neither has a disclosure triangle.** An *Einheit* unfolds purely from the route — the one the student is in (or, while a Dokument overlay is open, the one that Dokument belongs to) shows its Aufgaben; every other Einheit is a single row. There is no control for it, so no gesture can open a branch the student is not in. An *Aufgabe* is the one foldable thing: its row is a `<button>` (there is no Aufgabe route to navigate to) and pressing it toggles its Dokumente, starting folded. That override is layered over a derived default rather than replacing it, so the Aufgabe holding an open document unfolds without a click — otherwise the highlighted row would be hidden inside a collapsed branch.
+
+Three consequences worth knowing before touching it:
+
+- **A locked Einheit has no children in the tree, and RLS is what does that** — `tasks`/`documents` require an entitlement, `units` do not. So an unpaid Einheit is still listed by name (it is the thing being sold, and its page holds the paywall) while its contents are neither readable nor listable. The layout's `locked` flag is display only: a €3 badge and a hollow dot, never enforcement.
+- **`getKursNavTree()` selects titles and nothing else.** No `content` — the sidebar renders no document, and `*` would ship every published snapshot in the Kurs on every page load in it.
+- **Pages below the shell carry no page chrome of their own** — no background, no width cap, no „back to course" link. Their `error.tsx`/`loading.tsx` are content-only for the same reason. Errors thrown by the *layout* bubble past them to the root boundary.
+
+**Only the Einheit row is a link.** An Aufgabe row is a `<button>` that folds. A Dokument row is a `<button>` too, and it opens nothing: the Dokument is *already rendered* in the main column, so the click unfolds its Aufgabe there and scrolls to it. Nothing navigates, which is the strongest possible version of the #70 guarantee — there is no trip for a student's typed values to survive. The overlay is still one click away, from „Einzelansicht ↗" beside the Dokument itself.
+
+That last gesture needs a channel, because the sidebar lives in the layout and the accordion lives in the page it wraps — sibling route subtrees cannot see each other. `components/kurse/document-reveal.tsx` is that channel: a context the layout puts around *both* columns, holding the accordion's handler in a **ref** so registering it re-renders nothing. `reveal()` is a no-op when no accordion is mounted (the Kurs landing page, a paywalled Einheit), which needs no guard — only the Einheit on screen is unfolded in the tree, so the only clickable Dokumente are the ones that accordion holds.
+
+`?openTask=[taskId]` on the Einheit page still has two producers — the back link on `/dokumente/[docId]` and `RecentMiniCases` — and both are soft navigations that can hit a page whose `UnitDetailClient` is already mounted. That is why it adjusts its open set when the prop changes and not only on mount.
+
+### Lernkurse und Lernseiten (#107)
+
+A Kurs is one of two kinds, recorded in `kurse.kurs_type`:
+
+| Kursart | Was eine Einheit enthält |
+|---------|--------------------------|
+| `musterloesung` | Ein paar Lösungen — Bilder, PDFs. Das bestehende Aufgaben-Akkordeon. |
+| `lernkurs` | Eine Lernseite: Fließtext, Merkformeln, Beispielboxen, Videos. |
+
+**A Lernseite is a `documents` row with `file_type = 'lesson'`, and that is a security decision, not a filing preference.** The obvious shape — a `content` column on `units` — is wrong: `units` SELECT gates on `kurse.published` **alone**, deliberately, so non-purchasers can browse what they might buy. Anything on that row is readable by any logged-in visitor. `documents` SELECT requires an entitlement, so storing the page there inherits the paywall that already exists and adds no policy. `supabase/add_lessons.sql` records this at length so nobody re-proposes the column.
+
+**The invisible Aufgabe** is what that costs. `documents.task_id` is NOT NULL, so every Lernseite hangs under a Task titled `LESSON_TASK_TITLE` (`src/lib/lessons/lesson-task.ts`) that no author ever sees and no student ever sees:
+
+- `getLessonWorkspaceTree()` flattens past it, so the workspace shows Kurs → Einheit → Lernseite.
+- `splitUnitLessons()` removes it from what the student accordion renders — a Task that held *only* Lernseiten disappears, one that held both keeps its other documents.
+
+The constant lives in its own module because a `'use server'` file may export nothing but server actions, and both the action that creates the Task and the DAL that hides it need the same spelling.
+
+**Two document models now share `documents.content`**, told apart by `file_type` and never by sniffing the JSON — both are versioned discriminated unions, so a guess would make a malformed lesson look like a malformed document.
+
+| | LaTeX-Editor | Lernseite |
+|---|---|---|
+| Modul | `src/lib/editor/` | `src/lib/lessons/` |
+| Schema | `document-json.ts` (v1.1) | `lesson-json.ts` (v1.0) |
+| `file_type` | `interactive` | `lesson` |
+| Autorenfläche | `/admin/editor` (imperativ) | `/admin/lernseiten` (React) |
+
+**The lesson renderer is NOT a third imperative surface.** The other two own their DOM because it holds something React must not discard — an author's cursor, a student's typed values. A Lernseite holds neither, so `LessonView` is ordinary server-rendered React; only `LessonMath` touches the DOM, to swap LaTeX source for typeset SVG.
+
+**Rich text is a `<textarea>` plus `inline-markup.ts`** — `**fett**`, `$LaTeX$`, `[[Begriff|Erklärung]]` — not a contenteditable. Both directions are pure and round-trip-tested, which is the property that stands between an author and content silently corrupted on the second save. It is a stage: a WYSIWYG surface can replace the textarea later and produce the same nodes.
+
+**⚠ Saving writes live content.** There is no draft layer yet — a published Kurs shows a save immediately. The course-wide draft mode is the next piece; the workspace says so on screen rather than leaving an author to find out.
+
+**⚠ `kurse.sold_as` is not an access gate.** It records what a checkout sells. Whole-course purchase needs a scoped `entitlements` row, which does not exist yet, so `'kurs'` currently describes an intention. Prices are equally unbuilt: the fields in the Kurs form are visibly disabled, because every checkout still runs through one fixed Stripe Price ID.
 
 ### File Serving
 
@@ -509,6 +597,7 @@ Migrations live in `supabase/`. Apply them in order — first to dev (Supabase S
 | `add_editor_images.sql` | `editor_images` table (admin-only RLS, cascade with draft) + audit `entity_type` extension (`editor_image`); no storage-policy changes needed |
 | `add_document_content.sql` | `documents.content` JSONB (published document snapshot, NULL for legacy rows) + `documents_file_type_check` CHECK adding `interactive`; no RLS changes needed — the row is already entitlement-gated |
 | `add_rls_published_conjunct.sql` | Re-adds the `published` conjunct to the four child SELECT policies (tasks, documents, document_images, `pdfs` storage objects) so an archived Kurs goes dark in the database, not only in app code (#80). No-op for published Kurse; admins unaffected |
+| `add_lessons.sql` | `kurse.kurs_type` (`musterloesung`/`lernkurs`) + `kurse.sold_as` (`kurs`/`unit`), and `documents.file_type` gains `'lesson'` (#107). Adds NO RLS: a Lernseite is a Document and inherits the entitlement gate that already exists — which is exactly why it is not a column on `units` |
 
 **Verification checks** live in `supabase/checks/` — SQL scripts that prove a guarantee against a real database, for guarantees no Vitest seam can reach. Each one runs inside a transaction that ends in `ROLLBACK`. Run them against **dev**, after applying the migration they belong to:
 

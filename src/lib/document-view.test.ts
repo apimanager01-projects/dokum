@@ -39,4 +39,17 @@ describe('documentViewKind', () => {
   it('renders a PDF as a downloadable file', () => {
     expect(documentViewKind({ file_type: 'pdf', content: null })).toBe('file')
   })
+
+  it('renders a written Lernseite from its JSON (#107)', () => {
+    expect(documentViewKind({ file_type: 'lesson', content: { version: '1.0', blocks: [] } })).toBe(
+      'lesson'
+    )
+  })
+
+  it('treats an empty Lernseite as a picture, i.e. as nothing to show yet', () => {
+    // A `lesson` row with no content is a page an author created and has not
+    // written. There is no PNG behind a lesson, so this lands on the same
+    // honest nothing an image-less picture row already renders as.
+    expect(documentViewKind({ file_type: 'lesson', content: null })).toBe('picture')
+  })
 })

@@ -1,4 +1,5 @@
 import 'server-only'
+import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceClient } from '@/lib/supabase/service'
 import type { BacklinkSourceKind } from '@/lib/editor/backlinks'
@@ -12,9 +13,14 @@ import type {
   EditorDocumentListItem,
   EditorTargetKurs,
   Kurs,
+  KursNavTree,
+  KursNavUnit,
+  KursSoldAs,
+  KursType,
   KursWithUnits,
   UnitWithTasks,
 } from '@/types'
+import { LESSON_TASK_TITLE } from '@/lib/lessons/lesson-task'
 
 // ── Shared sort utility ─────────────────────────────────────────────────────
 function sortByPosition<T extends { position: number; created_at: string }>(items: T[]): T[] {
@@ -46,14 +52,46 @@ export async function getAllKurse(): Promise<Kurs[]> {
 
 export async function getKursById(
   kursId: string
-): Promise<Pick<Kurs, 'title' | 'description' | 'position' | 'published'> | null> {
+): Promise<Pick<Kurs, 'title' | 'description' | 'position' | 'published' | 'kurs_type' | 'sold_as'> | null> {
   const supabase = await createClient()
   const { data } = await supabase
     .from('kurse')
-    .select('title, description, position, published')
+    .select('title, description, position, published, kurs_type, sold_as')
     .eq('id', kursId)
     .single()
   return data ?? null
+}
+
+/**
+ * Every Kurs, NEWEST FIRST — the „Kurse verwalten" table (#108).
+ *
+ * A separate function rather than a flag on {@link getAllKurseWithUnits},
+ * because the two orders answer different questions and both are right.
+ * `position` is the order a STUDENT reads a catalogue in; `created_at DESC` is
+ * the order an AUTHOR works in — the Kurs you just made is the one you are
+ * about to open. The admin tree on the other pages still wants the student's
+ * order, so one function cannot serve both without a caller having to know
+ * which it is getting.
+ *
+ * Ordering stays in the DAL either way (the invariant): the page maps rows and
+ * does not re-sort.
+ *
+ * `created_at` ties are broken by title so the order is total — two Kurse
+ * created in the same millisecond (a seeded fixture, a scripted import) must
+ * not swap places between two loads of the same page.
+ */
+export async function getKurseNewestFirst(): Promise<KursWithUnits[]> {
+  const supabase = await createClient()
+  const { data } = await supabase
+    .from('kurse')
+    .select('*, units(id, kurs_id, title, description, position, created_at)')
+    .order('created_at', { ascending: false })
+    .order('title', { ascending: true })
+  const kurse = (data ?? []) as KursWithUnits[]
+  // The Einheiten inside each Kurs keep the hierarchy's own order — only the
+  // Kurse themselves are listed by age.
+  kurse.forEach((k) => { k.units = sortByPosition(k.units ?? []) })
+  return kurse
 }
 
 // Returns Kurs + sorted Units (no tasks/documents). Used by admin/kurse and admin/units pages.
@@ -102,6 +140,58 @@ export async function getAllKurseDeep(): Promise<KursWithUnits[]> {
   return kurse
 }
 
+// The lean hierarchy used by the course-wide admin workspace. It deliberately
+// omits `documents.content`: opening the course settings must not serialize all
+// published editor snapshots and Lernseiten into the client just to render the
+// navigation tree. The dedicated editors fetch that content on their own page.
+export type AdminKursWorkspaceDocument = Pick<
+  Document,
+  'id' | 'task_id' | 'title' | 'description' | 'file_path' | 'file_type' | 'position' | 'created_at'
+> & { document_images: Pick<DocumentImage, 'id'>[] }
+
+export type AdminKursWorkspaceTask = Pick<
+  import('@/types').Task,
+  'id' | 'unit_id' | 'title' | 'description' | 'position' | 'created_at'
+> & { documents: AdminKursWorkspaceDocument[] }
+
+export type AdminKursWorkspaceUnit = Pick<
+  import('@/types').Unit,
+  'id' | 'kurs_id' | 'title' | 'description' | 'position' | 'created_at'
+> & { tasks: AdminKursWorkspaceTask[] }
+
+export type AdminKursWorkspace = Kurs & { units: AdminKursWorkspaceUnit[] }
+
+/** One course and its editable hierarchy for `/admin/kurse/[kursId]`. */
+export async function getAdminKursWorkspace(
+  kursId: string
+): Promise<AdminKursWorkspace | null> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('kurse')
+    .select(
+      `*,
+       units(id, kurs_id, title, description, position, created_at,
+         tasks(id, unit_id, title, description, position, created_at,
+           documents(
+             id, task_id, title, description, file_path, file_type, position, created_at,
+             document_images(id)
+           )))`
+    )
+    .eq('id', kursId)
+    .single()
+  if (error || !data) return null
+
+  const kurs = data as unknown as AdminKursWorkspace
+  kurs.units = sortByPosition(kurs.units ?? [])
+  kurs.units.forEach((unit) => {
+    unit.tasks = sortByPosition(unit.tasks ?? [])
+    unit.tasks.forEach((task) => {
+      task.documents = sortByPosition(task.documents ?? [])
+    })
+  })
+  return kurs
+}
+
 export async function getPublishedKurseDeep(): Promise<KursWithUnits[]> {
   const supabase = await createClient()
   const { data } = await supabase
@@ -135,19 +225,187 @@ export async function getPublishedKurseDeep(): Promise<KursWithUnits[]> {
   return kurse
 }
 
-// Returns Kurs with sorted Units. Used by public Kurs detail page.
-export async function getKursWithUnits(kursId: string): Promise<KursWithUnits | null> {
+// The Kurs sidebar's whole tree — Kurs → Unit → Aufgabe → Dokument, titles only
+// (#106). One round trip, because the sidebar frames every page under
+// /kurse/[kursId] and cannot render half of itself.
+//
+// `cache()` is what makes that affordable: the Kurs layout and the page inside
+// it both need this tree, and React de-duplicates the two calls within a single
+// request. It is the ONLY memoised read in this file, and it is memoised
+// because two components in one render tree ask the same question — not as a
+// general policy.
+//
+// THE COLUMN LIST IS THE POINT (getUnitWithTasks precedent). No `content`: the
+// sidebar renders no document, and `*` here would ship every published
+// snapshot in the Kurs on every page load. No `file_path` either — nothing
+// below is a link to storage.
+//
+// Sorting is the hierarchy's, applied at all three levels here in the DAL;
+// `position`/`created_at` ride along only to make that possible and are dropped
+// on the way out, since this tree becomes a client component's prop.
+//
+// A LOCKED EINHEIT ARRIVES WITH NO CHILDREN, and that is RLS doing it, not a
+// filter here: `tasks` and `documents` both require an entitlement (plus a
+// published Kurs), while `units` gate on `published` alone. So an unpaid
+// Einheit is still listed by name — it has to be, it is the thing being sold —
+// but its Aufgaben and Dokumente are not readable and therefore not listable.
+export const getKursNavTree = cache(async (kursId: string): Promise<KursNavTree | null> => {
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('kurse')
-    .select('*, units(id, kurs_id, title, description, position, created_at)')
+    .select(
+      `id, title, description, kurs_type,
+       units(id, title, description, position, created_at,
+         tasks(id, title, position, created_at,
+           documents(id, title, file_type, position, created_at)))`
+    )
     .eq('id', kursId)
     .single()
   if (error || !data) return null
-  const kurs = data as KursWithUnits
-  kurs.units = sortByPosition(kurs.units ?? [])
-  return kurs
+
+  const row = data as unknown as KursNavTreeRow
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    kurs_type: row.kurs_type,
+    units: sortByPosition(row.units ?? []).map((unit) => ({
+      id: unit.id,
+      title: unit.title,
+      description: unit.description,
+      tasks: sortByPosition(unit.tasks ?? []).map((task) => ({
+        id: task.id,
+        title: task.title,
+        documents: sortByPosition(task.documents ?? []).map(({ id, title, file_type }) => ({
+          id,
+          title,
+          file_type,
+        })),
+      })),
+    })),
+  }
+})
+
+// The raw PostgREST shape of the query above — the nav types with the sort keys
+// still attached, which the mapping strips.
+type Positioned<T> = T & { position: number; created_at: string }
+type KursNavTreeRow = Pick<KursNavTree, 'id' | 'title' | 'description' | 'kurs_type'> & {
+  units:
+    | Positioned<
+        Pick<KursNavUnit, 'id' | 'title' | 'description'> & {
+          tasks:
+            | Positioned<
+                Pick<import('@/types').KursNavTask, 'id' | 'title'> & {
+                  documents: Positioned<import('@/types').KursNavDocument>[] | null
+                }
+              >[]
+            | null
+        }
+      >[]
+    | null
 }
+
+// ── Lernseiten workspace (#107) ─────────────────────────────────────────────
+
+/** One Kurs in the workspace tree, with its Einheiten and their Lernseiten. */
+export interface LessonWorkspaceKurs {
+  id: string
+  title: string
+  kurs_type: KursType
+  sold_as: KursSoldAs
+  published: boolean
+  units: LessonWorkspaceUnit[]
+}
+
+export interface LessonWorkspaceUnit {
+  id: string
+  title: string
+  lessons: LessonWorkspacePage[]
+}
+
+/** A Lernseite as the workspace lists it — `content` included, it is what gets edited. */
+export interface LessonWorkspacePage {
+  id: string
+  title: string
+  content: unknown
+}
+
+/**
+ * The whole authoring tree of the Lernseiten workspace (#107): every Kurs, its
+ * Einheiten, and the Lernseiten inside them.
+ *
+ * ADMIN-ONLY IN PRACTICE, and it must stay that way. It selects `content` for
+ * every Lernseite in the catalogue in one query — for an admin RLS grants that,
+ * for anyone else the entitlement gate on `documents` would silently return a
+ * partial tree that looks like an empty one. The only caller is the workspace
+ * page, which sits behind the proxy's /admin guard.
+ *
+ * IT LOOKS PAST THE HIDDEN AUFGABE ON PURPOSE. Lernseiten hang under a Task
+ * titled {@link LESSON_TASK_TITLE} that the author must never see, so the tree
+ * is flattened here: the DAL is where the storage shape is known, and letting
+ * that Task reach the UI would mean every component had to remember to skip it.
+ *
+ * `file_type = 'lesson'` is the filter, not the Task title alone — the title is
+ * how the Task is recognised, the file_type is what a Lernseite IS. A Document
+ * of another kind sitting under that Task (a stray upload) is not a page and
+ * must not be opened in a lesson editor.
+ */
+export async function getLessonWorkspaceTree(): Promise<LessonWorkspaceKurs[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from('kurse')
+    .select(
+      `id, title, kurs_type, sold_as, published, position, created_at,
+       units(id, title, position, created_at,
+         tasks(id, title, position, created_at,
+           documents(id, title, content, file_type, position, created_at)))`
+    )
+    .order('position', { ascending: true })
+    .order('created_at', { ascending: true })
+  if (error) throw new Error(`Kursbaum konnte nicht geladen werden: ${error.message}`)
+
+  const kurse = (data ?? []) as unknown as LessonWorkspaceRow[]
+  return sortByPosition(kurse).map((kurs) => ({
+    id: kurs.id,
+    title: kurs.title,
+    kurs_type: kurs.kurs_type,
+    sold_as: kurs.sold_as,
+    published: kurs.published,
+    units: sortByPosition(kurs.units ?? []).map((unit) => ({
+      id: unit.id,
+      title: unit.title,
+      lessons: sortByPosition(unit.tasks ?? [])
+        .filter((task) => task.title === LESSON_TASK_TITLE)
+        .flatMap((task) =>
+          sortByPosition(task.documents ?? [])
+            .filter((doc) => doc.file_type === 'lesson')
+            .map(({ id, title, content }) => ({ id, title, content }))
+        ),
+    })),
+  }))
+}
+
+/** The raw PostgREST shape of the query above, sort keys still attached. */
+type LessonWorkspaceRow = Positioned<{
+  id: string
+  title: string
+  kurs_type: KursType
+  sold_as: KursSoldAs
+  published: boolean
+  units:
+    | Positioned<{
+        id: string
+        title: string
+        tasks:
+          | Positioned<{
+              id: string
+              title: string
+              documents: Positioned<LessonWorkspacePage & { file_type: string }>[] | null
+            }>[]
+          | null
+      }>[]
+    | null
+}>
 
 // ── Unit queries ────────────────────────────────────────────────────────────
 
@@ -631,6 +889,29 @@ export async function getEntitledUnitIds(userId: string): Promise<Set<string>> {
     .eq('user_id', userId)
   return new Set((data ?? []).map((row) => row.unit_id as string))
 }
+
+/**
+ * Who is reading and which Einheiten they may open — the lock state the Kurs
+ * sidebar and the Kurs page both paint with (#106).
+ *
+ * Memoised for the same reason `getKursNavTree` is: a layout and the page
+ * inside it ask it in the same render. Admins short-circuit the entitlement
+ * query entirely — RLS lets them through everything anyway, so `entitledUnitIds`
+ * would be a list they do not consult.
+ *
+ * `locked` is decided HERE and nowhere else. It is a display state — a €3 badge
+ * and a hollow dot — never the enforcement: that stays with RLS and with the
+ * Einheit page's own `userHasUnitAccess` check.
+ */
+export const getKursViewerAccess = cache(
+  async (): Promise<{ isAdmin: boolean; entitledUnitIds: Set<string> }> => {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    const isAdmin = user?.app_metadata?.['role'] === 'admin'
+    if (!user || isAdmin) return { isAdmin, entitledUnitIds: new Set<string>() }
+    return { isAdmin, entitledUnitIds: await getEntitledUnitIds(user.id) }
+  }
+)
 
 // Single-unit access check. Pass the `app_metadata.role` value (or undefined)
 // so admins short-circuit without a DB round-trip.

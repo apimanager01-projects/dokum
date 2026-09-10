@@ -53,7 +53,7 @@ async function documentDeleteWarning(docId: string): Promise<string | null> {
 }
 
 const editHrefs = {
-  kurs: (id: string) => `/admin/kurse/new?editId=${id}`,
+  kurs: (id: string) => `/admin/kurse/${id}`,
   unit: (id: string) => `/admin/units/new?editId=${id}`,
   task: (id: string) => `/admin/tasks/new?editId=${id}`,
   document: (id: string) => `/admin/documents/new?editId=${id}`,
